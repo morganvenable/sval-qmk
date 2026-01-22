@@ -66,6 +66,10 @@ enum viable_command_id {
     viable_cmd_fragment_get_hardware   = 0x18,
     viable_cmd_fragment_get_selections = 0x19,
     viable_cmd_fragment_set_selections = 0x1A,
+    // Label commands (user-defined names for layers, tap dances, etc.)
+    viable_cmd_label_get         = 0x1B,
+    viable_cmd_label_set         = 0x1C,
+    viable_cmd_label_clear       = 0x1D,
     viable_cmd_error             = 0xFF,
 };
 
@@ -195,6 +199,36 @@ enum viable_leader_options {
     // bits 0-14 reserved
 };
 
+// Label types - what kind of item the label describes
+enum viable_label_type {
+    viable_label_type_layer          = 0,
+    viable_label_type_tap_dance      = 1,
+    viable_label_type_combo          = 2,
+    viable_label_type_key_override   = 3,
+    viable_label_type_alt_repeat_key = 4,
+    viable_label_type_leader         = 5,
+    viable_label_type_macro          = 6,
+};
+
+// Maximum label string length (UTF-8)
+#define VIABLE_LABEL_MAX_LENGTH 63
+
+// Label entry structure (66 bytes)
+// Uses sparse storage: only stores labels that are actually set
+// To find a label, scan all entries for matching type+index
+typedef struct __attribute__((packed)) {
+    uint8_t label_type;              // viable_label_type enum
+    uint8_t index;                   // Which item of that type
+    uint8_t length;                  // Actual string length (0 = slot unused)
+    char    string[VIABLE_LABEL_MAX_LENGTH];  // UTF-8 string data
+} viable_label_entry_t;
+_Static_assert(sizeof(viable_label_entry_t) == 66, "viable_label_entry_t must be 66 bytes");
+
+// Number of label slots - can be configured per keyboard
+#ifndef VIABLE_LABEL_ENTRIES
+#    define VIABLE_LABEL_ENTRIES 16
+#endif
+
 // EEPROM layout constants - shared across all viable modules
 #define VIABLE_TAP_DANCE_OFFSET      0
 #define VIABLE_TAP_DANCE_SIZE        (VIABLE_TAP_DANCE_ENTRIES * sizeof(viable_tap_dance_entry_t))
@@ -223,8 +257,11 @@ enum viable_leader_options {
 #define VIABLE_FRAGMENT_OFFSET       (VIABLE_QMK_SETTINGS_OFFSET + VIABLE_QMK_SETTINGS_SIZE)
 #define VIABLE_FRAGMENT_SIZE         VIABLE_FRAGMENT_MAX_INSTANCES  // 21 bytes
 
+#define VIABLE_LABEL_OFFSET          (VIABLE_FRAGMENT_OFFSET + VIABLE_FRAGMENT_SIZE)
+#define VIABLE_LABEL_SIZE            (VIABLE_LABEL_ENTRIES * sizeof(viable_label_entry_t))
+
 // Total EEPROM size (all viable storage areas)
-#define VIABLE_EEPROM_SIZE           (VIABLE_FRAGMENT_OFFSET + VIABLE_FRAGMENT_SIZE)
+#define VIABLE_EEPROM_SIZE           (VIABLE_LABEL_OFFSET + VIABLE_LABEL_SIZE)
 
 // Public API
 void viable_init(void);
@@ -307,3 +344,11 @@ void viable_fragment_set_selection(uint8_t instance_idx, uint8_t fragment_id);
 bool viable_handle_fragment_get_hardware(uint8_t *data, uint8_t length);
 bool viable_handle_fragment_get_selections(uint8_t *data, uint8_t length);
 bool viable_handle_fragment_set_selections(uint8_t *data, uint8_t length);
+
+// Storage API - Labels
+// Get label for a specific type+index (returns length, 0 if not found)
+uint8_t viable_get_label(uint8_t label_type, uint8_t index, char *buffer, uint8_t buffer_size);
+// Set label for a specific type+index (returns 0 on success, -1 on error)
+int viable_set_label(uint8_t label_type, uint8_t index, const char *string, uint8_t length);
+// Clear label for a specific type+index (returns 0 on success, -1 if not found)
+int viable_clear_label(uint8_t label_type, uint8_t index);

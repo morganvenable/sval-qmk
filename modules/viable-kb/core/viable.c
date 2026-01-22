@@ -204,6 +204,118 @@ int viable_set_leader(uint8_t index, const viable_leader_entry_t *entry) {
     return 0;
 }
 
+// Storage functions - Labels (sparse storage)
+uint8_t viable_get_label(uint8_t label_type, uint8_t index, char *buffer, uint8_t buffer_size) {
+    if (!buffer || buffer_size == 0) return 0;
+
+    // Scan all label slots to find matching type+index
+    for (uint8_t slot = 0; slot < VIABLE_LABEL_ENTRIES; slot++) {
+        viable_label_entry_t entry;
+        viable_read_eeprom(VIABLE_LABEL_OFFSET + slot * sizeof(viable_label_entry_t),
+                          &entry, sizeof(viable_label_entry_t));
+
+        // Check if this slot matches our type+index and has data
+        if (entry.length > 0 &&
+            entry.label_type == label_type &&
+            entry.index == index) {
+            // Validate length
+            uint8_t copy_len = entry.length;
+            if (copy_len > VIABLE_LABEL_MAX_LENGTH) {
+                copy_len = VIABLE_LABEL_MAX_LENGTH;
+            }
+            if (copy_len > buffer_size - 1) {
+                copy_len = buffer_size - 1;
+            }
+
+            // Copy string and null-terminate
+            memcpy(buffer, entry.string, copy_len);
+            buffer[copy_len] = '\0';
+            return copy_len;
+        }
+    }
+
+    // Not found
+    buffer[0] = '\0';
+    return 0;
+}
+
+int viable_set_label(uint8_t label_type, uint8_t index, const char *string, uint8_t length) {
+    if (!string) return -1;
+
+    // Validate length
+    if (length > VIABLE_LABEL_MAX_LENGTH) {
+        length = VIABLE_LABEL_MAX_LENGTH;
+    }
+
+    int8_t empty_slot = -1;
+
+    // Scan for existing entry or empty slot
+    for (uint8_t slot = 0; slot < VIABLE_LABEL_ENTRIES; slot++) {
+        viable_label_entry_t entry;
+        viable_read_eeprom(VIABLE_LABEL_OFFSET + slot * sizeof(viable_label_entry_t),
+                          &entry, sizeof(viable_label_entry_t));
+
+        // Found existing entry - update it
+        if (entry.length > 0 &&
+            entry.label_type == label_type &&
+            entry.index == index) {
+            entry.length = length;
+            memcpy(entry.string, string, length);
+            // Zero remaining bytes for cleaner storage
+            if (length < VIABLE_LABEL_MAX_LENGTH) {
+                memset(entry.string + length, 0, VIABLE_LABEL_MAX_LENGTH - length);
+            }
+            viable_write_eeprom(VIABLE_LABEL_OFFSET + slot * sizeof(viable_label_entry_t),
+                               &entry, sizeof(viable_label_entry_t));
+            return 0;
+        }
+
+        // Remember first empty slot
+        if (empty_slot < 0 && entry.length == 0) {
+            empty_slot = slot;
+        }
+    }
+
+    // Not found - use empty slot if available
+    if (empty_slot >= 0) {
+        viable_label_entry_t entry = {0};
+        entry.label_type = label_type;
+        entry.index = index;
+        entry.length = length;
+        memcpy(entry.string, string, length);
+        viable_write_eeprom(VIABLE_LABEL_OFFSET + empty_slot * sizeof(viable_label_entry_t),
+                           &entry, sizeof(viable_label_entry_t));
+        return 0;
+    }
+
+    // No space available
+    return -1;
+}
+
+int viable_clear_label(uint8_t label_type, uint8_t index) {
+    // Scan for existing entry
+    for (uint8_t slot = 0; slot < VIABLE_LABEL_ENTRIES; slot++) {
+        viable_label_entry_t entry;
+        viable_read_eeprom(VIABLE_LABEL_OFFSET + slot * sizeof(viable_label_entry_t),
+                          &entry, sizeof(viable_label_entry_t));
+
+        // Found it - clear by setting length to 0
+        if (entry.length > 0 &&
+            entry.label_type == label_type &&
+            entry.index == index) {
+            entry.length = 0;
+            // Zero the entire entry for cleaner storage
+            memset(&entry, 0, sizeof(viable_label_entry_t));
+            viable_write_eeprom(VIABLE_LABEL_OFFSET + slot * sizeof(viable_label_entry_t),
+                               &entry, sizeof(viable_label_entry_t));
+            return 0;
+        }
+    }
+
+    // Not found
+    return -1;
+}
+
 void viable_save(void) {
     // Data is written directly to EEPROM, nothing additional to flush
 }
@@ -543,6 +655,64 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
 
         case viable_cmd_fragment_set_selections:
             return viable_handle_fragment_set_selections(data, length);
+
+        case viable_cmd_label_get: {
+            // Request: [0xDF] [0x1B] [type] [index]
+            // Response: [0xDF] [0x1B] [length] [string bytes...]
+            if (length < 4) {
+                data[1] = viable_cmd_error;
+                return false;
+            }
+            uint8_t label_type = data[2];
+            uint8_t index = data[3];
+
+            // Get label (up to 28 bytes to fit in HID packet)
+            uint8_t label_len = viable_get_label(label_type, index, (char*)&data[3], 28);
+            data[2] = label_len;
+            break;
+        }
+
+        case viable_cmd_label_set: {
+            // Request: [0xDF] [0x1C] [type] [index] [length] [string bytes...]
+            // Response: [0xDF] [0x1C] [status]
+            if (length < 5) {
+                data[1] = viable_cmd_error;
+                return false;
+            }
+            uint8_t label_type = data[2];
+            uint8_t index = data[3];
+            uint8_t str_len = data[4];
+
+            // Validate string length against packet size
+            if (str_len > length - 5) {
+                data[1] = viable_cmd_error;
+                return false;
+            }
+
+            // Validate string length against maximum
+            if (str_len > VIABLE_LABEL_MAX_LENGTH) {
+                str_len = VIABLE_LABEL_MAX_LENGTH;
+            }
+
+            int result = viable_set_label(label_type, index, (const char*)&data[5], str_len);
+            data[2] = (result == 0) ? 0 : 1;
+            break;
+        }
+
+        case viable_cmd_label_clear: {
+            // Request: [0xDF] [0x1D] [type] [index]
+            // Response: [0xDF] [0x1D] [status]
+            if (length < 4) {
+                data[1] = viable_cmd_error;
+                return false;
+            }
+            uint8_t label_type = data[2];
+            uint8_t index = data[3];
+
+            int result = viable_clear_label(label_type, index);
+            data[2] = (result == 0) ? 0 : 1;
+            break;
+        }
 
         default:
             // Unknown command - set error response
