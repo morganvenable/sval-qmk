@@ -36,6 +36,12 @@ static void viable_write_eeprom(uint16_t offset, const void *buf, uint16_t size)
 // Use full timestamp (date + time) so every build gets unique magic
 static void viable_get_magic(uint8_t *magic) {
     char *p = QMK_BUILDDATE;
+    // Validate string length to prevent out-of-bounds access
+    size_t len = strlen(p);
+    if (len < 19) {
+        memset(magic, 0, VIABLE_MAGIC_SIZE);
+        return;
+    }
     magic[0] = ((p[2] & 0x0F) << 4) | (p[3] & 0x0F);  // year low 2 digits
     magic[1] = ((p[5] & 0x0F) << 4) | (p[6] & 0x0F);  // month
     magic[2] = ((p[8] & 0x0F) << 4) | (p[9] & 0x0F);  // day
@@ -295,6 +301,10 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
         case viable_cmd_tap_dance_set: {
             // Request: [0xDF] [0x02] [index] [10 bytes entry]
             // Response: [0xDF] [0x02] [status]
+            if (length < 13) {
+                data[1] = viable_cmd_error;
+                return false;
+            }
             uint8_t idx = data[2];
             viable_tap_dance_entry_t entry;
             memcpy(&entry, &data[3], sizeof(entry));
@@ -316,6 +326,10 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
         case viable_cmd_combo_set: {
             // Request: [0xDF] [0x04] [index] [12 bytes entry]
             // Response: [0xDF] [0x04] [status]
+            if (length < 15) {
+                data[1] = viable_cmd_error;
+                return false;
+            }
             uint8_t idx = data[2];
             viable_combo_entry_t entry;
             memcpy(&entry, &data[3], sizeof(entry));
@@ -337,6 +351,10 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
         case viable_cmd_key_override_set: {
             // Request: [0xDF] [0x06] [index] [12 bytes entry]
             // Response: [0xDF] [0x06] [status]
+            if (length < 15) {
+                data[1] = viable_cmd_error;
+                return false;
+            }
             uint8_t idx = data[2];
             viable_key_override_entry_t entry;
             memcpy(&entry, &data[3], sizeof(entry));
@@ -358,6 +376,10 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
         case viable_cmd_alt_repeat_key_set: {
             // Request: [0xDF] [0x08] [index] [6 bytes entry]
             // Response: [0xDF] [0x08] [status]
+            if (length < 9) {
+                data[1] = viable_cmd_error;
+                return false;
+            }
             uint8_t idx = data[2];
             viable_alt_repeat_key_entry_t entry;
             memcpy(&entry, &data[3], sizeof(entry));
@@ -423,6 +445,13 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
                 requested_size = VIABLE_DEFINITION_CHUNK_SIZE;
             }
 
+            // Validate offset to prevent overflow
+            uint32_t definition_size = viable_get_definition_size();
+            if (offset >= definition_size) {
+                data[4] = 0;
+                break;
+            }
+
             uint8_t actual_size = viable_get_definition_chunk(offset, &data[5], requested_size);
             data[4] = actual_size;
             break;
@@ -472,6 +501,10 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
         case viable_cmd_leader_set: {
             // Request: [0xDF] [0x15] [index] [14 bytes entry]
             // Response: [0xDF] [0x15] [status]
+            if (length < 17) {
+                data[1] = viable_cmd_error;
+                return false;
+            }
             uint8_t idx = data[2];
             viable_leader_entry_t entry;
             memcpy(&entry, &data[3], sizeof(entry));
@@ -594,22 +627,29 @@ void dynamic_keymap_macro_send(uint8_t id) {
     // Process macro bytes
     char data[4] = {0, 0, 0, 0};
     while (1) {
+        if (offset >= macro_size) {
+            break;
+        }
         memset(data, 0, sizeof(data));
         dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[0]);
         if (data[0] == 0) {
             break;
         }
         if (data[0] == SS_QMK_PREFIX) {
+            if (offset >= macro_size) break;
             dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[1]);
             if (data[1] == 0)
                 break;
             if (data[1] == SS_TAP_CODE || data[1] == SS_DOWN_CODE || data[1] == SS_UP_CODE) {
+                if (offset >= macro_size) break;
                 dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[2]);
                 if (data[2] != 0)
                     send_string(data);
             } else if (data[1] == VIAL_MACRO_EXT_TAP || data[1] == VIAL_MACRO_EXT_DOWN || data[1] == VIAL_MACRO_EXT_UP) {
+                if (offset >= macro_size) break;
                 dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[2]);
                 if (data[2] != 0) {
+                    if (offset >= macro_size) break;
                     dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[3]);
                     if (data[3] != 0) {
                         uint16_t kc;
@@ -630,7 +670,9 @@ void dynamic_keymap_macro_send(uint8_t id) {
                 }
             } else if (data[1] == SS_DELAY_CODE) {
                 uint8_t d0, d1;
+                if (offset >= macro_size) break;
                 dynamic_keymap_macro_get_buffer(offset++, 1, &d0);
+                if (offset >= macro_size) break;
                 dynamic_keymap_macro_get_buffer(offset++, 1, &d1);
                 if (d0 == 0 || d1 == 0)
                     break;

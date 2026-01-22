@@ -54,6 +54,13 @@ void raw_hid_send(uint8_t *data, uint8_t length) {
         // We need to shift it right by 6 bytes and prepend wrapper header
         // Note: last 6 bytes of VIA response will be truncated (wrapper overhead)
 
+        // Guard against integer underflow
+        if (length < 6) {
+            wrapper_pending = false;
+            host_raw_hid_send(data, length);
+            return;
+        }
+
         // Shift response right by 6 bytes to make room for header + protocol
         memmove(&data[6], data, length - 6);
 
@@ -101,6 +108,11 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
         // Request:  [0xDD] [0x00000000] [nonce:20]
         // Response: [0xDD] [0x00000000] [nonce:20] [new_client_id:4] [ttl:2]
 
+        // Guard against buffer overrun
+        if (length < 31) {
+            return true;
+        }
+
         uint32_t new_id = client_wrapper_allocate_id();
 
         // Nonce is at data[5..24], leave it in place (echo back)
@@ -143,6 +155,12 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
 
         case 0xFE: {
             // VIA - strip header, let VIA process, wrap response
+            // Guard against integer underflow
+            if (length < 6) {
+                send_error(client_id, CLIENT_ERR_UNKNOWN_PROTO, data, length);
+                return true;
+            }
+
             // Save state for raw_hid_send override
             wrapper_pending = true;
             wrapper_client_id = client_id;
