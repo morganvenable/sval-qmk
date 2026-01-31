@@ -203,31 +203,23 @@ enum viable_leader_options {
 enum viable_label_type {
     viable_label_type_layer          = 0,
     viable_label_type_tap_dance      = 1,
-    viable_label_type_combo          = 2,
-    viable_label_type_key_override   = 3,
-    viable_label_type_alt_repeat_key = 4,
-    viable_label_type_leader         = 5,
-    viable_label_type_macro          = 6,
+    viable_label_type_macro          = 2,
 };
 
-// Maximum label string length (UTF-8)
-#define VIABLE_LABEL_MAX_LENGTH 63
-
-// Label entry structure (66 bytes)
-// Uses sparse storage: only stores labels that are actually set
-// To find a label, scan all entries for matching type+index
-typedef struct __attribute__((packed)) {
-    uint8_t label_type;              // viable_label_type enum
-    uint8_t index;                   // Which item of that type
-    uint8_t length;                  // Actual string length (0 = slot unused)
-    char    string[VIABLE_LABEL_MAX_LENGTH];  // UTF-8 string data
-} viable_label_entry_t;
-_Static_assert(sizeof(viable_label_entry_t) == 66, "viable_label_entry_t must be 66 bytes");
-
-// Number of label slots - can be configured per keyboard
-#ifndef VIABLE_LABEL_ENTRIES
-#    define VIABLE_LABEL_ENTRIES 16
+// Label System v2: Fixed 8-character ASCII storage
+// Defaults for layer/macro counts if not defined
+#ifndef DYNAMIC_KEYMAP_LAYER_COUNT
+#    define DYNAMIC_KEYMAP_LAYER_COUNT 4
 #endif
+
+#ifndef DYNAMIC_KEYMAP_MACRO_COUNT
+#    define DYNAMIC_KEYMAP_MACRO_COUNT 16
+#endif
+
+// Label storage arrays (v2: fixed 8-byte ASCII per entry)
+extern char viable_td_labels[VIABLE_TAP_DANCE_ENTRIES][8];
+extern char viable_macro_labels[DYNAMIC_KEYMAP_MACRO_COUNT][8];
+extern char viable_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][8];
 
 // EEPROM layout constants - shared across all viable modules
 #define VIABLE_TAP_DANCE_OFFSET      0
@@ -257,11 +249,18 @@ _Static_assert(sizeof(viable_label_entry_t) == 66, "viable_label_entry_t must be
 #define VIABLE_FRAGMENT_OFFSET       (VIABLE_QMK_SETTINGS_OFFSET + VIABLE_QMK_SETTINGS_SIZE)
 #define VIABLE_FRAGMENT_SIZE         VIABLE_FRAGMENT_MAX_INSTANCES  // 21 bytes
 
-#define VIABLE_LABEL_OFFSET          (VIABLE_FRAGMENT_OFFSET + VIABLE_FRAGMENT_SIZE)
-#define VIABLE_LABEL_SIZE            (VIABLE_LABEL_ENTRIES * sizeof(viable_label_entry_t))
+// Label System v2: Fixed 8-byte arrays per type
+#define VIABLE_TD_LABEL_OFFSET       (VIABLE_FRAGMENT_OFFSET + VIABLE_FRAGMENT_SIZE)
+#define VIABLE_TD_LABEL_SIZE         (VIABLE_TAP_DANCE_ENTRIES * 8)
+
+#define VIABLE_MACRO_LABEL_OFFSET    (VIABLE_TD_LABEL_OFFSET + VIABLE_TD_LABEL_SIZE)
+#define VIABLE_MACRO_LABEL_SIZE      (DYNAMIC_KEYMAP_MACRO_COUNT * 8)
+
+#define VIABLE_LAYER_LABEL_OFFSET    (VIABLE_MACRO_LABEL_OFFSET + VIABLE_MACRO_LABEL_SIZE)
+#define VIABLE_LAYER_LABEL_SIZE      (DYNAMIC_KEYMAP_LAYER_COUNT * 8)
 
 // Total EEPROM size (all viable storage areas)
-#define VIABLE_EEPROM_SIZE           (VIABLE_LABEL_OFFSET + VIABLE_LABEL_SIZE)
+#define VIABLE_EEPROM_SIZE           (VIABLE_LAYER_LABEL_OFFSET + VIABLE_LAYER_LABEL_SIZE)
 
 // Public API
 void viable_init(void);
@@ -345,10 +344,13 @@ bool viable_handle_fragment_get_hardware(uint8_t *data, uint8_t length);
 bool viable_handle_fragment_get_selections(uint8_t *data, uint8_t length);
 bool viable_handle_fragment_set_selections(uint8_t *data, uint8_t length);
 
-// Storage API - Labels
-// Get label for a specific type+index (returns length, 0 if not found)
+// Storage API - Labels (v2: fixed 8-byte ASCII storage)
+// Get label for a specific type+index (returns actual length, 0 if empty)
+// Buffer receives exactly 8 bytes from storage (space-padded if shorter)
 uint8_t viable_get_label(uint8_t label_type, uint8_t index, char *buffer, uint8_t buffer_size);
-// Set label for a specific type+index (returns 0 on success, -1 on error)
+// Set label for a specific type+index (max 8 bytes, truncated if longer)
+// Returns 0 on success, -1 on error (invalid type/index)
 int viable_set_label(uint8_t label_type, uint8_t index, const char *string, uint8_t length);
-// Clear label for a specific type+index (returns 0 on success, -1 if not found)
+// Clear label for a specific type+index (sets all 8 bytes to 0x00)
+// Returns 0 on success, -1 on error (invalid type/index)
 int viable_clear_label(uint8_t label_type, uint8_t index);
