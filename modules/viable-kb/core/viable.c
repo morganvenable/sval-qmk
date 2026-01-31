@@ -677,15 +677,19 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
             return viable_handle_fragment_set_selections(data, length);
 
         case viable_cmd_label_get: {
-            // LABEL_GET_BULK (v2)
-            // Request: [0xDF] [0x1B] [type]
-            // Response: [0xDF] [0x1B] [type] [bitmap...] [labels...]
+            // LABEL_GET_BULK with chunking (v2.1)
+            // Request: [0xDF] [0x1B] [type] [offset]
+            //   offset = starting index to scan from (default 0 for backwards compat)
+            // Response: [0xDF] [0x1B] [type] [flags] [bitmap...] [labels...]
+            //   flags bit 0: more data available (1 = continue, 0 = done)
+            //   bitmap only included when offset == 0
             if (length < 3) {
                 data[1] = viable_cmd_error;
                 return false;
             }
 
             uint8_t label_type = data[2];
+            uint8_t start_offset = (length > 3) ? data[3] : 0;  // Default 0 for backwards compat
             uint8_t count;
             uint16_t eeprom_offset;
             char *labels = viable_get_label_array(label_type, &count, &eeprom_offset);
@@ -695,7 +699,12 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
                 return false;
             }
 
-            // Build bitmap (ceil(count/8) bytes)
+            // Clamp offset to valid range
+            if (start_offset >= count) {
+                start_offset = count;
+            }
+
+            // Build bitmap (ceil(count/8) bytes) - only needed on first chunk
             uint8_t bitmap_size = (count + 7) / 8;
             uint8_t bitmap[7] = {0};  // Max 7 bytes for 50 entries
 
@@ -707,23 +716,32 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
                 }
             }
 
-            // Build response: [0xDF] [0x1B] [type] [bitmap...] [labels...]
-            uint8_t offset = 3;
+            // Build response: [0xDF] [0x1B] [type] [flags] [bitmap?] [labels...]
+            // Byte 3 reserved for flags (set at end)
+            uint8_t resp_offset = 4;
 
-            // Copy bitmap
-            memcpy(&data[offset], bitmap, bitmap_size);
-            offset += bitmap_size;
+            // Include bitmap only on first chunk (offset == 0)
+            if (start_offset == 0) {
+                memcpy(&data[resp_offset], bitmap, bitmap_size);
+                resp_offset += bitmap_size;
+            }
 
-            // Copy non-empty labels (up to packet size limit)
-            // NOTE: For types with many labels (50 TDs/macros), not all labels
-            // will fit in one 32-byte packet. This simple implementation sends
-            // what fits; production should implement chunked retrieval.
-            for (uint8_t i = 0; i < count && offset + 8 <= 32; i++) {
+            // Send non-empty labels starting from offset
+            uint8_t flags = 0;
+            for (uint8_t i = start_offset; i < count; i++) {
                 if (!viable_label_is_empty(labels + (i * 8))) {
-                    memcpy(&data[offset], labels + (i * 8), 8);
-                    offset += 8;
+                    if (resp_offset + 8 <= 32) {
+                        memcpy(&data[resp_offset], labels + (i * 8), 8);
+                        resp_offset += 8;
+                    } else {
+                        // Packet full, more data available
+                        flags = 0x01;
+                        break;
+                    }
                 }
             }
+
+            data[3] = flags;  // Set continuation flag
 
             break;
         }
