@@ -96,9 +96,10 @@ int32_t m_scroll_accumulator_v = 0;
 
 bool scroll_timer_running = false;
 
-bool enable_scale_2 = false;
-bool enable_scale_3 = false;
-bool enable_scale_5 = false;
+uint8_t sniper_count = 0;
+bool sniper_2_toggled = false;
+bool sniper_3_toggled = false;
+bool sniper_5_toggled = false;
 
 static bool scroll_hold    = false,
             scroll_toggle  = false;
@@ -204,10 +205,22 @@ void handle_sniper_key(bool pressed, uint8_t divisor) {
     }
 }
 
+void sniper_activate(uint8_t divisor) {
+    sniper_count++;
+    handle_sniper_key(true, divisor);
+}
+
+void sniper_deactivate(uint8_t divisor) {
+    if (sniper_count > 0) {
+        sniper_count--;
+        handle_sniper_key(false, divisor);
+    }
+}
+
 report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, report_mouse_t reportMouse2) {
     report_mouse_t ret_mouse;
 
-    if (enable_scale_2 || enable_scale_3 || enable_scale_5) {
+    if (sniper_count > 0) {
         reportMouse1.x = add_to_axis(&sniper_x, reportMouse1.x);
         reportMouse1.y = add_to_axis(&sniper_y, reportMouse1.y);
         reportMouse1.h = add_to_axis(&sniper_h, reportMouse1.h);
@@ -467,16 +480,13 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
                 check_layer_67();
                 return false;
             case SV_SNIPER_2:
-	            enable_scale_2 = true;
-				handle_sniper_key(true, 2);
+                sniper_activate(2);
                 return false;
             case SV_SNIPER_3:
-                enable_scale_3 = true;
-                handle_sniper_key(true, 3);
+                sniper_activate(3);
                 return false;
             case SV_SNIPER_5:
-                enable_scale_5 = true;
-                handle_sniper_key(true, 5);
+                sniper_activate(5);
                 return false;
             case SV_SCROLL_HOLD:
                 scroll_hold = true;
@@ -517,22 +527,46 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
                 check_layer_67();
                 return false;
             case SV_SNIPER_2:
-                enable_scale_2 = false;
-                handle_sniper_key(false, 2);
+                sniper_deactivate(2);
                 return false;
             case SV_SNIPER_3:
-                enable_scale_3 = false;
-                handle_sniper_key(false, 3);
+                sniper_deactivate(3);
                 return false;
             case SV_SNIPER_5:
-                enable_scale_5 = false;
-                handle_sniper_key(false, 5);
+                sniper_deactivate(5);
                 return false;
             case SV_SCROLL_HOLD:
                 scroll_hold = false;
                 return false;
             case SV_SCROLL_TOGGLE:
                 scroll_toggle ^= true;
+                return false;
+            case SV_SNIPER_2_TOG:
+                if (sniper_2_toggled) {
+                    sniper_deactivate(2);
+                    sniper_2_toggled = false;
+                } else {
+                    sniper_activate(2);
+                    sniper_2_toggled = true;
+                }
+                return false;
+            case SV_SNIPER_3_TOG:
+                if (sniper_3_toggled) {
+                    sniper_deactivate(3);
+                    sniper_3_toggled = false;
+                } else {
+                    sniper_activate(3);
+                    sniper_3_toggled = true;
+                }
+                return false;
+            case SV_SNIPER_5_TOG:
+                if (sniper_5_toggled) {
+                    sniper_deactivate(5);
+                    sniper_5_toggled = false;
+                } else {
+                    sniper_activate(5);
+                    sniper_5_toggled = true;
+                }
                 return false;
         }
     }
