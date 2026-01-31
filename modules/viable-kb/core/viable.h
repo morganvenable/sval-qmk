@@ -306,6 +306,7 @@ void viable_reload_combo(void);
 void viable_reload_key_override(void);
 void viable_reload_alt_repeat_key(void);
 void viable_reload_leader(void);
+void viable_reload_labels(void);
 
 // Keycode execution helpers
 void viable_keycode_down(uint16_t keycode);
