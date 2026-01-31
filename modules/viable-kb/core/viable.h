@@ -83,7 +83,7 @@ enum viable_feature_flags {
 };
 
 // Keyboard definition chunk size (fits in 32-byte HID packet with header)
-#define VIABLE_DEFINITION_CHUNK_SIZE 28
+#define VIABLE_DEFINITION_CHUNK_SIZE 22
 
 // Entry counts - set by viable_config.h from viable.json
 // Features not in viable.json get 0 entries (disabled)
