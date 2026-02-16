@@ -310,21 +310,6 @@
             "shortName": "Sniper\n5x"
         },
         {
-            "name": "SV_SNIPER_2_TOG",
-            "title": "Toggle slow cursor 2x.",
-            "shortName": "Sniper\n2x\nToggle"
-        },
-        {
-            "name": "SV_SNIPER_3_TOG",
-            "title": "Toggle slow cursor 3x.",
-            "shortName": "Sniper\n3x\nToggle"
-        },
-        {
-            "name": "SV_SNIPER_5_TOG",
-            "title": "Toggle slow cursor 5x.",
-            "shortName": "Sniper\n5x\nToggle"
-        },
-        {
             "name": "SV_SCROLL_HOLD",
             "title": "Hold to toggle the scrolling mode of both pointers.",
             "shortName": "Scroll\nToggle\nHold"
@@ -353,6 +338,21 @@
             "name": "SV_NATURAL_SCROLL_TOGGLE",
             "title": "Toggle natural scroll (inverts vertical scroll direction).",
             "shortName": "Natural\nScroll"
+        },
+        {
+            "name": "SV_SNIPER_2_TOG",
+            "title": "Toggle slow cursor 2x.",
+            "shortName": "Sniper\n2x\nToggle"
+        },
+        {
+            "name": "SV_SNIPER_3_TOG",
+            "title": "Toggle slow cursor 3x.",
+            "shortName": "Sniper\n3x\nToggle"
+        },
+        {
+            "name": "SV_SNIPER_5_TOG",
+            "title": "Toggle slow cursor 5x.",
+            "shortName": "Sniper\n5x\nToggle"
         }
     ],
     "menus": [
