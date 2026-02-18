@@ -22,10 +22,10 @@ ASSERT_COMMUNITY_MODULES_MIN_API_VERSION(1, 0, 0);
 // Global for keycode override during tap dance execution
 uint16_t g_viable_magic_keycode_override;
 
-// Label System v2: Fixed 8-character ASCII storage arrays
-char viable_td_labels[VIABLE_TAP_DANCE_ENTRIES][8];
-char viable_macro_labels[DYNAMIC_KEYMAP_MACRO_COUNT][8];
-char viable_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][8];
+// Label System v2: Fixed VIABLE_LABEL_SIZE-byte UTF-8 storage arrays
+char viable_td_labels[VIABLE_TAP_DANCE_ENTRIES][VIABLE_LABEL_SIZE];
+char viable_macro_labels[DYNAMIC_KEYMAP_MACRO_COUNT][VIABLE_LABEL_SIZE];
+char viable_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][VIABLE_LABEL_SIZE];
 
 // Internal EEPROM access functions - uses eeconfig_kb_datablock
 static void viable_read_eeprom(uint16_t offset, void *buf, uint16_t size) {
@@ -210,7 +210,7 @@ int viable_set_leader(uint8_t index, const viable_leader_entry_t *entry) {
     return 0;
 }
 
-// Storage functions - Labels (v2: fixed 8-byte arrays)
+// Storage functions - Labels (v2: fixed VIABLE_LABEL_SIZE-byte arrays)
 
 // Helper: Get pointer to label array and count for a given type
 static char* viable_get_label_array(uint8_t label_type, uint8_t *count, uint16_t *eeprom_offset) {
@@ -236,7 +236,7 @@ static char* viable_get_label_array(uint8_t label_type, uint8_t *count, uint16_t
 
 // Helper: Check if label is empty (all bytes are 0x00)
 static bool viable_label_is_empty(const char *label) {
-    for (uint8_t i = 0; i < 8; i++) {
+    for (uint8_t i = 0; i < VIABLE_LABEL_SIZE; i++) {
         if (label[i] != 0x00) return false;
     }
     return true;
@@ -254,13 +254,13 @@ uint8_t viable_get_label(uint8_t label_type, uint8_t index, char *buffer, uint8_
         return 0;
     }
 
-    // Copy label from RAM array (exactly 8 bytes)
-    char *label = labels + (index * 8);
+    // Copy label from RAM array (exactly VIABLE_LABEL_SIZE bytes)
+    char *label = labels + (index * VIABLE_LABEL_SIZE);
 
-    // Find actual length (excluding trailing spaces/nulls)
+    // Find actual length (excluding trailing nulls)
     uint8_t len = 0;
-    for (uint8_t i = 0; i < 8; i++) {
-        if (label[i] != 0x00 && label[i] != 0x20) {
+    for (uint8_t i = 0; i < VIABLE_LABEL_SIZE; i++) {
+        if (label[i] != 0x00) {
             len = i + 1;
         }
     }
@@ -286,20 +286,20 @@ int viable_set_label(uint8_t label_type, uint8_t index, const char *string, uint
 
     if (!labels || index >= count) return -1;
 
-    // Truncate to 8 bytes max
-    if (length > 8) length = 8;
+    // Truncate to VIABLE_LABEL_SIZE bytes max
+    if (length > VIABLE_LABEL_SIZE) length = VIABLE_LABEL_SIZE;
 
     // Get pointer to label slot
-    char *label = labels + (index * 8);
+    char *label = labels + (index * VIABLE_LABEL_SIZE);
 
-    // Copy label data and space-pad remainder
+    // Copy label data and null-pad remainder
     memcpy(label, string, length);
-    if (length < 8) {
-        memset(label + length, 0x20, 8 - length);
+    if (length < VIABLE_LABEL_SIZE) {
+        memset(label + length, 0x00, VIABLE_LABEL_SIZE - length);
     }
 
     // Write to EEPROM
-    viable_write_eeprom(eeprom_offset + (index * 8), label, 8);
+    viable_write_eeprom(eeprom_offset + (index * VIABLE_LABEL_SIZE), label, VIABLE_LABEL_SIZE);
 
     return 0;
 }
@@ -312,11 +312,11 @@ int viable_clear_label(uint8_t label_type, uint8_t index) {
     if (!labels || index >= count) return -1;
 
     // Get pointer to label slot and clear it
-    char *label = labels + (index * 8);
-    memset(label, 0x00, 8);
+    char *label = labels + (index * VIABLE_LABEL_SIZE);
+    memset(label, 0x00, VIABLE_LABEL_SIZE);
 
     // Write to EEPROM
-    viable_write_eeprom(eeprom_offset + (index * 8), label, 8);
+    viable_write_eeprom(eeprom_offset + (index * VIABLE_LABEL_SIZE), label, VIABLE_LABEL_SIZE);
 
     return 0;
 }
@@ -325,15 +325,15 @@ int viable_clear_label(uint8_t label_type, uint8_t index) {
 void viable_reload_labels(void) {
     // Load layer labels
     viable_read_eeprom(VIABLE_LAYER_LABEL_OFFSET, viable_layer_labels,
-                      DYNAMIC_KEYMAP_LAYER_COUNT * 8);
+                      DYNAMIC_KEYMAP_LAYER_COUNT * VIABLE_LABEL_SIZE);
 
     // Load tap dance labels
     viable_read_eeprom(VIABLE_TD_LABEL_OFFSET, viable_td_labels,
-                      VIABLE_TAP_DANCE_ENTRIES * 8);
+                      VIABLE_TAP_DANCE_ENTRIES * VIABLE_LABEL_SIZE);
 
     // Load macro labels
     viable_read_eeprom(VIABLE_MACRO_LABEL_OFFSET, viable_macro_labels,
-                      DYNAMIC_KEYMAP_MACRO_COUNT * 8);
+                      DYNAMIC_KEYMAP_MACRO_COUNT * VIABLE_LABEL_SIZE);
 }
 
 void viable_save(void) {
@@ -709,7 +709,7 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
             uint8_t bitmap[7] = {0};  // Max 7 bytes for 50 entries
 
             for (uint8_t i = 0; i < count; i++) {
-                if (!viable_label_is_empty(labels + (i * 8))) {
+                if (!viable_label_is_empty(labels + (i * VIABLE_LABEL_SIZE))) {
                     uint8_t byte_idx = i / 8;
                     uint8_t bit_idx = 7 - (i % 8);  // MSB to LSB
                     bitmap[byte_idx] |= (1 << bit_idx);
@@ -729,10 +729,10 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
             // Send non-empty labels starting from offset
             uint8_t flags = 0;
             for (uint8_t i = start_offset; i < count; i++) {
-                if (!viable_label_is_empty(labels + (i * 8))) {
-                    if (resp_offset + 8 <= 32) {
-                        memcpy(&data[resp_offset], labels + (i * 8), 8);
-                        resp_offset += 8;
+                if (!viable_label_is_empty(labels + (i * VIABLE_LABEL_SIZE))) {
+                    if (resp_offset + VIABLE_LABEL_SIZE <= length) {
+                        memcpy(&data[resp_offset], labels + (i * VIABLE_LABEL_SIZE), VIABLE_LABEL_SIZE);
+                        resp_offset += VIABLE_LABEL_SIZE;
                     } else {
                         // Packet full, more data available
                         flags = 0x01;
@@ -748,28 +748,104 @@ bool viable_handle_command(uint8_t *data, uint8_t length) {
 
         case viable_cmd_label_set: {
             // LABEL_SET (v2)
-            // Request: [0xDF] [0x1C] [type] [index] [8-byte label]
+            // Request: [0xDF] [0x1C] [type] [index] [VIABLE_LABEL_SIZE-byte label]
             // Response: [0xDF] [0x1C] [status]
-            if (length < 12) {  // 2 header + 2 params + 8 label bytes
+            if (length < 4 + VIABLE_LABEL_SIZE) {  // 2 header + 2 params + label bytes
                 data[1] = viable_cmd_error;
                 return false;
             }
 
             uint8_t label_type = data[2];
             uint8_t index = data[3];
-            const char *label = (const char*)&data[4];
+            const uint8_t *label = &data[4];
 
-            // Validate ASCII characters (0x20-0x7E or 0x00)
-            for (uint8_t i = 0; i < 8; i++) {
-                uint8_t c = label[i];
-                if (c != 0x00 && (c < 0x20 || c > 0x7E)) {
-                    data[2] = 0x03;  // Invalid characters
-                    return true;
+            // Validate UTF-8 sequences
+            // Accept: valid UTF-8 (including multi-byte), 0x00 as null terminator
+            // Reject: C0/C1 overlong encodings, F5+ invalid lead bytes,
+            //         invalid continuation bytes, control chars 0x01-0x1F (except tab)
+            {
+                bool in_null_tail = false;
+                uint8_t i = 0;
+                while (i < VIABLE_LABEL_SIZE) {
+                    uint8_t c = label[i];
+                    if (c == 0x00) {
+                        // Null byte: everything after must also be null
+                        in_null_tail = true;
+                        i++;
+                        continue;
+                    }
+                    if (in_null_tail) {
+                        // Non-null byte after null — invalid
+                        data[2] = 0x03;
+                        return true;
+                    }
+                    if (c >= 0x01 && c <= 0x1F && c != 0x09) {
+                        // Control characters (except tab) — reject
+                        data[2] = 0x03;
+                        return true;
+                    }
+                    if (c == 0x7F) {
+                        // DEL — reject
+                        data[2] = 0x03;
+                        return true;
+                    }
+                    if (c <= 0x7F) {
+                        // Valid single-byte ASCII (0x20-0x7E, 0x09)
+                        i++;
+                        continue;
+                    }
+                    // Multi-byte UTF-8 sequence
+                    uint8_t expected_cont = 0;
+                    if (c >= 0xC2 && c <= 0xDF) {
+                        expected_cont = 1;  // 2-byte sequence
+                    } else if (c >= 0xE0 && c <= 0xEF) {
+                        expected_cont = 2;  // 3-byte sequence
+                    } else if (c >= 0xF0 && c <= 0xF4) {
+                        expected_cont = 3;  // 4-byte sequence
+                    } else {
+                        // Invalid lead byte (0x80-0xC1, 0xF5+)
+                        data[2] = 0x03;
+                        return true;
+                    }
+                    // Check continuation bytes exist and are valid (0x80-0xBF)
+                    if (i + expected_cont >= VIABLE_LABEL_SIZE) {
+                        // Truncated sequence — reject
+                        data[2] = 0x03;
+                        return true;
+                    }
+                    for (uint8_t j = 1; j <= expected_cont; j++) {
+                        uint8_t cb = label[i + j];
+                        if (cb < 0x80 || cb > 0xBF) {
+                            data[2] = 0x03;
+                            return true;
+                        }
+                    }
+                    // Reject overlong 3-byte sequences (E0 80-9F xx)
+                    if (c == 0xE0 && label[i + 1] < 0xA0) {
+                        data[2] = 0x03;
+                        return true;
+                    }
+                    // Reject surrogates (ED A0-BF xx)
+                    if (c == 0xED && label[i + 1] > 0x9F) {
+                        data[2] = 0x03;
+                        return true;
+                    }
+                    // Reject overlong 4-byte sequences (F0 80-8F xx xx)
+                    if (c == 0xF0 && label[i + 1] < 0x90) {
+                        data[2] = 0x03;
+                        return true;
+                    }
+                    // Reject codepoints above U+10FFFF (F4 90+ xx xx)
+                    if (c == 0xF4 && label[i + 1] > 0x8F) {
+                        data[2] = 0x03;
+                        return true;
+                    }
+                    i += 1 + expected_cont;
                 }
             }
 
             // Attempt to set label
-            int result = viable_set_label(label_type, index, label, 8);
+            int result = viable_set_label(label_type, index, (const char*)label, VIABLE_LABEL_SIZE);
 
             // Map result to status code
             if (result == 0) {

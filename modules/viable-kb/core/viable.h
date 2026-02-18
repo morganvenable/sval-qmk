@@ -206,7 +206,10 @@ enum viable_label_type {
     viable_label_type_macro          = 2,
 };
 
-// Label System v2: Fixed 8-character ASCII storage
+// Label System v2: Fixed 16-byte UTF-8 storage
+// Label size constant - shared by all label types (layer, TD, macro)
+#define VIABLE_LABEL_SIZE 16
+
 // Defaults for layer/macro counts if not defined
 #ifndef DYNAMIC_KEYMAP_LAYER_COUNT
 #    define DYNAMIC_KEYMAP_LAYER_COUNT 4
@@ -216,10 +219,10 @@ enum viable_label_type {
 #    define DYNAMIC_KEYMAP_MACRO_COUNT 16
 #endif
 
-// Label storage arrays (v2: fixed 8-byte ASCII per entry)
-extern char viable_td_labels[VIABLE_TAP_DANCE_ENTRIES][8];
-extern char viable_macro_labels[DYNAMIC_KEYMAP_MACRO_COUNT][8];
-extern char viable_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][8];
+// Label storage arrays (v2: fixed VIABLE_LABEL_SIZE-byte UTF-8 per entry)
+extern char viable_td_labels[VIABLE_TAP_DANCE_ENTRIES][VIABLE_LABEL_SIZE];
+extern char viable_macro_labels[DYNAMIC_KEYMAP_MACRO_COUNT][VIABLE_LABEL_SIZE];
+extern char viable_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][VIABLE_LABEL_SIZE];
 
 // EEPROM layout constants - shared across all viable modules
 #define VIABLE_TAP_DANCE_OFFSET      0
@@ -249,15 +252,15 @@ extern char viable_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][8];
 #define VIABLE_FRAGMENT_OFFSET       (VIABLE_QMK_SETTINGS_OFFSET + VIABLE_QMK_SETTINGS_SIZE)
 #define VIABLE_FRAGMENT_SIZE         VIABLE_FRAGMENT_MAX_INSTANCES  // 21 bytes
 
-// Label System v2: Fixed 8-byte arrays per type
+// Label System v2: Fixed VIABLE_LABEL_SIZE-byte arrays per type
 #define VIABLE_TD_LABEL_OFFSET       (VIABLE_FRAGMENT_OFFSET + VIABLE_FRAGMENT_SIZE)
-#define VIABLE_TD_LABEL_SIZE         (VIABLE_TAP_DANCE_ENTRIES * 8)
+#define VIABLE_TD_LABEL_SIZE         (VIABLE_TAP_DANCE_ENTRIES * VIABLE_LABEL_SIZE)
 
 #define VIABLE_MACRO_LABEL_OFFSET    (VIABLE_TD_LABEL_OFFSET + VIABLE_TD_LABEL_SIZE)
-#define VIABLE_MACRO_LABEL_SIZE      (DYNAMIC_KEYMAP_MACRO_COUNT * 8)
+#define VIABLE_MACRO_LABEL_SIZE      (DYNAMIC_KEYMAP_MACRO_COUNT * VIABLE_LABEL_SIZE)
 
 #define VIABLE_LAYER_LABEL_OFFSET    (VIABLE_MACRO_LABEL_OFFSET + VIABLE_MACRO_LABEL_SIZE)
-#define VIABLE_LAYER_LABEL_SIZE      (DYNAMIC_KEYMAP_LAYER_COUNT * 8)
+#define VIABLE_LAYER_LABEL_SIZE      (DYNAMIC_KEYMAP_LAYER_COUNT * VIABLE_LABEL_SIZE)
 
 // Total EEPROM size (all viable storage areas)
 #define VIABLE_EEPROM_SIZE           (VIABLE_LAYER_LABEL_OFFSET + VIABLE_LAYER_LABEL_SIZE)
@@ -345,13 +348,13 @@ bool viable_handle_fragment_get_hardware(uint8_t *data, uint8_t length);
 bool viable_handle_fragment_get_selections(uint8_t *data, uint8_t length);
 bool viable_handle_fragment_set_selections(uint8_t *data, uint8_t length);
 
-// Storage API - Labels (v2: fixed 8-byte ASCII storage)
+// Storage API - Labels (v2: fixed VIABLE_LABEL_SIZE-byte UTF-8 storage)
 // Get label for a specific type+index (returns actual length, 0 if empty)
-// Buffer receives exactly 8 bytes from storage (space-padded if shorter)
+// Buffer receives exactly VIABLE_LABEL_SIZE bytes from storage (null-padded if shorter)
 uint8_t viable_get_label(uint8_t label_type, uint8_t index, char *buffer, uint8_t buffer_size);
-// Set label for a specific type+index (max 8 bytes, truncated if longer)
+// Set label for a specific type+index (max VIABLE_LABEL_SIZE bytes, truncated if longer)
 // Returns 0 on success, -1 on error (invalid type/index)
 int viable_set_label(uint8_t label_type, uint8_t index, const char *string, uint8_t length);
-// Clear label for a specific type+index (sets all 8 bytes to 0x00)
+// Clear label for a specific type+index (sets all VIABLE_LABEL_SIZE bytes to 0x00)
 // Returns 0 on success, -1 on error (invalid type/index)
 int viable_clear_label(uint8_t label_type, uint8_t index);
