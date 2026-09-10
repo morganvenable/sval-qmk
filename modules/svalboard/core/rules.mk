@@ -11,9 +11,6 @@ OPT_DEFS += -DSERIAL_NUMBER=\"$(SERIAL_NUMBER)\"
 OPT_DEFS += -DRAW_USAGE_PAGE=0xFF61
 OPT_DEFS += -DRAW_USAGE_ID=0x62
 
-# Enable tapping term per key for tap dance custom timing
-TAPPING_TERM_PER_KEY ?= yes
-
 # Module path for source files
 SVAL_MODULE_PATH := $(dir $(lastword $(MAKEFILE_LIST)))
 

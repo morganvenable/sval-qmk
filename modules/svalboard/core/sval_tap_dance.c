@@ -33,9 +33,6 @@ static uint8_t dance_step(tap_dance_state_t *state) {
     return MORE_TAPS;
 }
 
-// Check if tap dance entry is enabled (bit 15 of custom_tapping_term)
-#define TD_ENABLED(entry) ((entry).custom_tapping_term & 0x8000)
-
 static void on_dance(tap_dance_state_t *state, void *user_data) {
     uint16_t index = (uintptr_t)user_data;
     if (sval_get_tap_dance(index, &td_entry) != 0)
@@ -188,37 +185,6 @@ tap_dance_action_t* tap_dance_get(uint16_t tap_dance_idx) {
     }
     return &sval_tap_dance_actions[tap_dance_idx];
 }
-
-#ifdef TAPPING_TERM_PER_KEY
-// User hook: override this for custom per-key tapping term logic
-// Return 0 to use Sval's setting, or a positive value to override
-__attribute__((weak)) uint16_t get_tapping_term_sval(uint16_t keycode, keyrecord_t *record) {
-    return 0;  // Default: use Sval's setting
-}
-
-// Sval owns this function - user hook is checked FIRST
-uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
-    // User hook gets first priority
-    uint16_t user_term = get_tapping_term_sval(keycode, record);
-    if (user_term > 0) {
-        return user_term;
-    }
-
-    // Then check for per-tap-dance custom timing from Sval
-    if (keycode >= QK_TAP_DANCE && keycode <= QK_TAP_DANCE_MAX) {
-        sval_tap_dance_entry_t td;
-        if (sval_get_tap_dance(keycode & 0xFF, &td) == 0 && TD_ENABLED(td)) {
-            uint16_t term = td.custom_tapping_term & 0x7FFF;  // Mask off enabled bit
-            if (term > 0) {
-                return term;
-            }
-        }
-    }
-
-    // Fall back to Sval's global setting
-    return sval_get_tapping_term();
-}
-#endif
 
 // Stub - tap dance processing is handled by QMK's standard mechanism
 bool process_record_sval_tap_dance(uint16_t keycode, keyrecord_t *record) {
