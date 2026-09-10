@@ -46,6 +46,14 @@
 #define HOLD_ON_OTHER_KEY_PRESS_PER_KEY
 #define QUICK_TAP_TERM_PER_KEY
 
+// Compile in the remaining Tap-Hold features whose toggles QMK Settings
+// exposes (Chordal Hold, Flow Tap, Retro Tapping). Each decision is routed
+// through a callback in sval_qmk_settings.c that honours the stored setting;
+// with the setting off, behaviour is the same as the feature not being built.
+#define CHORDAL_HOLD
+#define FLOW_TAP_TERM 0 // placeholder: the runtime value comes from get_flow_tap_term()
+#define RETRO_TAPPING_PER_KEY
+
 // QMK settings storage size (sval_qmk_settings_t)
 #define SVAL_QMK_SETTINGS_SIZE 44
 

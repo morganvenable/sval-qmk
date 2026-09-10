@@ -361,6 +361,9 @@ void sval_qmk_settings_reset(void) {
 #if defined(SVAL_DEFAULT_RETRO_TAPPING) && SVAL_DEFAULT_RETRO_TAPPING
     settings.tapping_v2 |= (1 << TAPPING_RETRO_TAPPING_BIT);
 #endif
+#ifdef SVAL_DEFAULT_FLOW_TAP_TERM
+    settings.flow_tap_term = SVAL_DEFAULT_FLOW_TAP_TERM;
+#endif
 
 #ifdef MOUSEKEY_ENABLE
     settings.mousekey_delay = MOUSEKEY_DELAY;
@@ -429,6 +432,14 @@ __attribute__((weak)) uint16_t get_quick_tap_term_sval(uint16_t keycode, keyreco
     return 0;  // Default: use Sval's setting
 }
 
+__attribute__((weak)) int8_t get_chordal_hold_sval(uint16_t tap_hold_keycode, keyrecord_t *tap_hold_record, uint16_t other_keycode, keyrecord_t *other_record) {
+    return -1; // Default: use Sval's setting
+}
+
+__attribute__((weak)) uint16_t get_flow_tap_term_sval(uint16_t keycode, keyrecord_t *record, uint16_t prev_keycode) {
+    return 0; // Default: use Sval's setting
+}
+
 // Sval owns these functions - user hook is checked FIRST
 uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
     uint16_t user_term = get_tapping_term_sval(keycode, record);
@@ -474,6 +485,30 @@ uint16_t get_quick_tap_term(uint16_t keycode, keyrecord_t *record) {
     uint16_t user_val = get_quick_tap_term_sval(keycode, record);
     if (user_val > 0) return user_val;
     return settings.quick_tap_term;
+}
+
+// Chordal Hold: when the setting is off, allow every chord to settle as a
+// hold. That is QMK's "opposite hands" path, which adds no behaviour beyond
+// the other tap-hold options, so it matches CHORDAL_HOLD not being built.
+// When on, apply the opposite-hands rule using the keyboard's
+// chordal_hold_layout (QMK generates one from the layout if the keyboard
+// doesn't define its own).
+bool get_chordal_hold(uint16_t tap_hold_keycode, keyrecord_t *tap_hold_record, uint16_t other_keycode, keyrecord_t *other_record) {
+    int8_t user_val = get_chordal_hold_sval(tap_hold_keycode, tap_hold_record, other_keycode, other_record);
+    if (user_val >= 0) return user_val;
+    if (!(settings.tapping_v2 & (1 << TAPPING_CHORDAL_HOLD_BIT))) return true;
+    return get_chordal_hold_default(tap_hold_record, other_record);
+}
+
+// Flow Tap: QMK treats a term of 0 as "no filtering", so a stored value of 0
+// (the default) leaves Flow Tap off.
+uint16_t get_flow_tap_term(uint16_t keycode, keyrecord_t *record, uint16_t prev_keycode) {
+    uint16_t user_val = get_flow_tap_term_sval(keycode, record, prev_keycode);
+    if (user_val > 0) return user_val;
+    if (settings.flow_tap_term > 0 && is_flow_tap_key(keycode) && is_flow_tap_key(prev_keycode)) {
+        return settings.flow_tap_term;
+    }
+    return 0;
 }
 
 // Getters for other modules to use
