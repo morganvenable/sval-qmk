@@ -229,6 +229,11 @@
                                     "type": "range",
                                     "options": [0, 255],
                                     "content": ["id_automouse_decay", 1, 10]
+                                },
+                                {
+                                    "label": "Skip Activation in Scroll Mode",
+                                    "type": "toggle",
+                                    "content": ["id_automouse_skip_scroll", 1, 11]
                                 }
                             ]
                         }

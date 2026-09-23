@@ -79,6 +79,7 @@ void read_eeprom_kb(void) {
         global_saved_values.axis_scroll_lock = true;
         global_saved_values.turbo_scan = 0;
         global_saved_values.natural_scroll = false;
+        global_saved_values.automouse_skip_scroll = false;
         global_saved_values.automouse_threshold = 50;
         global_saved_values.automouse_decay = 7;  // 70ms
 
@@ -140,11 +141,12 @@ void output_keyboard_info(void) {
 	    yes_or_no(global_saved_values.left_scroll), dpi_choices[global_saved_values.left_dpi_index],
 	    yes_or_no(global_saved_values.right_scroll), dpi_choices[global_saved_values.right_dpi_index]);
     send_string(output_buffer);
-    sprintf(output_buffer, "Axis Scroll Lock: %s (is Mac: %d), Natural Scroll: %s, Mouse Layer: %s, Mouse Layer Timeout: %d, Turbo Scan: %d\n",
+    sprintf(output_buffer, "Axis Scroll Lock: %s (is Mac: %d), Natural Scroll: %s, Mouse Layer: %s, Mouse Layer Skip Scroll: %s, Mouse Layer Timeout: %d, Turbo Scan: %d\n",
 	    yes_or_no(global_saved_values.axis_scroll_lock),
 	    is_mac,
 	    yes_or_no(global_saved_values.natural_scroll),
 	    yes_or_no(global_saved_values.auto_mouse),
+	    yes_or_no(global_saved_values.automouse_skip_scroll),
 	    mh_timer_choices[global_saved_values.mh_timer_index],
 	    global_saved_values.turbo_scan);
     send_string(output_buffer);
@@ -347,6 +349,7 @@ enum sval_via_value_id {
     id_axis_lock = 8,
     id_turbo_scan = 9,
     id_automouse_decay = 10,  // Accumulator decay time in 10ms units
+    id_automouse_skip_scroll = 11,  // Ignore scroll-mode movement for mouse layer activation
     id_tapping_term = 16,
     id_permissive_hold = 17,
     id_hold_on_other_key = 18,
@@ -408,6 +411,9 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 case id_automouse_decay:
                     global_saved_values.automouse_decay = value_data[0];
                     break;
+                case id_automouse_skip_scroll:
+                    global_saved_values.automouse_skip_scroll = value_data[0];
+                    break;
                 default:
                     // Layer colors: id 32-47
                     if (*value_id >= id_layer0_color && *value_id < id_layer0_color + 16) {
@@ -459,6 +465,9 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                     break;
                 case id_automouse_decay:
                     value_data[0] = global_saved_values.automouse_decay;
+                    break;
+                case id_automouse_skip_scroll:
+                    value_data[0] = global_saved_values.automouse_skip_scroll;
                     break;
                 default:
                     // Layer colors: id 32-47
