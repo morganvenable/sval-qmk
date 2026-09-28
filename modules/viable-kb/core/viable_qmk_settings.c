@@ -192,12 +192,17 @@ static void viable_qmk_settings_apply(void) {
 // Query supported QSIDs greater than qsid_gt
 // Response format: list of uint16_t QSIDs, terminated by 0xFFFF
 void viable_qmk_settings_query(uint16_t qsid_gt, uint8_t *buffer, uint8_t length) {
+    // Guard against invalid buffer size
+    if (length < 2) {
+        return;
+    }
+
     memset(buffer, 0xFF, length);
 
     size_t buf_offset = 0;
     for (size_t i = 0; i < NUM_SETTINGS; i++) {
         if (setting_descs[i].qsid > qsid_gt) {
-            // Reserve 2 bytes for 0xFFFF terminator
+            // Ensure room for QSID (2 bytes) and terminator (2 bytes)
             if (buf_offset + 4 > length) break;
             buffer[buf_offset++] = setting_descs[i].qsid & 0xFF;
             buffer[buf_offset++] = (setting_descs[i].qsid >> 8) & 0xFF;

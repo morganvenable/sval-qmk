@@ -37,7 +37,16 @@ extern uint16_t viable_leader_timeout;
 #define LEADER_TIMEOUT (viable_leader_timeout)
 #endif
 
-// Total size: tap_dance*10 + combo*12 + key_override*12 + alt_repeat*6 + one_shot(3) + leader*14 + magic(6) + qmk_settings(44) + fragments(21)
+// Defaults for dynamic keymap counts (needed for label storage calculation)
+#ifndef DYNAMIC_KEYMAP_LAYER_COUNT
+#    define DYNAMIC_KEYMAP_LAYER_COUNT 4
+#endif
+
+#ifndef DYNAMIC_KEYMAP_MACRO_COUNT
+#    define DYNAMIC_KEYMAP_MACRO_COUNT 16
+#endif
+
+// Total size: tap_dance*10 + combo*12 + key_override*12 + alt_repeat*6 + one_shot(3) + leader*14 + magic(6) + qmk_settings(44) + fragments(21) + labels_v2(td*16 + macro*16 + layer*16)
 #define VIABLE_EEPROM_SIZE_CALC ( \
     (VIABLE_TAP_DANCE_ENTRIES * 10) + \
     (VIABLE_COMBO_ENTRIES * 12) + \
@@ -45,7 +54,10 @@ extern uint16_t viable_leader_timeout;
     (VIABLE_ALT_REPEAT_KEY_ENTRIES * 6) + \
     3 + \
     (VIABLE_LEADER_ENTRIES * 14) + \
-    6 + VIABLE_QMK_SETTINGS_SIZE + 21)
+    6 + VIABLE_QMK_SETTINGS_SIZE + 21 + \
+    (VIABLE_TAP_DANCE_ENTRIES * 16) + \
+    (DYNAMIC_KEYMAP_MACRO_COUNT * 16) + \
+    (DYNAMIC_KEYMAP_LAYER_COUNT * 16))
 
 #ifndef EECONFIG_KB_DATA_SIZE
 #    define EECONFIG_KB_DATA_SIZE VIABLE_EEPROM_SIZE_CALC

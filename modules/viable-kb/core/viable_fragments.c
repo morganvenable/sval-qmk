@@ -125,6 +125,12 @@ bool viable_handle_fragment_set_selections(uint8_t *data, uint8_t length) {
         return true;
     }
 
+    // Validate instance count doesn't exceed configured count
+    uint8_t instance_count = viable_fragment_get_instance_count();
+    if (count > instance_count) {
+        count = instance_count;
+    }
+
     // Write all selections to EEPROM
     for (uint8_t i = 0; i < count; i++) {
         viable_fragment_set_selection(i, data[3 + i]);
