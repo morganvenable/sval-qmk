@@ -229,6 +229,16 @@
                                     "type": "range",
                                     "options": [0, 255],
                                     "content": ["id_automouse_decay", 1, 10]
+                                },
+                                {
+                                    "label": "Left Pointer Activates",
+                                    "type": "toggle",
+                                    "content": ["id_left_automouse", 1, 11]
+                                },
+                                {
+                                    "label": "Right Pointer Activates",
+                                    "type": "toggle",
+                                    "content": ["id_right_automouse", 1, 12]
                                 }
                             ]
                         }

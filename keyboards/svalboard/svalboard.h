@@ -32,7 +32,9 @@ struct __attribute__((__packed__)) saved_values {
     bool axis_scroll_lock: 1;
     bool auto_mouse: 1;
     bool natural_scroll: 1;
-    unsigned int unused0 :3;
+    bool left_automouse: 1;  // Left pointer movement activates the auto mouse layer
+    bool right_automouse: 1; // Right pointer movement activates the auto mouse layer
+    unsigned int unused0 :1;
     uint8_t left_dpi_index;
     uint8_t right_dpi_index;
     uint8_t mh_timer_index;

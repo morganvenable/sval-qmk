@@ -66,6 +66,10 @@ enum viable_command_id {
     viable_cmd_fragment_get_hardware   = 0x18,
     viable_cmd_fragment_get_selections = 0x19,
     viable_cmd_fragment_set_selections = 0x1A,
+    // Label commands (user-defined names for layers, tap dances, etc.)
+    viable_cmd_label_get         = 0x1B,
+    viable_cmd_label_set         = 0x1C,
+    viable_cmd_label_clear       = 0x1D,
     viable_cmd_error             = 0xFF,
 };
 
@@ -79,7 +83,7 @@ enum viable_feature_flags {
 };
 
 // Keyboard definition chunk size (fits in 32-byte HID packet with header)
-#define VIABLE_DEFINITION_CHUNK_SIZE 28
+#define VIABLE_DEFINITION_CHUNK_SIZE 22
 
 // Entry counts - set by viable_config.h from viable.json
 // Features not in viable.json get 0 entries (disabled)
@@ -195,6 +199,31 @@ enum viable_leader_options {
     // bits 0-14 reserved
 };
 
+// Label types - what kind of item the label describes
+enum viable_label_type {
+    viable_label_type_layer          = 0,
+    viable_label_type_tap_dance      = 1,
+    viable_label_type_macro          = 2,
+};
+
+// Label System v2: Fixed 16-byte UTF-8 storage
+// Label size constant - shared by all label types (layer, TD, macro)
+#define VIABLE_LABEL_SIZE 16
+
+// Defaults for layer/macro counts if not defined
+#ifndef DYNAMIC_KEYMAP_LAYER_COUNT
+#    define DYNAMIC_KEYMAP_LAYER_COUNT 4
+#endif
+
+#ifndef DYNAMIC_KEYMAP_MACRO_COUNT
+#    define DYNAMIC_KEYMAP_MACRO_COUNT 16
+#endif
+
+// Label storage arrays (v2: fixed VIABLE_LABEL_SIZE-byte UTF-8 per entry)
+extern char viable_td_labels[VIABLE_TAP_DANCE_ENTRIES][VIABLE_LABEL_SIZE];
+extern char viable_macro_labels[DYNAMIC_KEYMAP_MACRO_COUNT][VIABLE_LABEL_SIZE];
+extern char viable_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][VIABLE_LABEL_SIZE];
+
 // EEPROM layout constants - shared across all viable modules
 #define VIABLE_TAP_DANCE_OFFSET      0
 #define VIABLE_TAP_DANCE_SIZE        (VIABLE_TAP_DANCE_ENTRIES * sizeof(viable_tap_dance_entry_t))
@@ -223,8 +252,18 @@ enum viable_leader_options {
 #define VIABLE_FRAGMENT_OFFSET       (VIABLE_QMK_SETTINGS_OFFSET + VIABLE_QMK_SETTINGS_SIZE)
 #define VIABLE_FRAGMENT_SIZE         VIABLE_FRAGMENT_MAX_INSTANCES  // 21 bytes
 
+// Label System v2: Fixed VIABLE_LABEL_SIZE-byte arrays per type
+#define VIABLE_TD_LABEL_OFFSET       (VIABLE_FRAGMENT_OFFSET + VIABLE_FRAGMENT_SIZE)
+#define VIABLE_TD_LABEL_SIZE         (VIABLE_TAP_DANCE_ENTRIES * VIABLE_LABEL_SIZE)
+
+#define VIABLE_MACRO_LABEL_OFFSET    (VIABLE_TD_LABEL_OFFSET + VIABLE_TD_LABEL_SIZE)
+#define VIABLE_MACRO_LABEL_SIZE      (DYNAMIC_KEYMAP_MACRO_COUNT * VIABLE_LABEL_SIZE)
+
+#define VIABLE_LAYER_LABEL_OFFSET    (VIABLE_MACRO_LABEL_OFFSET + VIABLE_MACRO_LABEL_SIZE)
+#define VIABLE_LAYER_LABEL_SIZE      (DYNAMIC_KEYMAP_LAYER_COUNT * VIABLE_LABEL_SIZE)
+
 // Total EEPROM size (all viable storage areas)
-#define VIABLE_EEPROM_SIZE           (VIABLE_FRAGMENT_OFFSET + VIABLE_FRAGMENT_SIZE)
+#define VIABLE_EEPROM_SIZE           (VIABLE_LAYER_LABEL_OFFSET + VIABLE_LAYER_LABEL_SIZE)
 
 // Public API
 void viable_init(void);
@@ -270,6 +309,7 @@ void viable_reload_combo(void);
 void viable_reload_key_override(void);
 void viable_reload_alt_repeat_key(void);
 void viable_reload_leader(void);
+void viable_reload_labels(void);
 
 // Keycode execution helpers
 void viable_keycode_down(uint16_t keycode);
@@ -307,3 +347,14 @@ void viable_fragment_set_selection(uint8_t instance_idx, uint8_t fragment_id);
 bool viable_handle_fragment_get_hardware(uint8_t *data, uint8_t length);
 bool viable_handle_fragment_get_selections(uint8_t *data, uint8_t length);
 bool viable_handle_fragment_set_selections(uint8_t *data, uint8_t length);
+
+// Storage API - Labels (v2: fixed VIABLE_LABEL_SIZE-byte UTF-8 storage)
+// Get label for a specific type+index (returns actual length, 0 if empty)
+// Buffer receives exactly VIABLE_LABEL_SIZE bytes from storage (null-padded if shorter)
+uint8_t viable_get_label(uint8_t label_type, uint8_t index, char *buffer, uint8_t buffer_size);
+// Set label for a specific type+index (max VIABLE_LABEL_SIZE bytes, truncated if longer)
+// Returns 0 on success, -1 on error (invalid type/index)
+int viable_set_label(uint8_t label_type, uint8_t index, const char *string, uint8_t length);
+// Clear label for a specific type+index (sets all VIABLE_LABEL_SIZE bytes to 0x00)
+// Returns 0 on success, -1 on error (invalid type/index)
+int viable_clear_label(uint8_t label_type, uint8_t index);

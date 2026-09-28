@@ -278,6 +278,9 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
     // Use only the greater of left/right to prevent both sides shaking from triggering
     int32_t left_movement = abs(reportMouse1.x) + abs(reportMouse1.y);
     int32_t right_movement = abs(reportMouse2.x) + abs(reportMouse2.y);
+    // Per-pointer gate: a side with auto mouse disabled never activates (or refreshes) the layer.
+    if (!global_saved_values.left_automouse) left_movement = 0;
+    if (!global_saved_values.right_automouse) right_movement = 0;
     int32_t left_normalized = (left_movement > 0) ? (left_movement * 800) / get_left_dpi() : 0;
     int32_t right_normalized = (right_movement > 0) ? (right_movement * 800) / get_right_dpi() : 0;
     int32_t normalized_movement = (left_normalized > right_normalized) ? left_normalized : right_normalized;
