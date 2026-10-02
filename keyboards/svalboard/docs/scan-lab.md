@@ -73,7 +73,19 @@ Revision A defaults to unpaced, as before.
 
 The firmware measures the real frame interval and LED-on time per frame
 (smoothed) and the Scan Lab reports them (op `0x11`), so duty is read, not
-assumed. The master pushes all three values to the other half with the
+assumed. Measured on a revision B left half with a pmw3389 trackball at
+45 / 5 µs:
+
+| Frame period | Measured frame | LED-on per frame | LED duty | Scan rate |
+|--------------|----------------|------------------|----------|-----------|
+| 0 (unpaced)  | 536 µs         | 280 µs           | 52 %     | 1866 Hz   |
+| 1000 µs      | 1023 µs        | 299 µs           | 29 %     | 978 Hz    |
+| 2000 µs      | 2021 µs        | 295 µs           | 15 %     | 495 Hz    |
+
+LED-on is about 58 µs per row: the 45 µs pre-wait plus roughly 13 µs of
+row switching and column reads. Unpaced, the rest of the main loop (the
+trackball read, USB and debounce) already keeps duty near half; pacing
+makes it a chosen number. The master pushes all three values to the other half with the
 timing values. Scan Lab sweeps run unpaced so they finish quickly.
 
 ## Scan timing settings
