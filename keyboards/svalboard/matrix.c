@@ -270,11 +270,17 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
             // spinning; the idle thread parks the core in WFI. Wake a little early and let the
             // next pass through here start the frame on time.
             uint32_t remaining = period - elapsed;
-            if ((global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) && remaining > SVAL_SLEEP_MIN_US) {
-                uint32_t nap = remaining > SVAL_SLEEP_MAX_US ? SVAL_SLEEP_MAX_US : remaining - (SVAL_SLEEP_MIN_US / 2);
-                chThdSleepMicroseconds(nap);
+            if (!(global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) || remaining <= SVAL_SLEEP_MIN_US) return false;
+            if (remaining > SVAL_SLEEP_MAX_US) {
+                chThdSleepMicroseconds(SVAL_SLEEP_MAX_US);
+                return false;
             }
-            return false;
+            // Last nap before the frame: wake slightly early, finish with a short busy-wait and
+            // start the frame right here. Returning and coming back costs a whole loop pass
+            // (pointer read, USB, housekeeping) and started frames ~300 us late.
+            chThdSleepMicroseconds(remaining - (SVAL_SLEEP_MIN_US / 2));
+            while ((uint32_t)(now_us() - frame_start_us) < period) {}
+            now = now_us();
         }
     } else {
         idle_stage = 0;
