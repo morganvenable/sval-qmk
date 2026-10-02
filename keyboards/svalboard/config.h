@@ -66,12 +66,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef SVAL_HW_REV_PIN
     #define SVAL_HW_REV_PIN GP22
 #endif
-// Revision B starts on explicit scan timing until characterized (see docs/scan-lab.md).
+// Revision B boots on explicit scan timing. Measured with the Scan Lab on a
+// revision B board (see docs/scan-lab.md): centre keys settle in 21-27 us,
+// side keys in 11-15 us, every line recovers within 1 us. 100 / 5 us leaves
+// better than 3x margin on settle and 5x on recovery.
 #ifndef SVAL_FLIPFET_DEFAULT_PREWAIT_US
-    #define SVAL_FLIPFET_DEFAULT_PREWAIT_US 200
+    #define SVAL_FLIPFET_DEFAULT_PREWAIT_US 100
 #endif
 #ifndef SVAL_FLIPFET_DEFAULT_POSTWAIT_US
-    #define SVAL_FLIPFET_DEFAULT_POSTWAIT_US 200
+    #define SVAL_FLIPFET_DEFAULT_POSTWAIT_US 5
 #endif
 // Thumb-row pushed states on revision B. Identical to revision A until the
 // settle probe says otherwise; the probe reports each key's polarity.

@@ -16,7 +16,7 @@ custom-value packets.
 | Revision | Strap on `SVAL_HW_REV_PIN` | Sensor LED resistors | Notes |
 |----------|----------------------------|----------------------|-------|
 | A        | open (reads high)          | 330 Ω everywhere      | Original boards. Scan timing from the turbo table unless explicit values are set. |
-| B "flipfet" | bridged to ground (reads low) | 100 Ω side keys, 68 Ω centre keys and thumb down | Revised analog front end with isolated sense channels. Lines settle more slowly, so the board boots on explicit conservative timing until characterized. |
+| B "flipfet" | bridged to ground (reads low) | 100 Ω side keys, 68 Ω centre keys and thumb down | Revised analog front end with isolated sense channels. Lines settle more slowly, so the board boots on explicit timing: 100 µs pre-wait, 5 µs post-wait. |
 
 The pin is read once at boot with the internal pull-up enabled. It defaults
 to `GP22` and can be moved with `-DSVAL_HW_REV_PIN=GPxx`. Prototypes without
@@ -30,6 +30,24 @@ when pressed. The pushed-state tables in `config.h` encode this; revision B
 has its own thumb-row table (`MATRIX_COL_PUSHED_STATES_THUMBS_FLIPFET`) that
 starts identical to revision A. The settle probe reports measured polarity,
 so the table can be corrected from data.
+
+## Measured on revision B
+
+First characterization, one left half with a pmw3389 trackball, nothing
+pressed except where noted:
+
+| Signal | Settle after row-on | Recovery after row-off |
+|--------|---------------------|------------------------|
+| Centre keys (68 Ω), unpressed | 21–27 µs | ≤ 1 µs |
+| Side keys (100 Ω), held | 11–15 µs | ≤ 1 µs |
+
+No line crossed the input threshold more than once. The thumb-down key
+measures active light, so the revision A thumb table is correct for
+revision B. A pre-wait sweep at 5 µs steps with 10 µs post-wait was clean
+from 150 µs down to 30 µs, failed at 25 µs, and read every centre key wrong
+at 15 µs and below. The defaults of 100 / 5 µs therefore carry better than
+3× margin on settle and 5× on recovery, and still scan faster than the
+revision A default of 90 / 90 µs.
 
 ## Scan timing settings
 
