@@ -262,8 +262,20 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     // Pacing gate (sweeps run unpaced so they finish quickly).
     uint32_t now = now_us();
     if (!scanlab_active()) {
-        uint32_t period = sval_scan_period_now(&idle_stage);
-        if (period && (uint32_t)(now - frame_start_us) < period) return false;
+        uint32_t period  = sval_scan_period_now(&idle_stage);
+        uint32_t elapsed = now - frame_start_us;
+        if (period && elapsed < period) {
+            // Not due yet. With CPU sleep on, nap until the frame is due (in naps of at most
+            // SVAL_SLEEP_MAX_US so USB, the pointer and the split link stay responsive) instead of
+            // spinning; the idle thread parks the core in WFI. Wake a little early and let the
+            // next pass through here start the frame on time.
+            uint32_t remaining = period - elapsed;
+            if ((global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) && remaining > SVAL_SLEEP_MIN_US) {
+                uint32_t nap = remaining > SVAL_SLEEP_MAX_US ? SVAL_SLEEP_MAX_US : remaining - (SVAL_SLEEP_MIN_US / 2);
+                chThdSleepMicroseconds(nap);
+            }
+            return false;
+        }
     } else {
         idle_stage = 0;
     }

@@ -49,6 +49,7 @@ struct __attribute__((__packed__)) saved_values {
     uint16_t scan_idle_after_ms;  // Light idle: timeout since last raw matrix change (0 = never)
     uint16_t scan_deep_after_s;   // Deep idle: timeout in seconds (0 = never)
     uint16_t scan_deep_period_ms; // Deep idle: frame period in ms (<= active = no change)
+    uint8_t  idle_flags;          // SVAL_IDLE_* bits: pointer rest, RGB dim, CPU sleep
 };
 
 // RPC structure for split keyboard sync
@@ -61,6 +62,7 @@ typedef struct __attribute__((__packed__)) _presence_rpc_t {
     uint16_t scan_idle_after_ms;
     uint16_t scan_deep_after_s;
     uint16_t scan_deep_period_ms;
+    uint8_t  idle_flags;
 } presence_rpc_t;
 
 #define SVAL_TURBO_CHOICES 7
@@ -94,6 +96,11 @@ void set_dpi_from_eeprom(void);
 void write_eeprom_kb(void);
 void read_eeprom_kb(void);
 void change_turbo_scan(void);
+
+// Idle power features. Flags live in global_saved_values.idle_flags on both halves.
+void sval_pointer_rest_apply(void);   // push SVAL_IDLE_POINTER_REST into the sensor (weak no-op without one)
+void sval_rgb_idle_task(void);        // master: dim/restore the RGB by idle stage
+uint8_t sval_rgb_awake_val(void);     // RGB brightness as it was before any idle dimming
 void recalibrate_pointer(void);
 void sval_set_active_layer(uint32_t layer, bool save);
 void sval_on_reconnect(void);

@@ -86,13 +86,31 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     #define SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_MS 1     // light idle: same as active by default
 #endif
 #ifndef SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS
-    #define SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS 1000
+    #define SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS 10000   // light idle also dims the RGB, so not during typing pauses
 #endif
 #ifndef SVAL_FLIPFET_DEFAULT_DEEP_AFTER_S
     #define SVAL_FLIPFET_DEFAULT_DEEP_AFTER_S 0       // deep idle off by default
 #endif
 #ifndef SVAL_FLIPFET_DEFAULT_DEEP_PERIOD_MS
     #define SVAL_FLIPFET_DEFAULT_DEEP_PERIOD_MS 0
+#endif
+
+// Idle power features (saved_values.idle_flags). Each is a runtime toggle (VIA ids 25-27) so
+// their effect can be measured one at a time from the Scan Lab panel.
+#define SVAL_IDLE_POINTER_REST 0x01   // let the trackball sensor use its own rest modes
+#define SVAL_IDLE_RGB_DIM      0x02   // dim the RGB in light idle, off in deep idle
+#define SVAL_IDLE_CPU_SLEEP    0x04   // sleep the core between paced frames instead of spinning
+#ifndef SVAL_IDLE_FLAGS_DEFAULT
+    #define SVAL_IDLE_FLAGS_DEFAULT (SVAL_IDLE_POINTER_REST | SVAL_IDLE_RGB_DIM | SVAL_IDLE_CPU_SLEEP)
+#endif
+#ifndef SVAL_IDLE_RGB_LIGHT_DIV
+    #define SVAL_IDLE_RGB_LIGHT_DIV 4   // light idle brightness = awake brightness / this
+#endif
+#ifndef SVAL_SLEEP_MAX_US
+    #define SVAL_SLEEP_MAX_US 1000      // longest single nap between frames; keeps USB and pointer polling responsive
+#endif
+#ifndef SVAL_SLEEP_MIN_US
+    #define SVAL_SLEEP_MIN_US 60        // below this the timer round trip costs more than it saves
 #endif
 // Host-initiated reboot into the bootloader (Scan Lab REBOOT_ARM / REBOOT_GO).
 // Off unless a keymap or build enables it; the scanlab keymap does.

@@ -310,7 +310,8 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             rsp[17] = SCANLAB_ROWS;
             put16(&rsp[18], global_saved_values.scan_deep_after_s);
             put16(&rsp[20], global_saved_values.scan_deep_period_ms);
-            rsp[22] = (SVAL_HOST_BOOTLOADER ? 1 : 0) | (scanlab_reboot_armed() ? 2 : 0);
+            rsp[22] = (SVAL_HOST_BOOTLOADER ? 1 : 0) | (scanlab_reboot_armed() ? 2 : 0) |
+                      ((global_saved_values.idle_flags & 0x07) << 2); // bit2 pointer rest, bit3 RGB dim, bit4 CPU sleep
             return;
         }
         default:

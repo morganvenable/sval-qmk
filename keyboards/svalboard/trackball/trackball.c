@@ -4,11 +4,23 @@
 #include "quantum.h"
 #include "pointing_device.h"
 #include "drivers/sensors/pmw33xx_common.h"
+#include "svalboard.h"
 
 static uint16_t trackball_cached_cpi = 0;
 
+// The sensor's own rest modes: Run -> Rest1 (3 mA, 1 ms frames) after ~0.5 s without motion,
+// Rest2 (100 ms frames) after ~10 s, Rest3 (500 ms frames) after ~10 min; motion wakes it on its
+// own. QMK's init disables them (Config2 = 0), so we re-enable after init when the flag is set.
+#define PMW33XX_CONFIG2_REST_EN 0x20
+void sval_pointer_rest_apply(void) {
+    bool on = (global_saved_values.idle_flags & SVAL_IDLE_POINTER_REST) != 0;
+    pmw33xx_write(0, REG_Config2, on ? PMW33XX_CONFIG2_REST_EN : 0x00);
+}
+
 bool pointing_device_driver_init(void) {
-    return pmw33xx_init(0);
+    bool ok = pmw33xx_init(0);
+    if (ok) sval_pointer_rest_apply();
+    return ok;
 }
 
 report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {

@@ -309,6 +309,21 @@
                             "type": "range",
                             "options": [0, 60000],
                             "content": ["id_scan_deep_period_ms", 1, 24]
+                        },
+                        {
+                            "label": "Trackball Rest Mode",
+                            "type": "toggle",
+                            "content": ["id_idle_pointer_rest", 1, 25]
+                        },
+                        {
+                            "label": "Dim RGB When Idle",
+                            "type": "toggle",
+                            "content": ["id_idle_rgb_dim", 1, 26]
+                        },
+                        {
+                            "label": "Sleep Between Scans",
+                            "type": "toggle",
+                            "content": ["id_idle_cpu_sleep", 1, 27]
                         }
                     ]
                 }

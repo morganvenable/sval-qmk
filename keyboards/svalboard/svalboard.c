@@ -110,6 +110,7 @@ void read_eeprom_kb(void) {
         global_saved_values.scan_idle_after_ms  = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS : 0;
         global_saved_values.scan_deep_after_s   = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_DEEP_AFTER_S : 0;
         global_saved_values.scan_deep_period_ms = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_DEEP_PERIOD_MS : 0;
+        global_saved_values.idle_flags          = SVAL_IDLE_FLAGS_DEFAULT;
 
         // Layer colors
         global_saved_values.layer_colors[0] = HSV(0x55FFFF);  // Green
@@ -200,6 +201,11 @@ void output_keyboard_info(void) {
             global_saved_values.scan_deep_period_ms, global_saved_values.scan_deep_after_s,
             (unsigned long)frame_us, led_us, stage);
     send_string(output_buffer);
+    sprintf(output_buffer, "Idle power: pointer rest %s, RGB dim %s, CPU sleep %s\n",
+            (global_saved_values.idle_flags & SVAL_IDLE_POINTER_REST) ? "on" : "off",
+            (global_saved_values.idle_flags & SVAL_IDLE_RGB_DIM) ? "on" : "off",
+            (global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) ? "on" : "off");
+    send_string(output_buffer);
 }
 
 const uint16_t sval_postwait_us[] = {90, 60, 45, 30, 25, 20, 15};
@@ -269,14 +275,72 @@ void set_dpi_from_eeprom(void) {
     set_right_dpi(global_saved_values.right_dpi_index);
 }
 
+// ---- RGB idle dimming (master). Light idle divides the brightness, deep idle turns the
+// strip off; the first input restores it. Layer colour changes while dimmed keep using the
+// awake brightness so the dimmed value never reaches EEPROM.
+static uint8_t rgb_idle_applied = 0;   // 0 awake, 1 dimmed, 2 off
+static uint8_t rgb_awake_val    = 0;
+static uint8_t rgb_dim_val      = 0;
+static bool    rgb_awake_enabled = false;
+
+uint8_t sval_rgb_awake_val(void) {
+    return rgb_idle_applied ? rgb_awake_val : rgblight_get_val();
+}
+
+static void sval_rgb_idle_restore(void) {
+    if (!rgb_idle_applied) return;
+    if (rgb_awake_enabled && !rgblight_is_enabled()) rgblight_enable_noeeprom();
+    // Only undo our own change; if someone adjusted the brightness while dimmed, keep theirs.
+    if (rgb_idle_applied == 2 || rgblight_get_val() == rgb_dim_val) {
+        rgblight_sethsv_noeeprom(rgblight_get_hue(), rgblight_get_sat(), rgb_awake_val);
+    }
+    rgb_idle_applied = 0;
+}
+
+void sval_rgb_idle_task(void) {
+    if (!(global_saved_values.idle_flags & SVAL_IDLE_RGB_DIM)) {
+        sval_rgb_idle_restore();
+        return;
+    }
+    uint32_t quiet = last_input_activity_elapsed();
+    uint8_t  want  = 0;
+    if (global_saved_values.scan_deep_after_s && quiet > (uint32_t)global_saved_values.scan_deep_after_s * 1000u) {
+        want = 2;
+    } else if (global_saved_values.scan_idle_after_ms && quiet > global_saved_values.scan_idle_after_ms) {
+        want = 1;
+    }
+    if (want == rgb_idle_applied) return;
+    if (want == 0) {
+        sval_rgb_idle_restore();
+        return;
+    }
+    if (rgb_idle_applied == 0) {
+        rgb_awake_val     = rgblight_get_val();
+        rgb_awake_enabled = rgblight_is_enabled();
+    }
+    if (want == 1) {
+        rgb_dim_val = rgb_awake_val / SVAL_IDLE_RGB_LIGHT_DIV;
+        if (rgb_awake_val && rgb_dim_val < 2) rgb_dim_val = 2;
+        rgblight_sethsv_noeeprom(rgblight_get_hue(), rgblight_get_sat(), rgb_dim_val);
+    } else {
+        rgblight_disable_noeeprom();
+    }
+    rgb_idle_applied = want;
+}
+
+__attribute__((weak)) void sval_pointer_rest_apply(void) {}
+
 void sval_set_active_layer(uint32_t layer, bool save) {
     if (layer > 15) layer = 15;
     sval_active_layer = layer;
-    struct layer_hsv cols = global_saved_values.layer_colors[layer];
+    struct layer_hsv cols  = global_saved_values.layer_colors[layer];
+    uint8_t          awake = sval_rgb_awake_val();
+    uint8_t          shown = rgb_idle_applied == 1 ? rgb_dim_val : awake;
     if (save) {
-        rgblight_sethsv(cols.hue, cols.sat, rgblight_get_val()); //store using current brightness
+        rgblight_sethsv(cols.hue, cols.sat, awake); // store with the awake brightness
+        if (shown != awake) rgblight_sethsv_noeeprom(cols.hue, cols.sat, shown);
     } else {
-        rgblight_sethsv_noeeprom(cols.hue, cols.sat, rgblight_get_val()); //reuse currrent brightness
+        rgblight_sethsv_noeeprom(cols.hue, cols.sat, shown);
     }
 }
 
@@ -291,6 +355,10 @@ void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen
     global_saved_values.scan_idle_after_ms  = in->scan_idle_after_ms;
     global_saved_values.scan_deep_after_s   = in->scan_deep_after_s;
     global_saved_values.scan_deep_period_ms = in->scan_deep_period_ms;
+    if (global_saved_values.idle_flags != in->idle_flags) {
+        global_saved_values.idle_flags = in->idle_flags;
+        sval_pointer_rest_apply();
+    }
 }
 
 // Scan Lab requests from the master run here on the other half.
@@ -345,11 +413,12 @@ void housekeeping_task_kb(void) {
     scanlab_housekeeping();
 
     if (is_keyboard_master()) {
+        sval_rgb_idle_task();
         static uint32_t last_ping = 0;
         if (timer_elapsed(last_ping) > 500) {
             presence_rpc_t rpcout = {global_saved_values.turbo_scan, global_saved_values.scan_prewait_us, global_saved_values.scan_postwait_us,
                                      global_saved_values.scan_period_us, global_saved_values.scan_idle_period_ms, global_saved_values.scan_idle_after_ms,
-                                     global_saved_values.scan_deep_after_s, global_saved_values.scan_deep_period_ms};
+                                     global_saved_values.scan_deep_after_s, global_saved_values.scan_deep_period_ms, global_saved_values.idle_flags};
             presence_rpc_t rpcin = {0};
             if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rpc_t), &rpcin)) {
                 if (!is_connected) {
@@ -366,7 +435,7 @@ void housekeeping_task_kb(void) {
 
 void sval_on_reconnect(void) {
     // Reset colors, or it won't communicate the right color.
-    rgblight_sethsv_noeeprom(0, 0, rgblight_get_val()); //reuse existing (eeprom) val, so brightness doesn't reset
+    rgblight_sethsv_noeeprom(0, 0, rgblight_get_val()); //reuse existing val, so brightness doesn't reset
     sval_set_active_layer(sval_active_layer, true);
 }
 
@@ -430,6 +499,9 @@ enum sval_via_value_id {
     id_scan_idle_after_ms = 22,   // u16: light idle timeout since last matrix change, ms (0 = never)
     id_scan_deep_after_s = 23,    // u16: deep idle timeout, seconds (0 = never)
     id_scan_deep_period_ms = 24,  // u16: deep idle frame period, ms
+    id_idle_pointer_rest = 25,    // toggle: trackball sensor rest modes
+    id_idle_rgb_dim = 26,         // toggle: dim RGB in light idle, off in deep idle
+    id_idle_cpu_sleep = 27,       // toggle: sleep the core between paced frames
     id_tapping_term = 16,
     id_permissive_hold = 17,
     id_hold_on_other_key = 18,
@@ -522,6 +594,14 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 case id_scan_deep_period_ms:
                     global_saved_values.scan_deep_period_ms = value_data[0] | (value_data[1] << 8);
                     break;
+                case id_idle_pointer_rest:
+                case id_idle_rgb_dim:
+                case id_idle_cpu_sleep: {
+                    uint8_t bit = 1u << (*value_id - id_idle_pointer_rest);
+                    if (value_data[0]) global_saved_values.idle_flags |= bit; else global_saved_values.idle_flags &= ~bit;
+                    if (bit == SVAL_IDLE_POINTER_REST) sval_pointer_rest_apply();
+                    break;
+                }
                 default:
                     // Layer colors: id 32-47
                     if (*value_id >= id_layer0_color && *value_id < id_layer0_color + 16) {
@@ -610,6 +690,11 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 case id_scan_deep_period_ms:
                     value_data[0] = global_saved_values.scan_deep_period_ms & 0xFF;
                     value_data[1] = (global_saved_values.scan_deep_period_ms >> 8) & 0xFF;
+                    break;
+                case id_idle_pointer_rest:
+                case id_idle_rgb_dim:
+                case id_idle_cpu_sleep:
+                    value_data[0] = (global_saved_values.idle_flags >> (*value_id - id_idle_pointer_rest)) & 1;
                     break;
                 default:
                     // Layer colors: id 32-47
