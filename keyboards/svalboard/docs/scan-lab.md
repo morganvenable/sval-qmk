@@ -85,7 +85,24 @@ assumed. Measured on a revision B left half with a pmw3389 trackball at
 LED-on is about 58 µs per row: the 45 µs pre-wait plus roughly 13 µs of
 row switching and column reads. Unpaced, the rest of the main loop (the
 trackball read, USB and debounce) already keeps duty near half; pacing
-makes it a chosen number. The master pushes all three values to the other half with the
+makes it a chosen number.
+
+Total current at the USB cable for the same half, measured with a USB
+ammeter:
+
+| Frame period | LED duty | Total current | Sensor LEDs |
+|--------------|----------|---------------|-------------|
+| 65 ms        | 0.5 %    | 60 mA         | ~0          |
+| 2 ms         | 15 %     | 80 mA         | 20 mA       |
+| 1 ms         | 29 %     | 90 mA         | 30 mA       |
+| unpaced      | 58 %     | 125 mA        | 65 mA       |
+
+The relation is linear: about 110 mA while a row is lit, so sensor LED
+current is 1.1 mA per percent of duty. The 60 mA floor is the MCU, the
+trackball and the two RGB LEDs, and is the larger share at the 1 ms
+default. The keybard-ng Scan Lab shows an estimated total next to the
+measured duty using this model; re-measure the floor at a 65 ms period
+on other variants. The master pushes all three values to the other half with the
 timing values. Scan Lab sweeps run unpaced so they finish quickly.
 
 ## Scan timing settings
