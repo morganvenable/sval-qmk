@@ -32,8 +32,12 @@ static inline uint32_t now_us(void) {
 
 // Provided by matrix.c
 extern const pin_t col_pins[MATRIX_COLS];
-bool select_row(uint8_t row);
 void unselect_row(uint8_t row);
+
+// Hard cap on sample-loop iterations so the probe can never spin forever,
+// whatever the clock does. At ~0.5 us per iteration this is far beyond the
+// 1.5 ms window.
+#define SCANLAB_PROBE_MAX_ITER 200000u
 
 typedef struct {
     uint8_t      state;
@@ -134,7 +138,9 @@ static inline uint8_t read_cols(void) {
 static uint8_t sample_phase(uint8_t start_level, uint32_t t0, uint16_t window_us, uint16_t *last_change, uint8_t *trans) {
     uint8_t  last = start_level;
     uint32_t now;
+    uint32_t iter = 0;
     do {
+        if (++iter > SCANLAB_PROBE_MAX_ITER) break;
         now        = now_us() - t0;
         uint8_t v  = read_cols();
         uint8_t d  = v ^ last;
@@ -159,18 +165,22 @@ void scanlab_probe_row(uint8_t row) {
     memset(&probe, 0, sizeof(probe));
     probe.row = row;
 
+    // Nothing inside this block may take the kernel lock again: the row is
+    // driven with raw pin writes, not select_row()/unselect_row(), whose own
+    // critical sections would re-enter the lock we are holding.
     uint32_t t0;
     ATOMIC_BLOCK_FORCEON {
         probe.idle_level = read_cols();
 
         t0 = now_us();
-        select_row(row);
+        sval_row_drive_raw(row, true);
         probe.lit_level = sample_phase(probe.idle_level, t0, SCANLAB_PROBE_WINDOW_US, probe.on_settle, probe.on_trans);
 
         t0 = now_us();
-        unselect_row(row);
+        sval_row_drive_raw(row, false);
         probe.off_level = sample_phase(probe.lit_level, t0, SCANLAB_PROBE_WINDOW_US, probe.off_recover, probe.off_trans);
     }
+    unselect_row(row);  // restore the normal (locked) output state
     probe.valid = 1;
 }
 

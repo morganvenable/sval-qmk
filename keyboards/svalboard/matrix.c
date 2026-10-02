@@ -100,6 +100,19 @@ void unselect_row(uint8_t row) {
 }
 
 
+// Drive a row on/off with plain pin writes and no critical section. The row pin
+// must already be configured as an output (unselect_row() does that). For use
+// inside code that has already disabled interrupts, e.g. the Scan Lab probe.
+void sval_row_drive_raw(uint8_t row, bool on) {
+    pin_t pin = row_pins[row];
+    if (pin == NO_PIN) return;
+#ifdef PFET_ROWS
+    if (on) writePinLow(pin); else writePinHigh(pin);
+#else
+    if (on) writePinHigh(pin); else writePinLow(pin);
+#endif
+}
+
 static void unselect_rows(void) {
     for (uint8_t x = 0; x < ROWS_PER_HAND; x++) {
         unselect_row(x);

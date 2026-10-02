@@ -66,6 +66,7 @@ bool    sval_hw_rev_is_flipfet(void);
 bool    sval_other_half_connected(void);
 void    sval_scan_timing(uint16_t *pre, uint16_t *post); // matrix.c
 uint8_t sval_pushed_mask(bool thumbs);                    // matrix.c
+void    sval_row_drive_raw(uint8_t row, bool on);         // matrix.c: no critical section
 
 typedef struct saved_values saved_values_t;
 
