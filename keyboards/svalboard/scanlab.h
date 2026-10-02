@@ -61,6 +61,7 @@ enum scanlab_op {
     SCANLAB_OP_PROBE     = 0x02, // args: row
     SCANLAB_OP_ABORT     = 0x03,
     SCANLAB_OP_STATUS    = 0x10, // get
+    SCANLAB_OP_POWER     = 0x11, // get: pacing settings and measured frame/LED-on times
     SCANLAB_OP_SWEEP_ROW = 0x20, // get | hand<<3 | row
     SCANLAB_OP_PROBE_ON  = 0x40, // get | hand<<3 | row
     SCANLAB_OP_PROBE_OFF = 0x60, // get | hand<<3 | row

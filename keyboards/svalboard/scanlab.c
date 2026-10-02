@@ -241,6 +241,23 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             rsp[22] = is_keyboard_master() ? (sval_other_half_connected() ? 1 : 0) : 0;
             return;
         }
+        case SCANLAB_OP_POWER: {
+            uint16_t frame_us, led_us, pre, post;
+            bool     idle, idle_now;
+            sval_scan_stats(&frame_us, &led_us, &idle);
+            sval_scan_timing(&pre, &post);
+            put16(&rsp[0], global_saved_values.scan_period_us);
+            put16(&rsp[2], global_saved_values.scan_idle_period_us);
+            put16(&rsp[4], global_saved_values.scan_idle_after_ms);
+            put16(&rsp[6], frame_us);
+            put16(&rsp[8], led_us);
+            rsp[10] = idle ? 1 : 0;
+            put16(&rsp[11], sval_scan_period_now(&idle_now));
+            put16(&rsp[13], pre);
+            put16(&rsp[15], post);
+            rsp[17] = SCANLAB_ROWS;
+            return;
+        }
         default:
             break;
     }

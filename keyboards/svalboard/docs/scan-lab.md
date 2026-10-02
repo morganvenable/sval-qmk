@@ -49,6 +49,33 @@ at 15 µs and below. The defaults of 100 / 5 µs therefore carry better than
 3× margin on settle and 5× on recovery, and still scan faster than the
 revision A default of 90 / 90 µs.
 
+## Power: frame pacing
+
+Sensor LED duty cycle = rows × (pre-wait + read) ÷ frame period. Without
+pacing the scan runs back to back, some row is always lit, and the LEDs sit
+at close to 100 % duty. Three saved values (VIA ids 20–22, Pointing Device →
+Advanced) make the period explicit:
+
+- `scan_period_us`: frame period while active. `0` = unpaced. The gate is
+  non-blocking: when it is too early for the next frame the matrix reports
+  "no change" and the main loop goes on servicing USB, the pointing device
+  and the split link.
+- `scan_idle_period_us`: frame period after the idle timeout. Values at or
+  below the active period mean "same as active".
+- `scan_idle_after_ms`: idle timeout since the last raw matrix change. `0`
+  = never idle. The first change after idle restores the active period on
+  the next frame, so the only cost is one slow frame on the first key.
+
+Revision B defaults: 45 µs pre-wait, 5 µs post-wait, 1000 µs period, 1000
+µs idle period, 1000 ms idle timeout. That is 5 × 48 ÷ 1000 ≈ 24 % duty at
+the USB poll rate, with no idle slow-down unless a user chooses one.
+Revision A defaults to unpaced, as before.
+
+The firmware measures the real frame interval and LED-on time per frame
+(smoothed) and the Scan Lab reports them (op `0x11`), so duty is read, not
+assumed. The master pushes all three values to the other half with the
+timing values. Scan Lab sweeps run unpaced so they finish quickly.
+
 ## Scan timing settings
 
 Two saved values, exposed in the Pointing Device → Advanced menu and as VIA
@@ -130,6 +157,7 @@ Get commands (`0x08`), `value_id = op | hand << 3 | row`:
 
 | op | response |
 |----|----------|
+| `0x11` POWER | `[0..1]` saved period, `[2..3]` saved idle period, `[4..5]` idle timeout (ms), `[6..7]` measured frame interval (µs), `[8..9]` measured LED-on per frame (µs), `[10]` idle active, `[11..12]` effective period now, `[13..14]` effective pre-wait, `[15..16]` effective post-wait, `[17]` rows |
 | `0x10` STATUS | `[0]` proto version, `[1]` hw revision, `[2]` sweep state (0 idle, 1 capturing reference, 2 running, 3 done, 4 reference failed), `[3..4]` frames done, `[5..6]` frames target, `[7]` reference valid, `[8..9]` effective pre-wait, `[10..11]` effective post-wait, `[12]` this half is left, `[13]` finger pushed-state mask, `[14]` thumb pushed-state mask, `[15]` probe valid, `[16]` probed row, `[17..18]` saved pre-wait, `[19..20]` saved post-wait, `[21]` turbo index, `[22]` other half connected |
 | `0x20` SWEEP_ROW | `[0..11]` six u16 mismatch counts, `[12]` reference row bits, `[13]` last raw row bits, `[14]` sweep state, `[15]` reference valid |
 | `0x40` PROBE_ON | `[0..11]` six u16 settle times (µs), `[12..17]` six change counts, `[18]` idle level mask, `[19]` lit level mask, `[20]` valid |

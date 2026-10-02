@@ -105,6 +105,9 @@ void read_eeprom_kb(void) {
         // Revision B settles more slowly; start it on explicit conservative timing.
         global_saved_values.scan_prewait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_PREWAIT_US : 0;
         global_saved_values.scan_postwait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_POSTWAIT_US : 0;
+        global_saved_values.scan_period_us      = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_SCAN_PERIOD_US : 0;
+        global_saved_values.scan_idle_period_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_US : 0;
+        global_saved_values.scan_idle_after_ms  = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS : 0;
 
         // Layer colors
         global_saved_values.layer_colors[0] = HSV(0x55FFFF);  // Green
@@ -185,6 +188,13 @@ void output_keyboard_info(void) {
             sval_hw_rev_is_flipfet() ? "B (flipfet)" : "A",
             pre, post,
             (global_saved_values.scan_prewait_us || global_saved_values.scan_postwait_us) ? "explicit" : "turbo table");
+    send_string(output_buffer);
+    uint16_t frame_us, led_us;
+    bool idle;
+    sval_scan_stats(&frame_us, &led_us, &idle);
+    sprintf(output_buffer, "Scan period: %d us (idle %d us after %d ms), measured frame %d us, LED on %d us%s\n",
+            global_saved_values.scan_period_us, global_saved_values.scan_idle_period_us,
+            global_saved_values.scan_idle_after_ms, frame_us, led_us, idle ? " [idle]" : "");
     send_string(output_buffer);
 }
 
@@ -272,6 +282,9 @@ void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen
     global_saved_values.turbo_scan       = in->turbo_scan;
     global_saved_values.scan_prewait_us  = in->scan_prewait_us;
     global_saved_values.scan_postwait_us = in->scan_postwait_us;
+    global_saved_values.scan_period_us      = in->scan_period_us;
+    global_saved_values.scan_idle_period_us = in->scan_idle_period_us;
+    global_saved_values.scan_idle_after_ms  = in->scan_idle_after_ms;
 }
 
 // Scan Lab requests from the master run here on the other half.
@@ -327,7 +340,8 @@ void housekeeping_task_kb(void) {
     if (is_keyboard_master()) {
         static uint32_t last_ping = 0;
         if (timer_elapsed(last_ping) > 500) {
-            presence_rpc_t rpcout = {global_saved_values.turbo_scan, global_saved_values.scan_prewait_us, global_saved_values.scan_postwait_us};
+            presence_rpc_t rpcout = {global_saved_values.turbo_scan, global_saved_values.scan_prewait_us, global_saved_values.scan_postwait_us,
+                                     global_saved_values.scan_period_us, global_saved_values.scan_idle_period_us, global_saved_values.scan_idle_after_ms};
             presence_rpc_t rpcin = {0};
             if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rpc_t), &rpcin)) {
                 if (!is_connected) {
@@ -402,11 +416,15 @@ enum sval_via_value_id {
     id_scan_prewait_us = 13,  // u16: row-on settle time (0 = turbo table)
     id_scan_postwait_us = 14, // u16: row-off recovery time (0 = turbo table)
     id_hw_revision = 15,      // read-only: 0 = revision A, 1 = revision B (flipfet)
+    // 16-19: tapping settings
+    id_scan_period_us = 20,       // u16: frame period while active (0 = unpaced)
+    id_scan_idle_period_us = 21,  // u16: frame period after idle timeout (0 = same as active)
+    id_scan_idle_after_ms = 22,   // u16: idle timeout since last matrix change (0 = never)
     id_tapping_term = 16,
     id_permissive_hold = 17,
     id_hold_on_other_key = 18,
     id_retro_tapping = 19,
-    // 20-31 reserved
+    // 23-31 reserved
     id_layer0_color = 32,
     // 32-47 are layer colors (id_layer0_color + layer)
 };
@@ -479,6 +497,15 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 case id_scan_postwait_us:
                     global_saved_values.scan_postwait_us = value_data[0] | (value_data[1] << 8);
                     break;
+                case id_scan_period_us:
+                    global_saved_values.scan_period_us = value_data[0] | (value_data[1] << 8);
+                    break;
+                case id_scan_idle_period_us:
+                    global_saved_values.scan_idle_period_us = value_data[0] | (value_data[1] << 8);
+                    break;
+                case id_scan_idle_after_ms:
+                    global_saved_values.scan_idle_after_ms = value_data[0] | (value_data[1] << 8);
+                    break;
                 default:
                     // Layer colors: id 32-47
                     if (*value_id >= id_layer0_color && *value_id < id_layer0_color + 16) {
@@ -547,6 +574,18 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                     break;
                 case id_hw_revision:
                     value_data[0] = sval_hw_rev();
+                    break;
+                case id_scan_period_us:
+                    value_data[0] = global_saved_values.scan_period_us & 0xFF;
+                    value_data[1] = (global_saved_values.scan_period_us >> 8) & 0xFF;
+                    break;
+                case id_scan_idle_period_us:
+                    value_data[0] = global_saved_values.scan_idle_period_us & 0xFF;
+                    value_data[1] = (global_saved_values.scan_idle_period_us >> 8) & 0xFF;
+                    break;
+                case id_scan_idle_after_ms:
+                    value_data[0] = global_saved_values.scan_idle_after_ms & 0xFF;
+                    value_data[1] = (global_saved_values.scan_idle_after_ms >> 8) & 0xFF;
                     break;
                 default:
                     // Layer colors: id 32-47

@@ -279,6 +279,24 @@
                             "type": "range",
                             "options": [0, 1000],
                             "content": ["id_scan_postwait_us", 1, 14]
+                        },
+                        {
+                            "label": "Scan Period (us, 0 = unpaced)",
+                            "type": "range",
+                            "options": [0, 20000],
+                            "content": ["id_scan_period_us", 1, 20]
+                        },
+                        {
+                            "label": "Idle Scan Period (us)",
+                            "type": "range",
+                            "options": [0, 20000],
+                            "content": ["id_scan_idle_period_us", 1, 21]
+                        },
+                        {
+                            "label": "Idle After (ms, 0 = never)",
+                            "type": "range",
+                            "options": [0, 60000],
+                            "content": ["id_scan_idle_after_ms", 1, 22]
                         }
                     ]
                 }

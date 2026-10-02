@@ -68,13 +68,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 // Revision B boots on explicit scan timing. Measured with the Scan Lab on a
 // revision B board (see docs/scan-lab.md): centre keys settle in 21-27 us,
-// side keys in 11-15 us, every line recovers within 1 us. 100 / 5 us leaves
-// better than 3x margin on settle and 5x on recovery.
+// side keys in 11-15 us, every line recovers within 1 us. 45 / 5 us leaves
+// 1.7x margin on settle and 5x on recovery.
 #ifndef SVAL_FLIPFET_DEFAULT_PREWAIT_US
-    #define SVAL_FLIPFET_DEFAULT_PREWAIT_US 100
+    #define SVAL_FLIPFET_DEFAULT_PREWAIT_US 45
 #endif
 #ifndef SVAL_FLIPFET_DEFAULT_POSTWAIT_US
     #define SVAL_FLIPFET_DEFAULT_POSTWAIT_US 5
+#endif
+// Frame pacing: sensor LED duty = rows x (pre-wait + read) / period. 1 ms
+// matches the USB poll interval; the idle period defaults to the same value
+// so there is no latency trade-off unless a user chooses one.
+#ifndef SVAL_FLIPFET_DEFAULT_SCAN_PERIOD_US
+    #define SVAL_FLIPFET_DEFAULT_SCAN_PERIOD_US 1000
+#endif
+#ifndef SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_US
+    #define SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_US 1000
+#endif
+#ifndef SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS
+    #define SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS 1000
 #endif
 // Thumb-row pushed states on revision B. Identical to revision A until the
 // settle probe says otherwise; the probe reports each key's polarity.

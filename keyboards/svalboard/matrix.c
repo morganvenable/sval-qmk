@@ -138,12 +138,56 @@ void sval_scan_timing(uint16_t *pre, uint16_t *post) {
 }
 static uint16_t cur_prewait_us = 90, cur_postwait_us = 90;
 
+// --- Frame pacing ----------------------------------------------------------
+// Sensor LED duty cycle = rows x (pre-wait + read) / frame period, so the frame
+// period is the power knob. The gate is non-blocking: when it is too early for
+// the next frame we report "no change" and let the main loop service USB, the
+// pointing device and the split link. After scan_idle_after_ms without a raw
+// matrix change the period stretches to scan_idle_period_us; the first change
+// restores the active period on the next frame.
+_Static_assert(CH_CFG_ST_FREQUENCY == 1000000, "matrix pacing assumes a 1 MHz system timer");
+static inline uint32_t now_us(void) {
+    return (uint32_t)chVTGetSystemTimeX();
+}
+
+static uint32_t frame_start_us = 0;
+static uint32_t last_change_ms = 0;
+static uint32_t led_on_acc_us  = 0;
+static uint16_t stat_frame_us  = 0;   // measured frame-to-frame interval, smoothed
+static uint16_t stat_led_us    = 0;   // measured LED-on time per frame, smoothed
+static bool     idle_mode      = false;
+
+static inline void ema16(uint16_t *s, uint32_t sample) {
+    if (sample > 0xFFFF) sample = 0xFFFF;
+    *s = (uint16_t)(*s + ((int32_t)sample - (int32_t)*s) / 8);
+}
+
+uint16_t sval_scan_period_now(bool *idle) {
+    uint16_t p = global_saved_values.scan_period_us;
+    bool     i = false;
+    if (p && global_saved_values.scan_idle_after_ms &&
+        global_saved_values.scan_idle_period_us > p &&
+        timer_elapsed32(last_change_ms) > global_saved_values.scan_idle_after_ms) {
+        p = global_saved_values.scan_idle_period_us;
+        i = true;
+    }
+    if (idle) *idle = i;
+    return p;
+}
+
+void sval_scan_stats(uint16_t *frame_us, uint16_t *led_us, bool *idle) {
+    *frame_us = stat_frame_us;
+    *led_us   = stat_led_us;
+    *idle     = idle_mode;
+}
+
 int16_t scans_before_dd_detect = 3;  // Has to be one higher than the actual number of scans.
 uint8_t dd_detected = 0;
 void matrix_read_cols_on_row(matrix_row_t current_matrix[], uint8_t current_row) {
     // Start with a clear matrix row
     matrix_row_t current_row_value = 0;
 
+    uint32_t t_on = now_us();
     select_row(current_row);
     // if thumb row use col_pushed_states_thumbs
 
@@ -175,6 +219,7 @@ void matrix_read_cols_on_row(matrix_row_t current_matrix[], uint8_t current_row)
 
     // Unselect row
     unselect_row(current_row);
+    led_on_acc_us += now_us() - t_on;
     wait_us(cur_postwait_us);
 
     // Update the matrix
@@ -199,11 +244,25 @@ bool first_scan = true;
 bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     
     matrix_row_t curr_matrix[ROWS_PER_HAND] = {0};
+
+    // Pacing gate (sweeps run unpaced so they finish quickly).
+    uint32_t now = now_us();
+    if (!scanlab_active()) {
+        uint16_t period = sval_scan_period_now(&idle_mode);
+        if (period && (uint32_t)(now - frame_start_us) < period) return false;
+    } else {
+        idle_mode = false;
+    }
+    if (frame_start_us) ema16(&stat_frame_us, now - frame_start_us);
+    frame_start_us = now;
+    led_on_acc_us  = 0;
+
     sval_scan_timing(&cur_prewait_us, &cur_postwait_us);
     // Set row, read cols
     for (uint8_t current_row = 0; current_row < (ROWS_PER_HAND); current_row++) {
         matrix_read_cols_on_row(curr_matrix, current_row);
     }
+    ema16(&stat_led_us, led_on_acc_us);
 
     // While a Scan Lab sweep runs, frames feed the engine and never become key events.
     if (scanlab_active()) {
@@ -220,7 +279,10 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
 	return true;
     } else {
         bool changed = memcmp(raw_matrix, curr_matrix, sizeof(curr_matrix)) != 0;
-        if (changed) memcpy(raw_matrix, curr_matrix, sizeof(curr_matrix));
+        if (changed) {
+            memcpy(raw_matrix, curr_matrix, sizeof(curr_matrix));
+            last_change_ms = timer_read32();
+        }
 	return changed;
     }
 }
