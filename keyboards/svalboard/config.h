@@ -59,6 +59,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 #define DOUBLEDOWN_COL 5 // need a pullup on COL6
 
+// Hardware revision strap. The pin is read with the internal pull-up enabled:
+// open = revision A, bridged to ground = revision B ("flipfet"). Override the
+// pin per build if the MCU board routes a different spare GPIO, or force a
+// revision with -DSVAL_HW_REV_FORCE=1 on prototypes without the strap.
+#ifndef SVAL_HW_REV_PIN
+    #define SVAL_HW_REV_PIN GP22
+#endif
+// Revision B starts on explicit scan timing until characterized (see docs/scan-lab.md).
+#ifndef SVAL_FLIPFET_DEFAULT_PREWAIT_US
+    #define SVAL_FLIPFET_DEFAULT_PREWAIT_US 200
+#endif
+#ifndef SVAL_FLIPFET_DEFAULT_POSTWAIT_US
+    #define SVAL_FLIPFET_DEFAULT_POSTWAIT_US 200
+#endif
+// Thumb-row pushed states on revision B. Identical to revision A until the
+// settle probe says otherwise; the probe reports each key's polarity.
+#ifndef MATRIX_COL_PUSHED_STATES_THUMBS_FLIPFET
+    #define MATRIX_COL_PUSHED_STATES_THUMBS_FLIPFET MATRIX_COL_PUSHED_STATES_THUMBS
+#endif
+
 #define SERIAL_DEBUG
 #define RP2040_BOOTLOADER_DOUBLE_TAP_RESET
 #define RP2040_BOOTLOADER_DOUBLE_TAP_RESET_TIMEOUT 500 // Timeout window in ms in which the double tap can occur.
@@ -104,7 +124,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define RGBLIGHT_VAL_STEP 10
 #define RGBLIGHT_LED_COUNT 2
 
-#define SPLIT_TRANSACTION_IDS_KB KEYBOARD_SYNC_A
+#define SPLIT_TRANSACTION_IDS_KB KEYBOARD_SYNC_A, KEYBOARD_SYNC_B
 
 #define PERMISSIVE_HOLD
 

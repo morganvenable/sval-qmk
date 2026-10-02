@@ -487,6 +487,18 @@
                             "type": "dropdown",
                             "options": ["0", "1", "2", "3", "4", "5", "6"],
                             "content": ["id_turbo_scan", 0, 9]
+                        },
+                        {
+                            "label": "Scan Pre-wait (us, 0 = auto)",
+                            "type": "range",
+                            "options": [0, 1000],
+                            "content": ["id_scan_prewait_us", 0, 13]
+                        },
+                        {
+                            "label": "Scan Post-wait (us, 0 = auto)",
+                            "type": "range",
+                            "options": [0, 1000],
+                            "content": ["id_scan_postwait_us", 0, 14]
                         }
                     ]
                 }

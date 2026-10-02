@@ -42,12 +42,30 @@ struct __attribute__((__packed__)) saved_values {
     uint8_t turbo_scan;
     uint16_t automouse_threshold; // Movement distance required for layer activation (0=disabled)
     uint8_t automouse_decay;      // Accumulator decay time in 10ms units (0=no decay)
+    uint16_t scan_prewait_us;     // Row-on settle time before reading (0 = use turbo table)
+    uint16_t scan_postwait_us;    // Row-off recovery time after reading (0 = use turbo table)
 };
 
 // RPC structure for split keyboard sync
-typedef struct _presence_rpc_t {
-    uint8_t turbo_scan;
+typedef struct __attribute__((__packed__)) _presence_rpc_t {
+    uint8_t  turbo_scan;
+    uint16_t scan_prewait_us;
+    uint16_t scan_postwait_us;
 } presence_rpc_t;
+
+#define SVAL_TURBO_CHOICES 7
+
+// Hardware revision, read once from SVAL_HW_REV_PIN (internal pull-up; the
+// board straps the pin to ground on revision B "flipfet").
+enum sval_hw_rev {
+    SVAL_HW_REV_A       = 0,
+    SVAL_HW_REV_FLIPFET = 1,
+};
+uint8_t sval_hw_rev(void);
+bool    sval_hw_rev_is_flipfet(void);
+bool    sval_other_half_connected(void);
+void    sval_scan_timing(uint16_t *pre, uint16_t *post); // matrix.c
+uint8_t sval_pushed_mask(bool thumbs);                    // matrix.c
 
 typedef struct saved_values saved_values_t;
 

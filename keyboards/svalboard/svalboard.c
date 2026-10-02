@@ -8,6 +8,7 @@
 #include QMK_KEYBOARD_H
 #include "usb_main.h"
 #include "suspend.h"
+#include "scanlab.h"
 
 // USB remote wakeup status bit (from USB spec, not exported by QMK headers)
 #ifndef USB_GETSTATUS_REMOTE_WAKEUP_ENABLED
@@ -18,6 +19,24 @@ saved_values_t global_saved_values;
 const int16_t mh_timer_choices[6] = { 200, 300, 400, 500, 800, -1 }; // -1 is infinite.
 
 uint8_t sval_active_layer = 0;
+
+static int8_t hw_rev_cache = -1;
+uint8_t sval_hw_rev(void) {
+    if (hw_rev_cache < 0) {
+#if defined(SVAL_HW_REV_FORCE)
+        hw_rev_cache = SVAL_HW_REV_FORCE;
+#else
+        setPinInputHigh(SVAL_HW_REV_PIN);
+        wait_us(200);
+        hw_rev_cache = readPin(SVAL_HW_REV_PIN) ? SVAL_HW_REV_A : SVAL_HW_REV_FLIPFET;
+#endif
+    }
+    return (uint8_t)hw_rev_cache;
+}
+
+bool sval_hw_rev_is_flipfet(void) {
+    return sval_hw_rev() == SVAL_HW_REV_FLIPFET;
+}
 
 // Store svalboard data in VIA custom config at offset 0
 #define SVALBOARD_VIA_CONFIG_OFFSET 0
@@ -83,6 +102,9 @@ void read_eeprom_kb(void) {
         global_saved_values.right_automouse = true;
         global_saved_values.automouse_threshold = 50;
         global_saved_values.automouse_decay = 7;  // 70ms
+        // Revision B settles more slowly; start it on explicit conservative timing.
+        global_saved_values.scan_prewait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_PREWAIT_US : 0;
+        global_saved_values.scan_postwait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_POSTWAIT_US : 0;
 
         // Layer colors
         global_saved_values.layer_colors[0] = HSV(0x55FFFF);  // Green
@@ -156,6 +178,13 @@ void output_keyboard_info(void) {
             boost_hold_2, boost_hold_3, boost_hold_5,
             boost_toggle_2, boost_toggle_3, boost_toggle_5,
             boost_x.mult);
+    send_string(output_buffer);
+    uint16_t pre, post;
+    sval_scan_timing(&pre, &post);
+    sprintf(output_buffer, "HW rev: %s, Scan timing: pre %d us, post %d us (%s)\n",
+            sval_hw_rev_is_flipfet() ? "B (flipfet)" : "A",
+            pre, post,
+            (global_saved_values.scan_prewait_us || global_saved_values.scan_postwait_us) ? "explicit" : "turbo table");
     send_string(output_buffer);
 }
 
@@ -239,20 +268,37 @@ void sval_set_active_layer(uint32_t layer, bool save) {
 
 // RPC listener for split keyboard sync
 void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen, void* out_data) {
-    global_saved_values.turbo_scan = ((const presence_rpc_t *)in_data)->turbo_scan;
+    const presence_rpc_t *in = (const presence_rpc_t *)in_data;
+    global_saved_values.turbo_scan       = in->turbo_scan;
+    global_saved_values.scan_prewait_us  = in->scan_prewait_us;
+    global_saved_values.scan_postwait_us = in->scan_postwait_us;
+}
+
+// Scan Lab requests from the master run here on the other half.
+static void scanlab_rpc_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen, void* out_data) {
+    uint8_t req[SCANLAB_REQ_LEN] = {0};
+    uint8_t rsp[SCANLAB_RSP_LEN] = {0};
+    memcpy(req, in_data, in_buflen < SCANLAB_REQ_LEN ? in_buflen : SCANLAB_REQ_LEN);
+    scanlab_handle(req, rsp);
+    memcpy(out_data, rsp, out_buflen < SCANLAB_RSP_LEN ? out_buflen : SCANLAB_RSP_LEN);
 }
 
 void keyboard_post_init_kb(void) {
     read_eeprom_kb();
     set_dpi_from_eeprom();
     keyboard_post_init_user();
+    scanlab_init();
     transaction_register_rpc(KEYBOARD_SYNC_A, kb_sync_listener);
+    transaction_register_rpc(KEYBOARD_SYNC_B, scanlab_rpc_listener);
     if (is_keyboard_master()) {
         sval_set_active_layer(sval_active_layer, false);
     }
 }
 
 static bool is_connected = false;
+bool sval_other_half_connected(void) {
+    return is_connected;
+}
 
 // Custom USB wake handler for split keyboards with NO_USB_STARTUP_CHECK
 // This replaces the wake functionality that NO_USB_STARTUP_CHECK disables
@@ -281,7 +327,7 @@ void housekeeping_task_kb(void) {
     if (is_keyboard_master()) {
         static uint32_t last_ping = 0;
         if (timer_elapsed(last_ping) > 500) {
-            presence_rpc_t rpcout = {global_saved_values.turbo_scan};
+            presence_rpc_t rpcout = {global_saved_values.turbo_scan, global_saved_values.scan_prewait_us, global_saved_values.scan_postwait_us};
             presence_rpc_t rpcin = {0};
             if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rpc_t), &rpcin)) {
                 if (!is_connected) {
@@ -353,6 +399,9 @@ enum sval_via_value_id {
     id_automouse_decay = 10,  // Accumulator decay time in 10ms units
     id_left_automouse = 11,   // Left pointer movement activates the mouse layer
     id_right_automouse = 12,  // Right pointer movement activates the mouse layer
+    id_scan_prewait_us = 13,  // u16: row-on settle time (0 = turbo table)
+    id_scan_postwait_us = 14, // u16: row-off recovery time (0 = turbo table)
+    id_hw_revision = 15,      // read-only: 0 = revision A, 1 = revision B (flipfet)
     id_tapping_term = 16,
     id_permissive_hold = 17,
     id_hold_on_other_key = 18,
@@ -364,6 +413,10 @@ enum sval_via_value_id {
 
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
     // New VIA API: data[0]=command, data[1]=channel, data[2]=value_id, data[3+]=value_data
+    if (data[1] == SCANLAB_CHANNEL) {
+        scanlab_via_command(data, length);
+        return;
+    }
     uint8_t command = data[0];
     uint8_t *value_id = &data[2];
     uint8_t *value_data = &data[3];
@@ -419,6 +472,12 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                     break;
                 case id_right_automouse:
                     global_saved_values.right_automouse = value_data[0];
+                    break;
+                case id_scan_prewait_us:
+                    global_saved_values.scan_prewait_us = value_data[0] | (value_data[1] << 8);
+                    break;
+                case id_scan_postwait_us:
+                    global_saved_values.scan_postwait_us = value_data[0] | (value_data[1] << 8);
                     break;
                 default:
                     // Layer colors: id 32-47
@@ -477,6 +536,17 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                     break;
                 case id_right_automouse:
                     value_data[0] = global_saved_values.right_automouse;
+                    break;
+                case id_scan_prewait_us:
+                    value_data[0] = global_saved_values.scan_prewait_us & 0xFF;
+                    value_data[1] = (global_saved_values.scan_prewait_us >> 8) & 0xFF;
+                    break;
+                case id_scan_postwait_us:
+                    value_data[0] = global_saved_values.scan_postwait_us & 0xFF;
+                    value_data[1] = (global_saved_values.scan_postwait_us >> 8) & 0xFF;
+                    break;
+                case id_hw_revision:
+                    value_data[0] = sval_hw_rev();
                     break;
                 default:
                     // Layer colors: id 32-47
