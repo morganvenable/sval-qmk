@@ -14,3 +14,9 @@
 #ifndef SVAL_HW_REV_FORCE
 #    define SVAL_HW_REV_FORCE 1
 #endif
+
+// Let the Scan Lab host reboot this board into the bootloader (two-stage
+// arm/confirm) so development images can be flashed without touching it.
+// The keyboard-level config defaults this to 0 and is included first.
+#undef SVAL_HOST_BOOTLOADER
+#define SVAL_HOST_BOOTLOADER 1

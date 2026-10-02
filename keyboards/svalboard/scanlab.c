@@ -62,6 +62,30 @@ typedef struct {
 static scanlab_sweep_t sweep;
 static scanlab_probe_t probe;
 
+// Host-initiated reboot into the bootloader: two stages so a stray packet can
+// never do it. ARM hands out a token good for SCANLAB_REBOOT_WINDOW_MS; GO
+// with that token acknowledges, then the reboot happens from housekeeping
+// 100 ms later so the acknowledgement reaches the host first.
+static uint16_t reboot_token    = 0;
+static uint32_t reboot_armed_ms = 0;
+#if SVAL_HOST_BOOTLOADER
+static bool     reboot_pending  = false;
+static uint32_t reboot_due_ms   = 0;
+#endif
+
+bool scanlab_reboot_armed(void) {
+    return reboot_token != 0 && timer_elapsed32(reboot_armed_ms) <= SCANLAB_REBOOT_WINDOW_MS;
+}
+
+void scanlab_housekeeping(void) {
+#if SVAL_HOST_BOOTLOADER
+    if (reboot_pending && (int32_t)(timer_read32() - reboot_due_ms) >= 0) {
+        reboot_pending = false;
+        reset_keyboard();  // clears the report, then bootloader_jump(): ROM UF2 mode
+    }
+#endif
+}
+
 static inline void put16(uint8_t *p, uint16_t v) { p[0] = v & 0xFF; p[1] = v >> 8; }
 static inline uint16_t get16(const uint8_t *p) { return p[0] | (p[1] << 8); }
 
@@ -219,6 +243,32 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             sweep.state = SCANLAB_IDLE;
             rsp[0] = sweep.state;
             return;
+        case SCANLAB_OP_REBOOT_ARM:
+#if SVAL_HOST_BOOTLOADER
+            reboot_token    = (uint16_t)((timer_read32() * 2654435761u) >> 16) | 1u;
+            reboot_armed_ms = timer_read32();
+            put16(&rsp[0], reboot_token);
+            rsp[2] = 1;  // supported
+#else
+            rsp[2] = 0;  // not compiled in
+#endif
+            return;
+        case SCANLAB_OP_REBOOT_GO: {
+#if SVAL_HOST_BOOTLOADER
+            uint16_t token = get16(&req[1]);
+            bool     ok    = scanlab_reboot_armed() && token == reboot_token;
+            if (ok) {
+                reboot_token   = 0;
+                reboot_pending = true;
+                reboot_due_ms  = timer_read32() + 100;
+            }
+            rsp[0] = ok ? 1 : 0;
+#else
+            rsp[0] = 0;
+#endif
+            rsp[2] = SVAL_HOST_BOOTLOADER ? 1 : 0;
+            return;
+        }
         case SCANLAB_OP_STATUS: {
             uint16_t pre, post;
             sval_scan_timing(&pre, &post);
@@ -242,20 +292,25 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             return;
         }
         case SCANLAB_OP_POWER: {
-            uint16_t frame_us, led_us, pre, post;
-            bool     idle, idle_now;
-            sval_scan_stats(&frame_us, &led_us, &idle);
+            uint32_t frame_us;
+            uint16_t led_us, pre, post;
+            uint8_t  stage, stage_now;
+            sval_scan_stats(&frame_us, &led_us, &stage);
             sval_scan_timing(&pre, &post);
+            uint32_t eff = sval_scan_period_now(&stage_now);
             put16(&rsp[0], global_saved_values.scan_period_us);
-            put16(&rsp[2], global_saved_values.scan_idle_period_us);
+            put16(&rsp[2], global_saved_values.scan_idle_period_ms);
             put16(&rsp[4], global_saved_values.scan_idle_after_ms);
-            put16(&rsp[6], frame_us);
+            put16(&rsp[6], frame_us > 0xFFFF ? 0xFFFF : (uint16_t)frame_us);
             put16(&rsp[8], led_us);
-            rsp[10] = idle ? 1 : 0;
-            put16(&rsp[11], sval_scan_period_now(&idle_now));
+            rsp[10] = stage;  // 0 active, 1 light idle, 2 deep idle
+            put16(&rsp[11], eff > 0xFFFF ? 0xFFFF : (uint16_t)eff);
             put16(&rsp[13], pre);
             put16(&rsp[15], post);
             rsp[17] = SCANLAB_ROWS;
+            put16(&rsp[18], global_saved_values.scan_deep_after_s);
+            put16(&rsp[20], global_saved_values.scan_deep_period_ms);
+            rsp[22] = (SVAL_HOST_BOOTLOADER ? 1 : 0) | (scanlab_reboot_armed() ? 2 : 0);
             return;
         }
         default:

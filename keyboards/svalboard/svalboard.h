@@ -45,8 +45,10 @@ struct __attribute__((__packed__)) saved_values {
     uint16_t scan_prewait_us;     // Row-on settle time before reading (0 = use turbo table)
     uint16_t scan_postwait_us;    // Row-off recovery time after reading (0 = use turbo table)
     uint16_t scan_period_us;      // Frame period while active (0 = unpaced, scan back to back)
-    uint16_t scan_idle_period_us; // Frame period after idle timeout (0 or <= active = same as active)
-    uint16_t scan_idle_after_ms;  // Idle timeout since last raw matrix change (0 = never idle)
+    uint16_t scan_idle_period_ms; // Light idle: frame period in ms once idle (<= active = no change)
+    uint16_t scan_idle_after_ms;  // Light idle: timeout since last raw matrix change (0 = never)
+    uint16_t scan_deep_after_s;   // Deep idle: timeout in seconds (0 = never)
+    uint16_t scan_deep_period_ms; // Deep idle: frame period in ms (<= active = no change)
 };
 
 // RPC structure for split keyboard sync
@@ -55,8 +57,10 @@ typedef struct __attribute__((__packed__)) _presence_rpc_t {
     uint16_t scan_prewait_us;
     uint16_t scan_postwait_us;
     uint16_t scan_period_us;
-    uint16_t scan_idle_period_us;
+    uint16_t scan_idle_period_ms;
     uint16_t scan_idle_after_ms;
+    uint16_t scan_deep_after_s;
+    uint16_t scan_deep_period_ms;
 } presence_rpc_t;
 
 #define SVAL_TURBO_CHOICES 7
@@ -73,8 +77,8 @@ bool    sval_other_half_connected(void);
 void    sval_scan_timing(uint16_t *pre, uint16_t *post); // matrix.c
 uint8_t sval_pushed_mask(bool thumbs);                    // matrix.c
 void    sval_row_drive_raw(uint8_t row, bool on);         // matrix.c: no critical section
-uint16_t sval_scan_period_now(bool *idle);                // matrix.c: effective frame period (0 = unpaced)
-void    sval_scan_stats(uint16_t *frame_us, uint16_t *led_us, bool *idle); // matrix.c: measured
+uint32_t sval_scan_period_now(uint8_t *stage);            // matrix.c: effective frame period us (0 = unpaced); stage 0/1/2
+void    sval_scan_stats(uint32_t *frame_us, uint16_t *led_us, uint8_t *stage); // matrix.c: measured
 
 typedef struct saved_values saved_values_t;
 

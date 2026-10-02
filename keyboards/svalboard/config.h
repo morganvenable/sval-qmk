@@ -82,11 +82,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef SVAL_FLIPFET_DEFAULT_SCAN_PERIOD_US
     #define SVAL_FLIPFET_DEFAULT_SCAN_PERIOD_US 1000
 #endif
-#ifndef SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_US
-    #define SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_US 1000
+#ifndef SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_MS
+    #define SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_MS 1     // light idle: same as active by default
 #endif
 #ifndef SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS
     #define SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS 1000
+#endif
+#ifndef SVAL_FLIPFET_DEFAULT_DEEP_AFTER_S
+    #define SVAL_FLIPFET_DEFAULT_DEEP_AFTER_S 0       // deep idle off by default
+#endif
+#ifndef SVAL_FLIPFET_DEFAULT_DEEP_PERIOD_MS
+    #define SVAL_FLIPFET_DEFAULT_DEEP_PERIOD_MS 0
+#endif
+// Host-initiated reboot into the bootloader (Scan Lab REBOOT_ARM / REBOOT_GO).
+// Off unless a keymap or build enables it; the scanlab keymap does.
+#ifndef SVAL_HOST_BOOTLOADER
+    #define SVAL_HOST_BOOTLOADER 0
 #endif
 // Thumb-row pushed states on revision B. Identical to revision A until the
 // settle probe says otherwise; the probe reports each key's polarity.

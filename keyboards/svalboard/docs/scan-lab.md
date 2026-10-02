@@ -60,16 +60,21 @@ Advanced) make the period explicit:
   non-blocking: when it is too early for the next frame the matrix reports
   "no change" and the main loop goes on servicing USB, the pointing device
   and the split link.
-- `scan_idle_period_us`: frame period after the idle timeout. Values at or
-  below the active period mean "same as active".
-- `scan_idle_after_ms`: idle timeout since the last raw matrix change. `0`
-  = never idle. The first change after idle restores the active period on
-  the next frame, so the only cost is one slow frame on the first key.
+- Light idle: after `scan_idle_after_ms` (ms, `0` = never) without a raw
+  matrix change, the period becomes `scan_idle_period_ms` (ms). Meant for a
+  short wake-up, e.g. 100 ms after 2 s quiet.
+- Deep idle: after `scan_deep_after_s` (seconds, `0` = never) the period
+  becomes `scan_deep_period_ms` (ms, up to 65 s). Meant for long absences,
+  e.g. a 1 s wake-up after 10 minutes.
+- A stage whose period is at or below the active period changes nothing.
+  The first raw matrix change restores the active period on the next frame,
+  so the only cost is one idle-length frame on the first key after a pause.
 
-Revision B defaults: 45 µs pre-wait, 5 µs post-wait, 1000 µs period, 1000
-µs idle period, 1000 ms idle timeout. That is 5 × 48 ÷ 1000 ≈ 24 % duty at
-the USB poll rate, with no idle slow-down unless a user chooses one.
-Revision A defaults to unpaced, as before.
+VIA ids 21–24 carry the four idle values. Revision B defaults: 45 µs
+pre-wait, 5 µs post-wait, 1000 µs period, light idle 1 ms after 1000 ms
+(no slow-down), deep idle off. That is about 29 % measured duty at the USB
+poll rate with no latency trade-off unless a user opts in. Revision A
+defaults to unpaced, as before.
 
 The firmware measures the real frame interval and LED-on time per frame
 (smoothed) and the Scan Lab reports them (op `0x11`), so duty is read, not
@@ -104,6 +109,29 @@ default. The keybard-ng Scan Lab shows an estimated total next to the
 measured duty using this model; re-measure the floor at a 65 ms period
 on other variants. The master pushes all three values to the other half with the
 timing values. Scan Lab sweeps run unpaced so they finish quickly.
+
+## Reflashing without buttons
+
+Builds with `SVAL_HOST_BOOTLOADER` (the `scanlab` keymap sets it; add
+`-DSVAL_HOST_BOOTLOADER=1` for others) accept a two-stage reboot over the
+Scan Lab channel: `REBOOT_ARM` returns a one-time token valid for 5 s, and
+`REBOOT_GO` with that token acknowledges and then, 100 ms later from the
+housekeeping loop, calls `reset_keyboard()`, which jumps to the RP2040 ROM
+bootloader. The half enumerates as the `RPI-RP2` mass-storage drive.
+
+`keyboards/svalboard/tools/flash.sh <image.uf2>` waits for that drive,
+copies the image and waits for the reboot. It works from WSL (through
+PowerShell), Linux and macOS. Afterwards reconnect from keybard-ng's
+permitted-keyboard list; the WebHID permission survives a reflash.
+
+Both halves: send the reboot to the other half first (it drops into the
+bootloader and waits, dark, on the link), then to the connected half; flash
+the connected half; move the USB cable to the other half, which enumerates
+immediately; flash it; reconnect. No buttons.
+
+The command is off by default in production keymaps because any web origin
+that has been granted HID access could otherwise put a keyboard into
+bootloader mode.
 
 ## Scan timing settings
 
@@ -181,12 +209,14 @@ Set commands (`0x07`), `value_data = [hand][args...]`:
 | `0x01` | SET_MODE | `mode` (0 off, 1 sweep), `prewait` u16, `postwait` u16, `frames` u16 |
 | `0x02` | PROBE | `row` (0 = thumbs, 1–4 = fingers) |
 | `0x03` | ABORT | |
+| `0x04` | REBOOT_ARM | response `[0..1]` token, `[2]` 1 if supported |
+| `0x05` | REBOOT_GO | `token` u16; response `[0]` 1 if accepted, `[2]` 1 if supported |
 
 Get commands (`0x08`), `value_id = op | hand << 3 | row`:
 
 | op | response |
 |----|----------|
-| `0x11` POWER | `[0..1]` saved period, `[2..3]` saved idle period, `[4..5]` idle timeout (ms), `[6..7]` measured frame interval (µs), `[8..9]` measured LED-on per frame (µs), `[10]` idle active, `[11..12]` effective period now, `[13..14]` effective pre-wait, `[15..16]` effective post-wait, `[17]` rows |
+| `0x11` POWER | `[0..1]` saved period (µs), `[2..3]` light idle period (ms), `[4..5]` light idle timeout (ms), `[6..7]` measured frame interval (µs, capped), `[8..9]` measured LED-on per frame (µs), `[10]` stage (0 active, 1 light idle, 2 deep idle), `[11..12]` effective period (µs, capped), `[13..14]` effective pre-wait, `[15..16]` effective post-wait, `[17]` rows, `[18..19]` deep idle timeout (s), `[20..21]` deep idle period (ms), `[22]` bit 0 host bootloader supported, bit 1 reboot armed |
 | `0x10` STATUS | `[0]` proto version, `[1]` hw revision, `[2]` sweep state (0 idle, 1 capturing reference, 2 running, 3 done, 4 reference failed), `[3..4]` frames done, `[5..6]` frames target, `[7]` reference valid, `[8..9]` effective pre-wait, `[10..11]` effective post-wait, `[12]` this half is left, `[13]` finger pushed-state mask, `[14]` thumb pushed-state mask, `[15]` probe valid, `[16]` probed row, `[17..18]` saved pre-wait, `[19..20]` saved post-wait, `[21]` turbo index, `[22]` other half connected |
 | `0x20` SWEEP_ROW | `[0..11]` six u16 mismatch counts, `[12]` reference row bits, `[13]` last raw row bits, `[14]` sweep state, `[15]` reference valid |
 | `0x40` PROBE_ON | `[0..11]` six u16 settle times (µs), `[12..17]` six change counts, `[18]` idle level mask, `[19]` lit level mask, `[20]` valid |

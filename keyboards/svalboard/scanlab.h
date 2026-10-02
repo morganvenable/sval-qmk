@@ -50,6 +50,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SCANLAB_PROBE_WINDOW_US  1500  // per phase (row on, row off)
 #define SCANLAB_REF_FRAMES       8     // identical frames needed for a reference
 #define SCANLAB_REF_MAX_TRIES    64    // frames to find one before giving up
+#define SCANLAB_REBOOT_WINDOW_MS 5000  // "go" must follow "arm" within this
 #define SCANLAB_REQ_LEN          24    // bytes: [op][args...]
 #define SCANLAB_RSP_LEN          24    // bytes written back into the VIA packet (23 used)
 
@@ -60,6 +61,8 @@ enum scanlab_op {
     SCANLAB_OP_SET_MODE  = 0x01, // args: mode(1: 0 off, 1 sweep), prewait u16, postwait u16, frames u16
     SCANLAB_OP_PROBE     = 0x02, // args: row
     SCANLAB_OP_ABORT     = 0x03,
+    SCANLAB_OP_REBOOT_ARM = 0x04, // set: returns a one-time token (needs SVAL_HOST_BOOTLOADER)
+    SCANLAB_OP_REBOOT_GO  = 0x05, // set: args token u16; acks, then reboots into the bootloader
     SCANLAB_OP_STATUS    = 0x10, // get
     SCANLAB_OP_POWER     = 0x11, // get: pacing settings and measured frame/LED-on times
     SCANLAB_OP_SWEEP_ROW = 0x20, // get | hand<<3 | row
@@ -82,3 +85,5 @@ void scanlab_on_frame(const matrix_row_t *raw);         // feed every raw (pre-d
 void scanlab_probe_row(uint8_t row);                    // run the settle probe on this hand
 void scanlab_handle(const uint8_t *req, uint8_t *rsp);  // execute one request on this hand
 void scanlab_via_command(uint8_t *data, uint8_t length); // master: VIA entry, routes to a hand
+void scanlab_housekeeping(void);                        // call from housekeeping_task_kb on both halves
+bool scanlab_reboot_armed(void);

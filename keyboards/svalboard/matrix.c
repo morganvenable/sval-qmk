@@ -142,9 +142,12 @@ static uint16_t cur_prewait_us = 90, cur_postwait_us = 90;
 // Sensor LED duty cycle = rows x (pre-wait + read) / frame period, so the frame
 // period is the power knob. The gate is non-blocking: when it is too early for
 // the next frame we report "no change" and let the main loop service USB, the
-// pointing device and the split link. After scan_idle_after_ms without a raw
-// matrix change the period stretches to scan_idle_period_us; the first change
-// restores the active period on the next frame.
+// pointing device and the split link. Two idle stages stretch the period
+// after a quiet spell: light idle (scan_idle_after_ms -> scan_idle_period_ms,
+// e.g. a 100 ms wake-up) and deep idle (scan_deep_after_s ->
+// scan_deep_period_ms, seconds-long timeouts, up to a 65 s period). The first
+// raw matrix change restores the active period on the next frame, so the only
+// latency cost is one idle-length frame on the first key after a pause.
 _Static_assert(CH_CFG_ST_FREQUENCY == 1000000, "matrix pacing assumes a 1 MHz system timer");
 static inline uint32_t now_us(void) {
     return (uint32_t)chVTGetSystemTimeX();
@@ -153,32 +156,43 @@ static inline uint32_t now_us(void) {
 static uint32_t frame_start_us = 0;
 static uint32_t last_change_ms = 0;
 static uint32_t led_on_acc_us  = 0;
-static uint16_t stat_frame_us  = 0;   // measured frame-to-frame interval, smoothed
+static uint32_t stat_frame_us  = 0;   // measured frame-to-frame interval, smoothed
 static uint16_t stat_led_us    = 0;   // measured LED-on time per frame, smoothed
-static bool     idle_mode      = false;
+static uint8_t  idle_stage     = 0;   // 0 active, 1 light idle, 2 deep idle
 
 static inline void ema16(uint16_t *s, uint32_t sample) {
     if (sample > 0xFFFF) sample = 0xFFFF;
     *s = (uint16_t)(*s + ((int32_t)sample - (int32_t)*s) / 8);
 }
+static inline void ema32(uint32_t *s, uint32_t sample) {
+    *s = (uint32_t)((int64_t)*s + ((int64_t)sample - (int64_t)*s) / 8);
+}
 
-uint16_t sval_scan_period_now(bool *idle) {
-    uint16_t p = global_saved_values.scan_period_us;
-    bool     i = false;
-    if (p && global_saved_values.scan_idle_after_ms &&
-        global_saved_values.scan_idle_period_us > p &&
-        timer_elapsed32(last_change_ms) > global_saved_values.scan_idle_after_ms) {
-        p = global_saved_values.scan_idle_period_us;
-        i = true;
+uint32_t sval_scan_period_now(uint8_t *stage) {
+    uint32_t p = global_saved_values.scan_period_us;
+    uint8_t  s = 0;
+    if (p) {
+        uint32_t quiet_ms = timer_elapsed32(last_change_ms);
+        uint32_t deep_us  = (uint32_t)global_saved_values.scan_deep_period_ms * 1000u;
+        uint32_t light_us = (uint32_t)global_saved_values.scan_idle_period_ms * 1000u;
+        if (global_saved_values.scan_deep_after_s && deep_us > p &&
+            quiet_ms > (uint32_t)global_saved_values.scan_deep_after_s * 1000u) {
+            p = deep_us;
+            s = 2;
+        } else if (global_saved_values.scan_idle_after_ms && light_us > p &&
+                   quiet_ms > global_saved_values.scan_idle_after_ms) {
+            p = light_us;
+            s = 1;
+        }
     }
-    if (idle) *idle = i;
+    if (stage) *stage = s;
     return p;
 }
 
-void sval_scan_stats(uint16_t *frame_us, uint16_t *led_us, bool *idle) {
+void sval_scan_stats(uint32_t *frame_us, uint16_t *led_us, uint8_t *stage) {
     *frame_us = stat_frame_us;
     *led_us   = stat_led_us;
-    *idle     = idle_mode;
+    *stage    = idle_stage;
 }
 
 int16_t scans_before_dd_detect = 3;  // Has to be one higher than the actual number of scans.
@@ -248,12 +262,12 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     // Pacing gate (sweeps run unpaced so they finish quickly).
     uint32_t now = now_us();
     if (!scanlab_active()) {
-        uint16_t period = sval_scan_period_now(&idle_mode);
+        uint32_t period = sval_scan_period_now(&idle_stage);
         if (period && (uint32_t)(now - frame_start_us) < period) return false;
     } else {
-        idle_mode = false;
+        idle_stage = 0;
     }
-    if (frame_start_us) ema16(&stat_frame_us, now - frame_start_us);
+    if (frame_start_us) ema32(&stat_frame_us, now - frame_start_us);
     frame_start_us = now;
     led_on_acc_us  = 0;
 
