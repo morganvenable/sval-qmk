@@ -110,6 +110,14 @@ typedef struct {
 void sval_idle_status(sval_idle_status_t *st);
 void sval_pointer_status(sval_idle_status_t *st); // weak: fills the sensor_* fields
 
+// Deep-idle clock and nap control (power.c).
+void     sval_clock_low(void);        // clk_sys/clk_peri from the USB PLL at 48 MHz, system PLL off, PIO dividers rescaled
+void     sval_clock_full(void);       // back to 125 MHz (no-op when already there)
+bool     sval_clock_is_low(void);
+uint8_t  sval_clock_mhz(void);
+uint32_t sval_deep_nap_us(void);      // longest nap allowed in deep idle on this half
+void     sval_sleep_gating_init(void); // stop clocking unused blocks while the core is in WFI
+
 // Idle power features. Flags live in global_saved_values.idle_flags on both halves.
 void sval_pointer_rest_apply(void);   // push SVAL_IDLE_POINTER_REST into the sensor (weak no-op without one)
 void sval_rgb_idle_task(void);        // master: dim/restore the RGB by idle stage

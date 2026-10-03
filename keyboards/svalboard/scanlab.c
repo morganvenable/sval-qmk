@@ -311,6 +311,7 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             put32(&rsp[9],  last_input_activity_elapsed());
             put32(&rsp[13], last_matrix_activity_elapsed());
             put32(&rsp[17], last_pointing_device_activity_elapsed());
+            rsp[21] = sval_clock_mhz();
             return;
         }
         case SCANLAB_OP_POWER: {
@@ -333,7 +334,7 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             put16(&rsp[18], global_saved_values.scan_deep_after_s);
             put16(&rsp[20], global_saved_values.scan_deep_period_ms);
             rsp[22] = (SVAL_HOST_BOOTLOADER ? 1 : 0) | (scanlab_reboot_armed() ? 2 : 0) |
-                      ((global_saved_values.idle_flags & 0x07) << 2); // bit2 pointer rest, bit3 RGB dim, bit4 CPU sleep
+                      ((global_saved_values.idle_flags & 0x1F) << 2); // bit2 pointer rest, bit3 RGB dim, bit4 CPU sleep, bit5 low clock, bit6 long naps
             return;
         }
         default:

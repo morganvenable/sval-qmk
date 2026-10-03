@@ -201,10 +201,13 @@ void output_keyboard_info(void) {
             global_saved_values.scan_deep_period_ms, global_saved_values.scan_deep_after_s,
             (unsigned long)frame_us, led_us, stage);
     send_string(output_buffer);
-    sprintf(output_buffer, "Idle power: pointer rest %s, RGB dim %s, CPU sleep %s\n",
+    sprintf(output_buffer, "Idle power: pointer rest %s, RGB dim %s, CPU sleep %s, 48 MHz in deep idle %s, long naps %s; clock now %d MHz\n",
             (global_saved_values.idle_flags & SVAL_IDLE_POINTER_REST) ? "on" : "off",
             (global_saved_values.idle_flags & SVAL_IDLE_RGB_DIM) ? "on" : "off",
-            (global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) ? "on" : "off");
+            (global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) ? "on" : "off",
+            (global_saved_values.idle_flags & SVAL_IDLE_LOW_CLOCK) ? "on" : "off",
+            (global_saved_values.idle_flags & SVAL_IDLE_LONG_NAP) ? "on" : "off",
+            sval_clock_mhz());
     send_string(output_buffer);
 }
 
@@ -383,6 +386,7 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void* in_data, uint8_t
 void keyboard_post_init_kb(void) {
     read_eeprom_kb();
     sval_pointer_rest_apply(); // the sensor was initialised before the flags were read
+    sval_sleep_gating_init();
     set_dpi_from_eeprom();
     keyboard_post_init_user();
     scanlab_init();
@@ -513,6 +517,8 @@ enum sval_via_value_id {
     id_idle_pointer_rest = 25,    // toggle: trackball sensor rest modes
     id_idle_rgb_dim = 26,         // toggle: dim RGB in light idle, off in deep idle
     id_idle_cpu_sleep = 27,       // toggle: sleep the core between paced frames
+    id_idle_low_clock = 28,       // toggle: 48 MHz system clock in deep idle
+    id_idle_long_nap = 29,        // toggle: long naps in deep idle
     id_tapping_term = 16,
     id_permissive_hold = 17,
     id_hold_on_other_key = 18,
@@ -607,7 +613,9 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                     break;
                 case id_idle_pointer_rest:
                 case id_idle_rgb_dim:
-                case id_idle_cpu_sleep: {
+                case id_idle_cpu_sleep:
+                case id_idle_low_clock:
+                case id_idle_long_nap: {
                     uint8_t bit = 1u << (*value_id - id_idle_pointer_rest);
                     if (value_data[0]) global_saved_values.idle_flags |= bit; else global_saved_values.idle_flags &= ~bit;
                     if (bit == SVAL_IDLE_POINTER_REST) sval_pointer_rest_apply();
@@ -705,6 +713,8 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 case id_idle_pointer_rest:
                 case id_idle_rgb_dim:
                 case id_idle_cpu_sleep:
+                case id_idle_low_clock:
+                case id_idle_long_nap:
                     value_data[0] = (global_saved_values.idle_flags >> (*value_id - id_idle_pointer_rest)) & 1;
                     break;
                 default:

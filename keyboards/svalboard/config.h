@@ -100,8 +100,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SVAL_IDLE_POINTER_REST 0x01   // let the trackball sensor use its own rest modes
 #define SVAL_IDLE_RGB_DIM      0x02   // dim the RGB in light idle, off in deep idle
 #define SVAL_IDLE_CPU_SLEEP    0x04   // sleep the core between paced frames instead of spinning
+#define SVAL_IDLE_LOW_CLOCK    0x08   // deep idle: clk_sys from the USB PLL at 48 MHz, system PLL off
+#define SVAL_IDLE_LONG_NAP     0x10   // deep idle: naps of SVAL_DEEP_NAP_*_US instead of 1 ms
 #ifndef SVAL_IDLE_FLAGS_DEFAULT
-    #define SVAL_IDLE_FLAGS_DEFAULT (SVAL_IDLE_POINTER_REST | SVAL_IDLE_RGB_DIM | SVAL_IDLE_CPU_SLEEP)
+    #define SVAL_IDLE_FLAGS_DEFAULT (SVAL_IDLE_POINTER_REST | SVAL_IDLE_RGB_DIM | SVAL_IDLE_CPU_SLEEP | SVAL_IDLE_LOW_CLOCK | SVAL_IDLE_LONG_NAP)
+#endif
+#ifndef SVAL_DEEP_NAP_MASTER_US
+    #define SVAL_DEEP_NAP_MASTER_US 20000 // the sensor only reports every 100-500 ms in rest; USB replies wait at most this
+#endif
+#ifndef SVAL_DEEP_NAP_SLAVE_US
+    #define SVAL_DEEP_NAP_SLAVE_US 4000   // must stay well inside the master's 20 ms split-transaction timeout
 #endif
 #ifndef SVAL_IDLE_RGB_LIGHT_DIV
     #define SVAL_IDLE_RGB_LIGHT_DIV 4   // light idle brightness = awake brightness / this

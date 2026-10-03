@@ -544,6 +544,16 @@
                             "label": "Sleep Between Scans",
                             "type": "toggle",
                             "content": ["id_idle_cpu_sleep", 0, 27]
+                        },
+                        {
+                            "label": "48 MHz In Deep Idle",
+                            "type": "toggle",
+                            "content": ["id_idle_low_clock", 0, 28]
+                        },
+                        {
+                            "label": "Long Naps In Deep Idle",
+                            "type": "toggle",
+                            "content": ["id_idle_long_nap", 0, 29]
                         }
                     ]
                 }

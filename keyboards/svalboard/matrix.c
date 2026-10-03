@@ -172,7 +172,11 @@ uint32_t sval_scan_period_now(uint8_t *stage) {
     uint32_t p = global_saved_values.scan_period_us;
     uint8_t  s = 0;
     if (p) {
+        // Quiet since the last raw matrix change here or any input anywhere (keys on the
+        // other half, ball motion), whichever is more recent.
         uint32_t quiet_ms = timer_elapsed32(last_change_ms);
+        uint32_t input_ms = last_input_activity_elapsed();
+        if (input_ms < quiet_ms) quiet_ms = input_ms;
         uint32_t deep_us  = (uint32_t)global_saved_values.scan_deep_period_ms * 1000u;
         uint32_t light_us = (uint32_t)global_saved_values.scan_idle_period_ms * 1000u;
         if (global_saved_values.scan_deep_after_s && deep_us > p &&
@@ -263,16 +267,20 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     uint32_t now = now_us();
     if (!scanlab_active()) {
         uint32_t period  = sval_scan_period_now(&idle_stage);
+        uint8_t  flags   = global_saved_values.idle_flags;
+        // Deep idle may run the core at 48 MHz; any other state needs full speed first.
+        if (idle_stage == 2 && (flags & SVAL_IDLE_LOW_CLOCK)) sval_clock_low(); else sval_clock_full();
         uint32_t elapsed = now - frame_start_us;
         if (period && elapsed < period) {
-            // Not due yet. With CPU sleep on, nap until the frame is due (in naps of at most
-            // SVAL_SLEEP_MAX_US so USB, the pointer and the split link stay responsive) instead of
-            // spinning; the idle thread parks the core in WFI. Wake a little early and let the
-            // next pass through here start the frame on time.
+            // Not due yet. With CPU sleep on, nap until the frame is due instead of spinning;
+            // the idle thread parks the core in WFI. Naps are capped (1 ms normally, longer in
+            // deep idle) so USB, the pointer and the split link stay responsive. Wake a little
+            // early and let the next pass through here start the frame on time.
             uint32_t remaining = period - elapsed;
-            if (!(global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) || remaining <= SVAL_SLEEP_MIN_US) return false;
-            if (remaining > SVAL_SLEEP_MAX_US) {
-                chThdSleepMicroseconds(SVAL_SLEEP_MAX_US);
+            if (!(flags & SVAL_IDLE_CPU_SLEEP) || remaining <= SVAL_SLEEP_MIN_US) return false;
+            uint32_t cap = (idle_stage == 2 && (flags & SVAL_IDLE_LONG_NAP)) ? sval_deep_nap_us() : SVAL_SLEEP_MAX_US;
+            if (remaining > cap) {
+                chThdSleepMicroseconds(cap);
                 return false;
             }
             // Last nap before the frame: wake slightly early, finish with a short busy-wait and
@@ -284,6 +292,7 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         }
     } else {
         idle_stage = 0;
+        sval_clock_full();
     }
     if (frame_start_us) ema32(&stat_frame_us, now - frame_start_us);
     frame_start_us = now;
