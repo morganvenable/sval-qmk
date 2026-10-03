@@ -630,6 +630,12 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 nvm_via_update_keycodes_version(value_data[0]);
                 break;
             }
+            if (*value_id == 0xF4) { // test: forget the legacy-store check and blank the settings store
+                void identity_test_clear_legacy_store_checked(void);
+                identity_test_clear_legacy_store_checked();
+                eeconfig_disable(); // full format; the board resets itself on the next boot
+                break;
+            }
 #endif
             switch (*value_id) {
                 case id_left_dpi:

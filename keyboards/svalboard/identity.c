@@ -243,6 +243,14 @@ void identity_mark_legacy_store_checked(void) {
     save();
 }
 
+#ifdef SVAL_TEST_HOOKS
+void identity_test_clear_legacy_store_checked(void) {
+    identity_init();
+    current.flags &= ~IDENTITY_FLAG_LEGACY_STORE_CHECKED;
+    save();
+}
+#endif
+
 // ---- hooks into QMK -----------------------------------------------------------------
 
 // The USB serial: QMK formats get_hardware_id() as hex after SERIAL_NUMBER_PREFIX.
