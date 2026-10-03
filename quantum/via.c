@@ -471,7 +471,11 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
             break;
         }
         case id_dynamic_keymap_macro_get_buffer_size: {
-            uint16_t size   = dynamic_keymap_macro_get_buffer_size();
+            // VIA's macro commands carry 16-bit offsets: report at most the
+            // first 64 KB. A larger buffer is reached through a keyboard's own
+            // protocol with wider offsets.
+            uint32_t full   = dynamic_keymap_macro_get_buffer_size();
+            uint16_t size   = full > 0xFFFF ? 0xFFFF : full;
             command_data[0] = size >> 8;
             command_data[1] = size & 0xFF;
             break;

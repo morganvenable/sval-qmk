@@ -29,8 +29,8 @@
 
 STATIC_ASSERT(DYNAMIC_KEYMAP_EEPROM_MAX_ADDR <= (TOTAL_EEPROM_BYTE_COUNT - 1), "DYNAMIC_KEYMAP_EEPROM_MAX_ADDR is configured to use more space than what is available for the selected EEPROM driver");
 
-// Due to usage of uint16_t check for max 65535
-STATIC_ASSERT(DYNAMIC_KEYMAP_EEPROM_MAX_ADDR <= 65535, "DYNAMIC_KEYMAP_EEPROM_MAX_ADDR must be less than 65536");
+// The macro buffer API takes 32-bit offsets; VIA's own macro commands carry
+// 16-bit offsets and so reach only the first 64 KB of a larger buffer.
 
 // If DYNAMIC_KEYMAP_EEPROM_ADDR not explicitly defined in config.h,
 #ifndef DYNAMIC_KEYMAP_EEPROM_ADDR

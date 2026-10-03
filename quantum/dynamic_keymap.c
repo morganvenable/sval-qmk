@@ -129,15 +129,15 @@ uint16_t dynamic_keymap_macro_get_count(void) {
     return DYNAMIC_KEYMAP_MACRO_COUNT;
 }
 
-uint16_t dynamic_keymap_macro_get_buffer_size(void) {
-    return (uint16_t)nvm_dynamic_keymap_macro_size();
+uint32_t dynamic_keymap_macro_get_buffer_size(void) {
+    return nvm_dynamic_keymap_macro_size();
 }
 
-void dynamic_keymap_macro_get_buffer(uint16_t offset, uint16_t size, uint8_t *data) {
+void dynamic_keymap_macro_get_buffer(uint32_t offset, uint16_t size, uint8_t *data) {
     nvm_dynamic_keymap_macro_read_buffer(offset, size, data);
 }
 
-void dynamic_keymap_macro_set_buffer(uint16_t offset, uint16_t size, uint8_t *data) {
+void dynamic_keymap_macro_set_buffer(uint32_t offset, uint16_t size, uint8_t *data) {
     nvm_dynamic_keymap_macro_update_buffer(offset, size, data);
 }
 
