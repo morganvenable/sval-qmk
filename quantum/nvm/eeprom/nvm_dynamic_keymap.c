@@ -184,8 +184,8 @@ uint32_t nvm_dynamic_keymap_macro_size(void) {
 void nvm_dynamic_keymap_macro_read_buffer(uint32_t offset, uint32_t size, uint8_t *data) {
     void    *source = (void *)(uintptr_t)(DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR + offset);
     uint8_t *target = data;
-    for (uint16_t i = 0; i < size; i++) {
-        if (offset + i < DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE) {
+    for (uint32_t i = 0; i < size; i++) {
+        if (offset < DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE && i < DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE - offset) {
             *target = eeprom_read_byte(source);
         } else {
             *target = 0x00;
@@ -198,8 +198,8 @@ void nvm_dynamic_keymap_macro_read_buffer(uint32_t offset, uint32_t size, uint8_
 void nvm_dynamic_keymap_macro_update_buffer(uint32_t offset, uint32_t size, uint8_t *data) {
     void    *target = (void *)(uintptr_t)(DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR + offset);
     uint8_t *source = data;
-    for (uint16_t i = 0; i < size; i++) {
-        if (offset + i < DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE) {
+    for (uint32_t i = 0; i < size; i++) {
+        if (offset < DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE && i < DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE - offset) {
             eeprom_update_byte(target, *source);
         }
         source++;

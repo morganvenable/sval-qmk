@@ -23,8 +23,9 @@
 //   keyboard data version, Vial settings version 1-6, VIA magic not mid-reset).
 //   Anything else, including other Vial releases, takes the normal path: a
 //   clean reset.
-// - The layout stamps are written last, so an interrupted migration is a clean
-//   reset on the next boot, never a half-converted setup that gets misread.
+// - A persistent pending flag allows an interrupted migration to replay from
+//   the untouched legacy store. The layout stamps precede the completion flag,
+//   so a half-converted setup is never treated as a completed migration.
 //
 // Turn it off with SVAL_MIGRATE_VIAL = no in rules.mk.
 
@@ -288,16 +289,21 @@ void sval_test_legacy_read(uint16_t offset, uint8_t *out) {
 void sval_migrate_vial(void) {
     MIGRATE_DIAG[0] = 0x56410000u | STAGE_START;
     // Once per board: never again after a look, and never into a store that
-    // already holds a setup.
+    // already holds a setup, unless an earlier migration attempt is pending.
     if (identity_legacy_store_checked()) {
         diag_stage(STAGE_ALREADY_CHECKED);
         return;
     }
-    if (eeprom_read_word(EECONFIG_MAGIC) == EECONFIG_MAGIC_NUMBER) {
+    if (!identity_legacy_store_pending() && eeprom_read_word(EECONFIG_MAGIC) == EECONFIG_MAGIC_NUMBER) {
         identity_mark_legacy_store_checked();
         diag_stage(STAGE_ALREADY_CHECKED);
         return;
     }
+
+    // Persist the intent before allocation: normal initialization may create
+    // valid core magic after allocation failure, and a partial copy writes it
+    // early too. Neither should prevent retrying the untouched legacy store.
+    if (!identity_mark_legacy_store_pending()) return;
 
     uint8_t *snap = malloc(SVAL_LEGACY_STORE_LOGICAL_SIZE);
     if (!snap) return; // try again next boot; meanwhile the normal clean reset
@@ -408,8 +414,6 @@ void sval_migrate_vial(void) {
 #undef AT
     free(snap);
 
-    identity_mark_legacy_store_checked();
-
     // Stamps last: only a fully written setup is ever trusted.
     sval_eeprom_set_valid();
     svalboard_eeprom_set_valid();
@@ -417,5 +421,7 @@ void sval_migrate_vial(void) {
     // translates everything (keymap, macros, Sval tables) to the current one.
     nvm_via_update_keycodes_version(VIAL_KEYCODES_VERSION);
     via_eeprom_set_valid(true);
+    // Commit only after all stamps: an interrupted copy is replayed next boot.
+    identity_mark_legacy_store_checked();
     diag_stage(STAGE_DONE);
 }

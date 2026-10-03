@@ -236,17 +236,33 @@ bool identity_legacy_store_checked(void) {
     return current.flags & IDENTITY_FLAG_LEGACY_STORE_CHECKED;
 }
 
+bool identity_legacy_store_pending(void) {
+    identity_init();
+    return current.flags & IDENTITY_FLAG_LEGACY_STORE_PENDING;
+}
+
+bool identity_mark_legacy_store_pending(void) {
+    identity_init();
+    if (current.flags & IDENTITY_FLAG_LEGACY_STORE_PENDING) return true;
+    uint8_t flags = current.flags;
+    current.flags |= IDENTITY_FLAG_LEGACY_STORE_PENDING;
+    if (save()) return true;
+    current.flags = flags;
+    return false;
+}
+
 void identity_mark_legacy_store_checked(void) {
     identity_init();
     if (current.flags & IDENTITY_FLAG_LEGACY_STORE_CHECKED) return;
-    current.flags |= IDENTITY_FLAG_LEGACY_STORE_CHECKED;
-    save();
+    uint8_t flags = current.flags;
+    current.flags = (flags | IDENTITY_FLAG_LEGACY_STORE_CHECKED) & ~IDENTITY_FLAG_LEGACY_STORE_PENDING;
+    if (!save()) current.flags = flags;
 }
 
 #ifdef SVAL_TEST_HOOKS
 void identity_test_clear_legacy_store_checked(void) {
     identity_init();
-    current.flags &= ~IDENTITY_FLAG_LEGACY_STORE_CHECKED;
+    current.flags &= ~(IDENTITY_FLAG_LEGACY_STORE_CHECKED | IDENTITY_FLAG_LEGACY_STORE_PENDING);
     save();
 }
 #endif

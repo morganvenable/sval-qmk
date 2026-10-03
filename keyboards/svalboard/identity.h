@@ -28,6 +28,10 @@ typedef enum {
 // (and migrated if it held a setup). Kept here because it must survive a full
 // settings wipe, or a wiped board would migrate the old setup back in.
 #define IDENTITY_FLAG_LEGACY_STORE_CHECKED 0x01
+// An attempt is pending until its settings and validity stamps are committed.
+#define IDENTITY_FLAG_LEGACY_STORE_PENDING 0x02
+bool identity_legacy_store_pending(void);
+bool identity_mark_legacy_store_pending(void);
 bool identity_legacy_store_checked(void);
 void identity_mark_legacy_store_checked(void);
 
