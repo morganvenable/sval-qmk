@@ -164,9 +164,9 @@ void sval_upgrade_keycodes(uint8_t from) {
     // Macros: only the 16-bit extension actions carry QMK keycodes. Walk the
     // buffer byte by byte; the extension holds two non-zero bytes, so the
     // rewrite never changes its length.
-    uint16_t size = dynamic_keymap_macro_get_buffer_size();
+    uint32_t size = dynamic_keymap_macro_get_buffer_size();
     uint8_t  b[4];
-    for (uint16_t i = 0; i + 1 < size; i++) {
+    for (uint32_t i = 0; i + 1 < size; i++) {
         dynamic_keymap_macro_get_buffer(i, 2, b);
         if (b[0] != SS_QMK_PREFIX) continue;
         if (b[1] == SS_TAP_CODE || b[1] == SS_DOWN_CODE || b[1] == SS_UP_CODE) {
@@ -797,6 +797,37 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         case sval_cmd_fragment_set_selections:
             return sval_handle_fragment_set_selections(data, length);
 
+        case sval_cmd_macro_buffer_size: {
+            // Request:  [0xDF] [0x1E]
+            // Response: [0xDF] [0x1E] [size u32 LE]
+            uint32_t size = dynamic_keymap_macro_get_buffer_size();
+            data[2] = size & 0xFF;
+            data[3] = (size >> 8) & 0xFF;
+            data[4] = (size >> 16) & 0xFF;
+            data[5] = (size >> 24) & 0xFF;
+            break;
+        }
+
+        case sval_cmd_macro_buffer_get:
+        case sval_cmd_macro_buffer_set: {
+            // Request:  [0xDF] [0x1F|0x20] [offset u32 LE] [count] [data... (set)]
+            // Response: get [0xDF] [0x1F] [offset u32 LE] [count] [data...]
+            //           set [0xDF] [0x20] [status] (0 = ok, 1 = out of range)
+            uint32_t offset = data[2] | (data[3] << 8) | ((uint32_t)data[4] << 16) | ((uint32_t)data[5] << 24);
+            uint8_t  count  = data[6];
+            if (length < 7 || count > length - 7 || offset + count > dynamic_keymap_macro_get_buffer_size()) {
+                data[2] = 1;
+                break;
+            }
+            if (data[1] == sval_cmd_macro_buffer_get) {
+                dynamic_keymap_macro_get_buffer(offset, count, &data[7]);
+            } else {
+                dynamic_keymap_macro_set_buffer(offset, count, &data[7]);
+                data[2] = 0;
+            }
+            break;
+        }
+
         case sval_cmd_label_get: {
             // LABEL_GET (v2): the next non-empty label at or after a start index.
             // Request:  [0xDF] [0x1B] [type] [start lo] [start hi]
@@ -1036,7 +1067,7 @@ void dynamic_keymap_macro_send(uint8_t id) {
     }
 
     // Check the last byte of the buffer for validity
-    uint16_t macro_size = dynamic_keymap_macro_get_buffer_size();
+    uint32_t macro_size = dynamic_keymap_macro_get_buffer_size();
     uint8_t last_byte;
     dynamic_keymap_macro_get_buffer(macro_size - 1, 1, &last_byte);
     if (last_byte != 0) {
