@@ -34,6 +34,7 @@
 #include "nvm_eeprom_eeconfig_internal.h"
 #include "dynamic_keymap.h"
 #include "via.h"
+#include "nvm_via.h"
 #include "util.h"
 #include <stdlib.h>
 #include <string.h>
@@ -57,6 +58,7 @@
 #define VIAL_MACRO_ADDR 3547       // to the end of the 64 KB logical EEPROM
 #define VIAL_MACRO_SIZE 61989
 #define VIAL_MACRO_COUNT 50
+#define VIAL_KEYCODES_VERSION 7    // QMK keycodes 0.0.7; via_init() upgrades from here
 #define VIAL_LAYERS 16
 #define VIAL_ROWS 10
 #define VIAL_COLS 6
@@ -324,6 +326,9 @@ void sval_migrate_vial(void) {
     // Stamps last: only a fully written setup is ever trusted.
     sval_eeprom_set_valid();
     svalboard_eeprom_set_valid();
+    // Record the keycode numbering the data was written in, so via_init()
+    // translates everything (keymap, macros, Sval tables) to the current one.
+    nvm_via_update_keycodes_version(VIAL_KEYCODES_VERSION);
     via_eeprom_set_valid(true);
     diag_stage(STAGE_DONE);
 }
