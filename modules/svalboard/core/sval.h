@@ -270,6 +270,8 @@ void sval_init(void);
 // Stamp the stored Sval data block as current (layout stamp). For migrations that
 // write the block directly; normal code never needs it.
 void sval_eeprom_set_valid(void);
+// Translate stored keycodes from keycode version `from` (keycode_upgrade.h).
+void sval_upgrade_keycodes(uint8_t from);
 
 // Protocol handler for 0xDF commands
 // Returns true if command was handled

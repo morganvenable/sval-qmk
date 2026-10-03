@@ -11,6 +11,7 @@
 #include <string.h>
 #include "print.h"
 #include "layout_stamp.h"
+#include "keycode_upgrade.h"
 #include "send_string.h"
 #include "wait.h"
 
@@ -34,6 +35,18 @@ static void sval_read_eeprom(uint16_t offset, void *buf, uint16_t size) {
 
 static void sval_write_eeprom(uint16_t offset, const void *buf, uint16_t size) {
     eeconfig_update_kb_datablock(buf, offset, size);
+}
+
+// Vial macro extension codes for 16-bit keycodes
+#define VIAL_MACRO_EXT_TAP 5
+#define VIAL_MACRO_EXT_DOWN 6
+#define VIAL_MACRO_EXT_UP 7
+
+static uint16_t decode_keycode(uint16_t kc) {
+    // Map 0xFF01 => 0x0100; 0xFF02 => 0x0200, etc.
+    if (kc > 0xFF00)
+        return (kc & 0xFF) << 8;
+    return kc;
 }
 
 // Bump only when the meaning of stored bytes changes without any offset, count
@@ -89,6 +102,93 @@ void sval_eeprom_set_valid(void) {
     sval_get_magic(magic);
     sval_write_eeprom(SVAL_MAGIC_OFFSET, magic, SVAL_MAGIC_SIZE);
 }
+
+// Translate every keycode the Sval data block and the macros store from keycode
+// version `from` to the current numbering (keycode_upgrade.h). Called from the
+// keyboard's via_keycodes_upgrade_kb() during via_init(), before sval_init()
+// loads the tables. Idempotent, like every keycode upgrade.
+#define UPGRADE(field)                                   \
+    do {                                                 \
+        uint16_t upgraded_ = keycode_upgrade((field), from); \
+        if (upgraded_ != (field)) {                      \
+            (field) = upgraded_;                         \
+            changed = true;                              \
+        }                                                \
+    } while (0)
+void sval_upgrade_keycodes(uint8_t from) {
+    if (sval_eeprom_is_valid()) {
+        for (uint8_t i = 0; i < SVAL_TAP_DANCE_ENTRIES; i++) {
+            sval_tap_dance_entry_t e;
+            bool                   changed = false;
+            sval_get_tap_dance(i, &e);
+            UPGRADE(e.on_tap);
+            UPGRADE(e.on_hold);
+            UPGRADE(e.on_double_tap);
+            UPGRADE(e.on_tap_hold);
+            if (changed) sval_set_tap_dance(i, &e);
+        }
+        for (uint8_t i = 0; i < SVAL_COMBO_ENTRIES; i++) {
+            sval_combo_entry_t e;
+            bool               changed = false;
+            sval_get_combo(i, &e);
+            for (uint8_t k = 0; k < 4; k++) UPGRADE(e.input[k]);
+            UPGRADE(e.output);
+            if (changed) sval_set_combo(i, &e);
+        }
+        for (uint8_t i = 0; i < SVAL_KEY_OVERRIDE_ENTRIES; i++) {
+            sval_key_override_entry_t e;
+            bool                      changed = false;
+            sval_get_key_override(i, &e);
+            UPGRADE(e.trigger);
+            UPGRADE(e.replacement);
+            if (changed) sval_set_key_override(i, &e);
+        }
+        for (uint8_t i = 0; i < SVAL_ALT_REPEAT_KEY_ENTRIES; i++) {
+            sval_alt_repeat_key_entry_t e;
+            bool                        changed = false;
+            sval_get_alt_repeat_key(i, &e);
+            UPGRADE(e.keycode);
+            UPGRADE(e.alt_keycode);
+            if (changed) sval_set_alt_repeat_key(i, &e);
+        }
+        for (uint8_t i = 0; i < SVAL_LEADER_ENTRIES; i++) {
+            sval_leader_entry_t e;
+            bool                changed = false;
+            sval_get_leader(i, &e);
+            for (uint8_t k = 0; k < 5; k++) UPGRADE(e.sequence[k]);
+            UPGRADE(e.output);
+            if (changed) sval_set_leader(i, &e);
+        }
+    }
+
+    // Macros: only the 16-bit extension actions carry QMK keycodes. Walk the
+    // buffer byte by byte; the extension holds two non-zero bytes, so the
+    // rewrite never changes its length.
+    uint16_t size = dynamic_keymap_macro_get_buffer_size();
+    uint8_t  b[4];
+    for (uint16_t i = 0; i + 1 < size; i++) {
+        dynamic_keymap_macro_get_buffer(i, 2, b);
+        if (b[0] != SS_QMK_PREFIX) continue;
+        if (b[1] == SS_TAP_CODE || b[1] == SS_DOWN_CODE || b[1] == SS_UP_CODE) {
+            i += 2;
+        } else if (b[1] == SS_DELAY_CODE) {
+            i += 3;
+        } else if (b[1] >= VIAL_MACRO_EXT_TAP && b[1] <= VIAL_MACRO_EXT_UP && i + 3 < size) {
+            dynamic_keymap_macro_get_buffer(i + 2, 2, &b[2]);
+            uint16_t raw = b[2] | (b[3] << 8);
+            uint16_t kc  = decode_keycode(raw);
+            uint16_t up  = keycode_upgrade(kc, from);
+            if (up != kc) {
+                if ((up & 0xFF) == 0) up = 0xFF00 | (up >> 8);
+                b[2] = up & 0xFF;
+                b[3] = up >> 8;
+                dynamic_keymap_macro_set_buffer(i + 2, 2, &b[2]);
+            }
+            i += 3;
+        }
+    }
+}
+#undef UPGRADE
 
 void sval_init(void) {
     // Initialize client wrapper for multi-client support
@@ -965,17 +1065,6 @@ uint16_t keymap_key_to_keycode(uint8_t layer, keypos_t key) {
     return dynamic_keymap_get_keycode(layer, key.row, key.col);
 }
 
-// Vial macro extension codes for 16-bit keycodes
-#define VIAL_MACRO_EXT_TAP 5
-#define VIAL_MACRO_EXT_DOWN 6
-#define VIAL_MACRO_EXT_UP 7
-
-static uint16_t decode_keycode(uint16_t kc) {
-    // Map 0xFF01 => 0x0100; 0xFF02 => 0x0200, etc.
-    if (kc > 0xFF00)
-        return (kc & 0xFF) << 8;
-    return kc;
-}
 
 // Override dynamic_keymap_macro_send to support extended keycodes and binary delay
 void dynamic_keymap_macro_send(uint8_t id) {

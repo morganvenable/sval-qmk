@@ -10,6 +10,8 @@
 #include "usb_main.h"
 #include "suspend.h"
 #include "scanlab.h"
+#include "sval.h"
+#include "nvm_via.h"
 
 // USB remote wakeup status bit (from USB spec, not exported by QMK headers)
 #ifndef USB_GETSTATUS_REMOTE_WAKEUP_ENABLED
@@ -151,6 +153,12 @@ void svalboard_saved_values_defaults(void) {
 void sval_migrate_vial(void);                         // migrate_vial.c
 void sval_migrate_vial_diag(uint8_t *out, uint8_t len); // migrate_vial.c
 #endif
+
+// The stored keycode version is older than this firmware's: translate what the
+// Sval module stores outside the VIA keymap.
+void via_keycodes_upgrade_kb(uint8_t from) {
+    sval_upgrade_keycodes(from);
+}
 
 // Runs after the EEPROM driver is up and before anything validates or resets
 // stored settings, which is the only point a foreign layout can still be read.
@@ -610,6 +618,12 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
 
     switch (command) {
         case id_custom_set_value:
+#ifdef SVAL_TEST_HOOKS
+            if (*value_id == 0xF2) { // test: pretend the keymap was written by an older keycode version
+                nvm_via_update_keycodes_version(value_data[0]);
+                break;
+            }
+#endif
             switch (*value_id) {
                 case id_left_dpi:
                     if (value_data[0] < DPI_CHOICES_LENGTH) {
@@ -711,6 +725,12 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
             break;
 
         case id_custom_get_value:
+#ifdef SVAL_TEST_HOOKS
+            if (*value_id == 0xF2) { // test: stored keycode version
+                value_data[0] = nvm_via_read_keycodes_version();
+                break;
+            }
+#endif
 #ifdef SVAL_MIGRATE_VIAL
             if (*value_id == 0xF0) { // Vial migration diagnostics
                 sval_migrate_vial_diag(value_data, length > 3 ? length - 3 : 0);

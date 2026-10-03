@@ -29,3 +29,7 @@
 // The keyboard-level config defaults this to 0 and is included first.
 #undef SVAL_HOST_BOOTLOADER
 #define SVAL_HOST_BOOTLOADER 1
+
+// Test-only host hooks (VIA custom value 0xF2: stored keycode version). Never in
+// production keymaps.
+#define SVAL_TEST_HOOKS
