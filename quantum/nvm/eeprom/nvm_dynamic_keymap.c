@@ -8,6 +8,7 @@
 #include "nvm_dynamic_keymap.h"
 #include "nvm_eeprom_eeconfig_internal.h"
 #include "nvm_eeprom_via_internal.h"
+#include "layout_stamp.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,6 +70,32 @@ STATIC_ASSERT((int64_t)(DYNAMIC_KEYMAP_EEPROM_MAX_ADDR) - (int64_t)(DYNAMIC_KEYM
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#ifndef DYNAMIC_KEYMAP_LAYOUT_SCHEMA
+// Bump only when the meaning of a stored keycode changes without any address or
+// count changing, e.g. a keycode range is renumbered.
+#    define DYNAMIC_KEYMAP_LAYOUT_SCHEMA 0
+#endif
+
+uint32_t nvm_dynamic_keymap_layout_stamp(void) {
+    const uint32_t values[] = {
+        DYNAMIC_KEYMAP_EEPROM_ADDR,
+        DYNAMIC_KEYMAP_LAYER_COUNT,
+        MATRIX_ROWS,
+        MATRIX_COLS,
+        DYNAMIC_KEYMAP_ENCODER_EEPROM_ADDR,
+#ifdef ENCODER_MAP_ENABLE
+        NUM_ENCODERS,
+#else
+        0,
+#endif
+        DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR,
+        DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE,
+        QMK_KEYCODES_VERSION_BCD,
+        DYNAMIC_KEYMAP_LAYOUT_SCHEMA,
+    };
+    return layout_stamp(values, sizeof(values) / sizeof(values[0]));
+}
 
 void nvm_dynamic_keymap_erase(void) {
     // No-op, nvm_eeconfig_erase() will have already erased EEPROM if necessary.

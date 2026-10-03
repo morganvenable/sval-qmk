@@ -5,6 +5,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// Hash of everything that decides how the stored keymap and macro bytes are read.
+uint32_t nvm_dynamic_keymap_layout_stamp(void);
+
 void nvm_dynamic_keymap_erase(void);
 void nvm_dynamic_keymap_macro_erase(void);
 

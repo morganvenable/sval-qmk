@@ -34,8 +34,9 @@
 #include "matrix.h"
 #include "timer.h"
 #include "wait.h"
-#include "version.h" // for QMK_BUILDDATE used in EEPROM magic
 #include "nvm_via.h"
+#include "nvm_dynamic_keymap.h"
+#include "layout_stamp.h"
 
 #if defined(SECURE_ENABLE)
 #    include "secure.h"
@@ -65,13 +66,33 @@
 #    include "led_matrix.h"
 #endif
 
+// The stored magic is a layout stamp: a hash of everything that decides how the
+// VIA region is read (the keymap and macro geometry plus the layout-options and
+// custom-config sizes in front of it). Upstream used the build date, which
+// reset every user's keymap and macros on any firmware built on another day,
+// even from identical source. The stamp changes only when the stored bytes would
+// be misread, so ordinary updates keep the user's setup.
+//
+// The first byte's high nibble is forced to 0xA, which a BCD date byte can never
+// have, so a board still carrying an old build-date magic is never mistaken for
+// a valid stamp, and the stamp can never be the 0xFFFFFF "invalid" marker.
+static void via_get_magic(uint8_t *magic0, uint8_t *magic1, uint8_t *magic2) {
+    const uint32_t values[] = {
+        nvm_dynamic_keymap_layout_stamp(),
+        VIA_EEPROM_LAYOUT_OPTIONS_SIZE,
+        VIA_EEPROM_CUSTOM_CONFIG_SIZE,
+    };
+    uint32_t stamp = layout_stamp(values, sizeof(values) / sizeof(values[0]));
+    *magic0        = 0xA0 | ((stamp >> 16) & 0x0F);
+    *magic1        = (stamp >> 8) & 0xFF;
+    *magic2        = stamp & 0xFF;
+}
+
 // Can be called in an overriding via_init_kb() to test if keyboard level code usage of
 // EEPROM is invalid and use/save defaults.
 bool via_eeprom_is_valid(void) {
-    char   *p      = QMK_BUILDDATE; // e.g. "2019-11-05-11:29:54"
-    uint8_t magic0 = ((p[2] & 0x0F) << 4) | (p[3] & 0x0F);
-    uint8_t magic1 = ((p[5] & 0x0F) << 4) | (p[6] & 0x0F);
-    uint8_t magic2 = ((p[8] & 0x0F) << 4) | (p[9] & 0x0F);
+    uint8_t magic0, magic1, magic2;
+    via_get_magic(&magic0, &magic1, &magic2);
 
     uint8_t ee_magic0;
     uint8_t ee_magic1;
@@ -85,10 +106,8 @@ bool via_eeprom_is_valid(void) {
 // Keyboard level code (eg. via_init_kb()) should not call this
 void via_eeprom_set_valid(bool valid) {
     if (valid) {
-        char   *p      = QMK_BUILDDATE; // e.g. "2019-11-05-11:29:54"
-        uint8_t magic0 = ((p[2] & 0x0F) << 4) | (p[3] & 0x0F);
-        uint8_t magic1 = ((p[5] & 0x0F) << 4) | (p[6] & 0x0F);
-        uint8_t magic2 = ((p[8] & 0x0F) << 4) | (p[9] & 0x0F);
+        uint8_t magic0, magic1, magic2;
+        via_get_magic(&magic0, &magic1, &magic2);
         nvm_via_update_magic(magic0, magic1, magic2);
     } else {
         nvm_via_update_magic(0xFF, 0xFF, 0xFF);
