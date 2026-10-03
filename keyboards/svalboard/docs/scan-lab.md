@@ -140,10 +140,47 @@ alone from the Scan Lab panel:
   idle thread park the core in WFI. The last nap before a frame wakes
   slightly early and busy-waits the remainder so frames start on time.
 
-Measured on one revision B half with a pmw3389: 90 mA at 1 ms pacing
-with none of these, 40 mA in deep idle (500 ms frames) with all three.
-What remains is the RP2040 in WFI at full clock plus USB and the
-regulator; lowering the system clock in deep idle is the next lever.
+Two more switches act only in deep idle:
+
+- Low clock (bit 3) with a clock choice (`scan_deep_clock_idx`, VIA id
+  30: 48 or 24 MHz from the USB PLL, or the 12 MHz crystal): clk_sys and
+  clk_peri are switched and the system PLL is powered down, the sequence
+  the pico-sdk uses for its 48 MHz mode. USB keeps working at all three
+  because it runs from the USB PLL; the ChibiOS timer and `wait_us` run
+  from the 1 MHz TIMER tick, so scan timing is unchanged. Every enabled
+  PIO state machine (split serial, WS2812) has its divider rescaled on
+  the switch and restored exactly afterwards, so the split baud and LED
+  timing hold. The clock is only lowered once the master's RGB has made
+  its deep-idle write at full speed (the WS2812 program needs 20 MHz),
+  and restoring the RGB raises the clock first. The first input restores
+  125 MHz on the next scan pass.
+- Long naps (bit 4): deep idle naps 20 ms at a time on the master and
+  4 ms on the other half (inside the 20 ms split-transaction timeout)
+  instead of 1 ms. The sensor only reports every 100–500 ms in rest.
+
+Both halves also stop clocking blocks the build never uses (ADC, PWM,
+I2C, RTC, the unused SPI, the UARTs, JTAG, TBMAN) while the core is in
+WFI, and ball motion or input on the other half counts as activity for
+the scan idle stage, so rolling the ball wakes everything.
+
+Measured on one revision B half with a pmw3389, deep idle at 500 ms
+frames:
+
+| State | Current |
+|---|---|
+| 1 ms pacing, no idle features | 90 mA |
+| Sensor rest + RGB off + WFI, 125 MHz, 1 ms naps | 40 mA |
+| + 48 MHz, 20 ms naps | 24 mA |
+| + 12 MHz | 24 mA |
+| Awake again after ball motion | 80 mA |
+
+Going from 48 MHz to 12 MHz changed nothing, so the RP2040 is out of
+the picture at this point. The 24 mA that remain are the linear
+regulator and the standing current of the analog front end, which only
+a hardware change can reduce (a power gate on the front end and the
+sensor module, driven from the deep-idle transition, would be the
+natural next step and the firmware hook is one GPIO). 48 MHz is the
+default choice; 24 and 12 are there for measurement.
 
 Op `0x12` (IDLE) reports what the features are actually doing, which is
 what the panel's diagnostics line shows: the sensor's run/rest mode from
@@ -257,8 +294,8 @@ Get commands (`0x08`), `value_id = op | hand << 3 | row`:
 
 | op | response |
 |----|----------|
-| `0x12` IDLE | `[0]` idle flags, `[1]` sensor present, `[2]` sensor mode (bits 0–1: 0 run, 1–3 rest 1–3; bit 7 valid; bit 6 lifted), `[3]` Config2 as last written, `[4]` RGB value now, `[5]` RGB value awake, `[6]` RGB stage (0 awake, 1 dimmed, 2 off), `[7]` RGB enabled, `[8]` scan idle stage, `[9..12]` ms since any input, `[13..16]` ms since a matrix change, `[17..20]` ms since pointer motion |
-| `0x11` POWER | `[0..1]` saved period (µs), `[2..3]` light idle period (ms), `[4..5]` light idle timeout (ms), `[6..7]` measured frame interval (µs, capped), `[8..9]` measured LED-on per frame (µs), `[10]` stage (0 active, 1 light idle, 2 deep idle), `[11..12]` effective period (µs, capped), `[13..14]` effective pre-wait, `[15..16]` effective post-wait, `[17]` rows, `[18..19]` deep idle timeout (s), `[20..21]` deep idle period (ms), `[22]` bit 0 host bootloader supported, bit 1 reboot armed, bit 2 pointer rest, bit 3 RGB dim, bit 4 CPU sleep |
+| `0x12` IDLE | `[0]` idle flags, `[1]` sensor present, `[2]` sensor mode (bits 0–1: 0 run, 1–3 rest 1–3; bit 7 valid; bit 6 lifted), `[3]` Config2 as last written, `[4]` RGB value now, `[5]` RGB value awake, `[6]` RGB stage (0 awake, 1 dimmed, 2 off), `[7]` RGB enabled, `[8]` scan idle stage, `[9..12]` ms since any input, `[13..16]` ms since a matrix change, `[17..20]` ms since pointer motion, `[21]` system clock now (MHz), `[22]` configured deep-idle clock (MHz) |
+| `0x11` POWER | `[0..1]` saved period (µs), `[2..3]` light idle period (ms), `[4..5]` light idle timeout (ms), `[6..7]` measured frame interval (µs, capped), `[8..9]` measured LED-on per frame (µs), `[10]` stage (0 active, 1 light idle, 2 deep idle), `[11..12]` effective period (µs, capped), `[13..14]` effective pre-wait, `[15..16]` effective post-wait, `[17]` rows, `[18..19]` deep idle timeout (s), `[20..21]` deep idle period (ms), `[22]` bit 0 host bootloader supported, bit 1 reboot armed, bit 2 pointer rest, bit 3 RGB dim, bit 4 CPU sleep, bit 5 low clock, bit 6 long naps |
 | `0x10` STATUS | `[0]` proto version, `[1]` hw revision, `[2]` sweep state (0 idle, 1 capturing reference, 2 running, 3 done, 4 reference failed), `[3..4]` frames done, `[5..6]` frames target, `[7]` reference valid, `[8..9]` effective pre-wait, `[10..11]` effective post-wait, `[12]` this half is left, `[13]` finger pushed-state mask, `[14]` thumb pushed-state mask, `[15]` probe valid, `[16]` probed row, `[17..18]` saved pre-wait, `[19..20]` saved post-wait, `[21]` turbo index, `[22]` other half connected |
 | `0x20` SWEEP_ROW | `[0..11]` six u16 mismatch counts, `[12]` reference row bits, `[13]` last raw row bits, `[14]` sweep state, `[15]` reference valid |
 | `0x40` PROBE_ON | `[0..11]` six u16 settle times (µs), `[12..17]` six change counts, `[18]` idle level mask, `[19]` lit level mask, `[20]` valid |
