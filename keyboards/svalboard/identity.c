@@ -49,7 +49,8 @@ typedef struct __attribute__((packed)) {
     uint8_t  serial[IDENTITY_SERIAL_BYTES];
     uint8_t  serial_source; // identity_serial_source_t
     uint8_t  name_len;      // bytes of UTF-8 in name, no terminator
-    uint8_t  reserved[2];
+    uint8_t  flags;         // IDENTITY_FLAG_*
+    uint8_t  reserved;
     char     name[IDENTITY_NAME_MAX_BYTES];
     uint32_t crc;
 } identity_record_t;
@@ -228,6 +229,18 @@ identity_status_t identity_set_name(const char *name, uint8_t len) {
     memcpy(name_z, current.name, len);
     name_z[len] = 0;
     return IDENTITY_OK;
+}
+
+bool identity_legacy_store_checked(void) {
+    identity_init();
+    return current.flags & IDENTITY_FLAG_LEGACY_STORE_CHECKED;
+}
+
+void identity_mark_legacy_store_checked(void) {
+    identity_init();
+    if (current.flags & IDENTITY_FLAG_LEGACY_STORE_CHECKED) return;
+    current.flags |= IDENTITY_FLAG_LEGACY_STORE_CHECKED;
+    save();
 }
 
 // ---- hooks into QMK -----------------------------------------------------------------

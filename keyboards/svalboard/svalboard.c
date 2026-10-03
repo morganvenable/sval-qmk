@@ -737,6 +737,13 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 value_data[0] = nvm_via_read_keycodes_version();
                 break;
             }
+#    ifdef SVAL_MIGRATE_VIAL
+            if (*value_id == 0xF3) { // test: legacy store replay, 24 bytes from the offset in value_data[0..1]
+                void sval_test_legacy_read(uint16_t offset, uint8_t *out);
+                sval_test_legacy_read(value_data[0] | (value_data[1] << 8), value_data);
+                break;
+            }
+#    endif
 #endif
 #ifdef SVAL_MIGRATE_VIAL
             if (*value_id == 0xF0) { // Vial migration diagnostics

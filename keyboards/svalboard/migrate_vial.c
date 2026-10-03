@@ -4,24 +4,27 @@
 // One-time migration of a user's setup from the Vial firmware shipped as
 // svalboard/vial-qmk v2025-11-01 (keymap "vial").
 //
-// Flashing replaces only the firmware image; the wear-levelled settings area is
-// left alone, and both firmwares use the same wear-levelling engine at the same
-// flash offset and size. So on the first boot after a Vial board is flashed
-// with this firmware, the user's Vial settings are still there, byte for byte,
-// in the logical EEPROM. This file recognises that layout, copies it out, and
-// rewrites it in this firmware's layout before anything validates or resets the
-// stored data.
+// Flashing replaces only the firmware image. Vial kept its settings in a
+// wear-levelled store of 128 KB at 0x1E0000 (64 KB logical); this firmware keeps
+// a larger store just below it and never writes the old one. So on the first
+// boot after a Vial board is flashed, the user's Vial settings are still in the
+// old store. This file replays that store's write log into RAM, recognises the
+// Vial layout, and rewrites it into the new store in this firmware's layout,
+// before anything validates or resets stored data.
 //
 // It runs from keyboard_pre_init_kb(): after eeprom_driver_init(), before
 // via_init(), quantum_init() and the module's sval_init().
 //
 // Safety:
-// - It runs only on an exact fingerprint of that release (core magic, keyboard
-//   data version, Vial settings version 1-6, VIA magic not mid-reset). Anything else,
-//   including other Vial releases, takes the normal path: a clean reset.
-// - Its first write breaks the fingerprint and the layout stamps are written
-//   last, so an interrupted migration is a clean reset on the next boot, never
-//   a half-converted setup that gets misread.
+// - The old store is consulted once in the board's life. A flag in the board
+//   identity (which survives a full settings wipe) records that, so a later
+//   wipe never brings the old Vial setup back.
+// - It migrates only on an exact fingerprint of that release (core magic,
+//   keyboard data version, Vial settings version 1-6, VIA magic not mid-reset).
+//   Anything else, including other Vial releases, takes the normal path: a
+//   clean reset.
+// - The layout stamps are written last, so an interrupted migration is a clean
+//   reset on the next boot, never a half-converted setup that gets misread.
 //
 // Turn it off with SVAL_MIGRATE_VIAL = no in rules.mk.
 
@@ -36,6 +39,10 @@
 #include "via.h"
 #include "nvm_via.h"
 #include "util.h"
+#include "identity.h"
+#include "fnv.h"
+#include "wear_leveling_internal.h"
+#include "hardware/address_mapped.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -109,14 +116,66 @@ typedef struct __attribute__((packed)) {
 //   [0] 0x5641xxSS  SS = furthest stage reached (see enum), xx = fingerprint bits
 //   [1] keyboard data version dword as read
 //   [2] core magic (lo16) | Vial settings version (bits 16-23) | malloc ok (bit 31)
-//   [3] VIA magic bytes as read (bits 0-23) | snapshot length >> 8 (bits 24-31)
+//   [3] VIA magic bytes as read (bits 0-23)
 #define MIGRATE_DIAG ((volatile uint32_t *)0x4005800Cu) // WATCHDOG_BASE + SCRATCH0
-enum { STAGE_START = 1, STAGE_NO_MATCH, STAGE_MATCH, STAGE_SNAPSHOT, STAGE_SVAL, STAGE_KEYMAP, STAGE_MACROS, STAGE_SETTINGS, STAGE_DONE };
+enum { STAGE_START = 1, STAGE_NO_MATCH, STAGE_MATCH, STAGE_SNAPSHOT, STAGE_SVAL, STAGE_KEYMAP, STAGE_MACROS, STAGE_SETTINGS, STAGE_DONE, STAGE_ALREADY_CHECKED };
 static void diag_stage(uint8_t stage) {
     MIGRATE_DIAG[0] = (MIGRATE_DIAG[0] & 0xFFFFFF00u) | stage;
 }
 void sval_migrate_vial_diag(uint8_t *out, uint8_t len) {
     for (uint8_t i = 0; i < len && i < 16; i++) out[i] = (MIGRATE_DIAG[i / 4] >> ((i % 4) * 8)) & 0xFF;
+}
+
+// ---- the legacy store --------------------------------------------------------
+
+// Rebuild the legacy store's logical contents the way QMK's wear levelling
+// would at boot (quantum/wear_leveling/wear_leveling.c, 2-byte backing writes):
+// the consolidated image, valid only if its FNV-1a 64 checksum matches, then the
+// write log replayed over it until the first empty slot. Flash holds every
+// backing word inverted.
+static void legacy_store_read(uint8_t *out) {
+    const uint16_t *flash = (const uint16_t *)(XIP_NOCACHE_NOALLOC_BASE + SVAL_LEGACY_STORE_BASE);
+#define WORD(byte_addr) ((uint16_t) ~flash[(byte_addr) / 2])
+    for (uint32_t a = 0; a < SVAL_LEGACY_STORE_LOGICAL_SIZE; a += 2) {
+        uint16_t w = WORD(a);
+        out[a]     = w & 0xFF;
+        out[a + 1] = w >> 8;
+    }
+    write_log_entry_t sum;
+    for (uint8_t k = 0; k < 4; k++) sum.raw16[k] = WORD(SVAL_LEGACY_STORE_LOGICAL_SIZE + 2 * k);
+    if (sum.raw64 != fnv_64a_buf(out, SVAL_LEGACY_STORE_LOGICAL_SIZE, FNV1A_64_INIT)) {
+        memset(out, 0, SVAL_LEGACY_STORE_LOGICAL_SIZE);
+    }
+
+    for (uint32_t a = SVAL_LEGACY_STORE_LOGICAL_SIZE + 8; a + 2 <= SVAL_LEGACY_STORE_BACKING_SIZE;) {
+        write_log_entry_t log = {.raw16 = {WORD(a), 0, 0, 0}};
+        if (log.raw16[0] == 0) break; // first empty slot: end of log
+        a += 2;
+        switch (LOG_ENTRY_GET_TYPE(log)) {
+            case LOG_ENTRY_TYPE_MULTIBYTE: {
+                log.raw16[1]     = WORD(a), a += 2;
+                const uint32_t addr = LOG_ENTRY_MULTIBYTE_GET_ADDRESS(log);
+                const uint8_t  len  = LOG_ENTRY_MULTIBYTE_GET_LENGTH(log);
+                if (len > 1) log.raw16[2] = WORD(a), a += 2;
+                if (len > 3) log.raw16[3] = WORD(a), a += 2;
+                if (addr + len > SVAL_LEGACY_STORE_LOGICAL_SIZE) return; // corrupt: stop where QMK would
+                memcpy(&out[addr], &log.raw8[3], len);
+            } break;
+            case LOG_ENTRY_TYPE_OPTIMIZED_64: {
+                const uint32_t addr = LOG_ENTRY_OPTIMIZED_64_GET_ADDRESS(log);
+                out[addr]           = LOG_ENTRY_OPTIMIZED_64_GET_VALUE(log);
+            } break;
+            case LOG_ENTRY_TYPE_WORD_01: {
+                const uint32_t addr = LOG_ENTRY_WORD_01_GET_ADDRESS(log);
+                if (addr + 1 >= SVAL_LEGACY_STORE_LOGICAL_SIZE) return;
+                out[addr]     = LOG_ENTRY_WORD_01_GET_VALUE(log);
+                out[addr + 1] = 0;
+            } break;
+            default:
+                return;
+        }
+    }
+#undef WORD
 }
 
 static uint16_t translate_keycode(uint16_t kc) {
@@ -131,11 +190,14 @@ static uint16_t translate_keycode(uint16_t kc) {
     return kc;
 }
 
-static bool vial_layout_present(void) {
-    uint16_t magic   = eeprom_read_word(EECONFIG_MAGIC);
-    uint32_t kbver   = eeprom_read_dword(EECONFIG_KEYBOARD);
-    uint8_t  version = eeprom_read_byte((void *)VIAL_KB_DATA_ADDR);
-    uint8_t  yy = eeprom_read_byte((void *)VIAL_VIA_MAGIC_ADDR + 0), mm = eeprom_read_byte((void *)VIAL_VIA_MAGIC_ADDR + 1), dd = eeprom_read_byte((void *)VIAL_VIA_MAGIC_ADDR + 2);
+static bool vial_layout_present(const uint8_t *old) {
+    uint16_t magic, kbver16[2];
+    uint32_t kbver;
+    memcpy(&magic, &old[(uintptr_t)EECONFIG_MAGIC], 2);
+    memcpy(kbver16, &old[(uintptr_t)EECONFIG_KEYBOARD], 4);
+    kbver           = kbver16[0] | ((uint32_t)kbver16[1] << 16);
+    uint8_t version = old[VIAL_KB_DATA_ADDR];
+    uint8_t yy = old[VIAL_VIA_MAGIC_ADDR + 0], mm = old[VIAL_VIA_MAGIC_ADDR + 1], dd = old[VIAL_VIA_MAGIC_ADDR + 2];
     // Vial's VIA magic is its per-build BUILD_ID, not QMK's build date, so it
     // cannot be predicted; it only has to differ from the 0xFFFFFF that Vial
     // writes while it is part-way through resetting the keymap.
@@ -170,10 +232,10 @@ static void vial_upgrade(vial_saved_values_t *v) {
 }
 
 // Length of the macro buffer through the last macro's terminator.
-static uint32_t vial_macro_length(void) {
+static uint32_t vial_macro_length(const uint8_t *old) {
     uint32_t seen = 0;
     for (uint32_t i = 0; i < VIAL_MACRO_SIZE; i++) {
-        if (eeprom_read_byte((void *)(VIAL_MACRO_ADDR + i)) == 0 && ++seen == VIAL_MACRO_COUNT) {
+        if (old[VIAL_MACRO_ADDR + i] == 0 && ++seen == VIAL_MACRO_COUNT) {
             return i + 1;
         }
     }
@@ -212,27 +274,50 @@ static uint32_t fit_macros(const uint8_t *buf, uint32_t len, uint32_t room) {
     return end;
 }
 
+#ifdef SVAL_TEST_HOOKS
+// Test: 24 bytes of the legacy store as replayed, from `offset`.
+void sval_test_legacy_read(uint16_t offset, uint8_t *out) {
+    uint8_t *buf = malloc(SVAL_LEGACY_STORE_LOGICAL_SIZE);
+    if (!buf) return;
+    legacy_store_read(buf);
+    memcpy(out, buf + offset, MIN(24, SVAL_LEGACY_STORE_LOGICAL_SIZE - offset));
+    free(buf);
+}
+#endif
+
 void sval_migrate_vial(void) {
-    if (!vial_layout_present()) {
+    MIGRATE_DIAG[0] = 0x56410000u | STAGE_START;
+    // Once per board: never again after a look, and never into a store that
+    // already holds a setup.
+    if (identity_legacy_store_checked()) {
+        diag_stage(STAGE_ALREADY_CHECKED);
+        return;
+    }
+    if (eeprom_read_word(EECONFIG_MAGIC) == EECONFIG_MAGIC_NUMBER) {
+        identity_mark_legacy_store_checked();
+        diag_stage(STAGE_ALREADY_CHECKED);
+        return;
+    }
+
+    uint8_t *snap = malloc(SVAL_LEGACY_STORE_LOGICAL_SIZE);
+    if (!snap) return; // try again next boot; meanwhile the normal clean reset
+    legacy_store_read(snap);
+    bool vial = vial_layout_present(snap);
+    MIGRATE_DIAG[2] |= 0x80000000u;
+    if (!vial) {
+        free(snap);
+        identity_mark_legacy_store_checked();
         diag_stage(STAGE_NO_MATCH);
         return;
     }
-    diag_stage(STAGE_MATCH);
-
-    // Snapshot everything we need before the first write: the keyboard data
-    // block through the end of the used macros.
-    uint32_t macro_len = vial_macro_length();
-    uint32_t snap_len  = (VIAL_MACRO_ADDR - VIAL_KB_DATA_ADDR) + macro_len;
-    uint8_t *snap      = malloc(snap_len);
-    MIGRATE_DIAG[3] = (MIGRATE_DIAG[3] & 0x00FFFFFFu) | ((snap_len >> 8) << 24);
-    if (!snap) return; // falls through to the normal clean reset
-    MIGRATE_DIAG[2] |= 0x80000000u;
     diag_stage(STAGE_SNAPSHOT);
-    eeprom_read_block(snap, (void *)VIAL_KB_DATA_ADDR, snap_len);
-#define AT(addr) (snap + ((addr) - VIAL_KB_DATA_ADDR))
+    uint32_t macro_len = vial_macro_length(snap);
+#define AT(addr) (snap + (addr))
 
-    // First write breaks the Vial fingerprint (the keyboard data version), so
-    // an interruption from here on can never re-run on half-converted data.
+    // The core settings block (handedness, default layer, keymap options,
+    // lighting) has the same layout in both firmwares: copy it, then give the
+    // keyboard data block this firmware's version and size.
+    eeprom_update_block(snap, (void *)0, EECONFIG_BASE_SIZE);
     eeconfig_init_kb_datablock();
     via_eeprom_set_valid(false);
 
@@ -322,6 +407,8 @@ void sval_migrate_vial(void) {
 
 #undef AT
     free(snap);
+
+    identity_mark_legacy_store_checked();
 
     // Stamps last: only a fully written setup is ever trusted.
     sval_eeprom_set_valid();

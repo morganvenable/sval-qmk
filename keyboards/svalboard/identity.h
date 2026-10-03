@@ -24,6 +24,13 @@ typedef enum {
     IDENTITY_WRITE_FAILED = 3,
 } identity_status_t;
 
+// The settings store used by earlier firmware has been looked at once already
+// (and migrated if it held a setup). Kept here because it must survive a full
+// settings wipe, or a wiped board would migrate the old setup back in.
+#define IDENTITY_FLAG_LEGACY_STORE_CHECKED 0x01
+bool identity_legacy_store_checked(void);
+void identity_mark_legacy_store_checked(void);
+
 void                identity_init(void); // safe to call repeatedly; loads once
 bool                identity_available(void);
 const uint8_t      *identity_serial(identity_serial_source_t *source);
