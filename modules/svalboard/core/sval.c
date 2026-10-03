@@ -1006,9 +1006,14 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
     }
 }
 
-// Process record hook for Sval features
-bool process_record_sval(uint16_t keycode, keyrecord_t *record) {
+// Process record hook for Sval features. Community-module hooks are named
+// after the module's directory (svalboard/core), not its module_name.
+bool process_record_core(uint16_t keycode, keyrecord_t *record) {
     if (!process_record_sval_tap_dance(keycode, record)) {
+        return false;
+    }
+    if (keycode >= SVAL_MACRO_HIGH_BASE && keycode <= SVAL_MACRO_HIGH_MAX) {
+        if (record->event.pressed) dynamic_keymap_macro_send(128 + (keycode - SVAL_MACRO_HIGH_BASE));
         return false;
     }
     return true;

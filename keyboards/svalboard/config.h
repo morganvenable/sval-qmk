@@ -147,7 +147,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define RP2040_BOOTLOADER_DOUBLE_TAP_RESET_TIMEOUT 500 // Timeout window in ms in which the double tap can occur.
 
 // Macro count (Sval entry counts are now in each keymap's sval.json)
-#define DYNAMIC_KEYMAP_MACRO_COUNT 50
+// 256 macros: QMK's macro keycodes (0x7700-0x777F) reach macro 127; the Sval
+// module maps 0x7680-0x76FF to macros 128-255 (SVAL_MACRO_HIGH_BASE).
+#define DYNAMIC_KEYMAP_MACRO_COUNT 256
 
 // Sval defaults for Svalboard - sane mod-tap experience
 #define SVAL_DEFAULT_NKRO 1

@@ -14,6 +14,11 @@
 #    include "sval_config.h"
 #endif
 
+// Macros 128-255: QMK's own macro keycodes stop at 127 (QK_MACRO_MAX), so the
+// upper half lives in the unassigned block just below them.
+#define SVAL_MACRO_HIGH_BASE 0x7680 // macro 128
+#define SVAL_MACRO_HIGH_MAX 0x76FF  // macro 255
+
 // Sval protocol version
 #define SVAL_PROTOCOL_VERSION 0x00000002 // v2: 16-bit entry and label indices; LABEL_GET returns one label per request
 
