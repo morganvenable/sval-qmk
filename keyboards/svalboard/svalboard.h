@@ -121,6 +121,8 @@ uint8_t  sval_deep_clock_mhz(void);   // configured deep-idle clock (48/24/12)
 bool     sval_rgb_idle_quiesced(void); // master: RGB has reached its deep-idle state and the last write is done
 uint32_t sval_deep_nap_us(void);      // longest nap allowed in deep idle on this half
 void     sval_sleep_gating_init(void); // stop clocking unused blocks while the core is in WFI
+bool     sval_host_recent(void);       // a host app sent a raw HID packet within SVAL_HOST_ACTIVE_MS
+uint32_t sval_host_idle_ms(void);     // ms since the last host packet (UINT32_MAX until the first one)
 
 // Idle power features. Flags live in global_saved_values.idle_flags on both halves.
 void sval_pointer_rest_apply(void);   // push SVAL_IDLE_POINTER_REST into the sensor (weak no-op without one)

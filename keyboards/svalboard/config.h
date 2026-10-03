@@ -111,6 +111,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef SVAL_DEEP_NAP_SLAVE_US
     #define SVAL_DEEP_NAP_SLAVE_US 4000   // must stay well inside the master's 20 ms split-transaction timeout
 #endif
+#ifndef SVAL_HOST_ACTIVE_MS
+    #define SVAL_HOST_ACTIVE_MS 1500  // a host app is mid-conversation: full clock and 1 ms naps, so a
+                                      // request/response round trip is not paced by the deep-idle nap
+#endif
 #ifndef SVAL_IDLE_RGB_LIGHT_DIV
     #define SVAL_IDLE_RGB_LIGHT_DIV 4   // light idle brightness = awake brightness / this
 #endif

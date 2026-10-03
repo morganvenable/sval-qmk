@@ -279,6 +279,28 @@ void set_dpi_from_eeprom(void) {
     set_right_dpi(global_saved_values.right_dpi_index);
 }
 
+// ---- Host activity. Deep idle paces the whole main loop off the nap length, so a config
+// app talking over raw HID would get one request/response round trip per nap (20 ms on the
+// master). A bootstrap is hundreds of round trips, which is long enough that the host gives
+// up before the board has said anything wrong. Every host packet stamps the clock here; while
+// the stamp is fresh the pacing gate keeps full speed and 1 ms naps. The scan period itself
+// is left alone, so the sensor LEDs stay in deep idle and the power saving is kept.
+static uint32_t host_last_ms  = 0;
+static bool     host_seen_any = false;
+
+void sval_host_packet_kb(void) {
+    host_last_ms  = timer_read32();
+    host_seen_any = true;
+}
+
+uint32_t sval_host_idle_ms(void) {
+    return host_seen_any ? timer_elapsed32(host_last_ms) : UINT32_MAX;
+}
+
+bool sval_host_recent(void) {
+    return host_seen_any && timer_elapsed32(host_last_ms) < SVAL_HOST_ACTIVE_MS;
+}
+
 // ---- RGB idle dimming (master). Light idle divides the brightness, deep idle turns the
 // strip off; the first input restores it. Layer colour changes while dimmed keep using the
 // awake brightness so the dimmed value never reaches EEPROM.

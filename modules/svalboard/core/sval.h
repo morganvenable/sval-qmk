@@ -312,6 +312,11 @@ void sval_reload_leader(void);
 void sval_reload_labels(void);
 
 // Keycode execution helpers
+// Called once for every raw HID packet the host sends, before any dispatch.
+// Weak no-op in the module; a keyboard overrides it to notice host activity
+// (for example to leave a low-power idle while a config app is talking).
+void sval_host_packet_kb(void);
+
 void sval_keycode_down(uint16_t keycode);
 void sval_keycode_up(uint16_t keycode);
 void sval_keycode_tap(uint16_t keycode);

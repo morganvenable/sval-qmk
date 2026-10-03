@@ -268,9 +268,15 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     if (!scanlab_active()) {
         uint32_t period  = sval_scan_period_now(&idle_stage);
         uint8_t  flags   = global_saved_values.idle_flags;
+        // A config app mid-conversation needs the main loop running at its normal rate: the
+        // deep-idle nap length is also the raw HID round-trip time, and a bootstrap is hundreds
+        // of round trips. Deep idle is not left, so the scan period and the sensor LEDs stay
+        // where they are; only the clock and the nap length come back.
+        bool     host_busy = sval_host_recent();
+        bool     deep_pwr  = (idle_stage == 2) && !host_busy;
         // Deep idle may run the core slowly, once the RGB has finished its last write at full
         // speed; any other state needs full speed first.
-        if (idle_stage == 2 && (flags & SVAL_IDLE_LOW_CLOCK)) {
+        if (deep_pwr && (flags & SVAL_IDLE_LOW_CLOCK)) {
             if (sval_rgb_idle_quiesced()) sval_clock_low();
         } else {
             sval_clock_full();
@@ -283,7 +289,7 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
             // early and let the next pass through here start the frame on time.
             uint32_t remaining = period - elapsed;
             if (!(flags & SVAL_IDLE_CPU_SLEEP) || remaining <= SVAL_SLEEP_MIN_US) return false;
-            uint32_t cap = (idle_stage == 2 && (flags & SVAL_IDLE_LONG_NAP)) ? sval_deep_nap_us() : SVAL_SLEEP_MAX_US;
+            uint32_t cap = (deep_pwr && (flags & SVAL_IDLE_LONG_NAP)) ? sval_deep_nap_us() : SVAL_SLEEP_MAX_US;
             if (remaining > cap) {
                 chThdSleepMicroseconds(cap);
                 return false;

@@ -909,8 +909,12 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
     return true;
 }
 
+__attribute__((weak)) void sval_host_packet_kb(void) {}
+
 // Override via_command_kb to intercept wrapper and Sval protocol
 bool via_command_kb(uint8_t *data, uint8_t length) {
+    // Every host packet reaches this hook, including the ones VIA handles below.
+    sval_host_packet_kb();
     switch (data[0]) {
         case WRAPPER_PREFIX:  // 0xDD - Client ID wrapper
             return client_wrapper_receive(data, length);
