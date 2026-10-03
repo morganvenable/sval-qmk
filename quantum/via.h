@@ -128,6 +128,9 @@ enum via_qmk_audio_value {
 // EEPROM is invalid and use/save defaults.
 bool via_eeprom_is_valid(void);
 
+// Translate keycodes stored outside the VIA keymap from keycode version `from`.
+void via_keycodes_upgrade_kb(uint8_t from);
+
 // Sets VIA/keyboard level usage of EEPROM to valid/invalid
 // Keyboard level code (eg. via_init_kb()) should not call this
 void via_eeprom_set_valid(bool valid);

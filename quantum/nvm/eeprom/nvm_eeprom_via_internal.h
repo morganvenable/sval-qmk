@@ -12,7 +12,11 @@
 #    define VIA_EEPROM_MAGIC_ADDR (EECONFIG_SIZE)
 #endif
 
-#define VIA_EEPROM_LAYOUT_OPTIONS_ADDR (VIA_EEPROM_MAGIC_ADDR + 3)
+// The QMK keycode version (patch number) that wrote the stored keymap, so a
+// renumbering upstream can be translated rather than reset (keycode_upgrade.h).
+#define VIA_EEPROM_KEYCODES_VERSION_ADDR (VIA_EEPROM_MAGIC_ADDR + 3)
+
+#define VIA_EEPROM_LAYOUT_OPTIONS_ADDR (VIA_EEPROM_MAGIC_ADDR + 4)
 
 // The end of the EEPROM memory used by VIA
 // By default, dynamic keymaps will start at this if there is no
