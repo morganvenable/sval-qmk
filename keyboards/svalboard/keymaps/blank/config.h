@@ -2,4 +2,4 @@
 #pragma once
 
 // Blank keymap - minimal config for Sval testing
-// SERIAL_NUMBER is set by the sval module in rules.mk
+// The USB serial comes from the board identity (keyboards/svalboard/identity.c)

@@ -10,7 +10,7 @@ WS2812_DRIVER   = vendor
 
 CUSTOM_MATRIX = lite
 
-SRC += axis_scale.c matrix.c scanlab.c power.c
+SRC += axis_scale.c matrix.c scanlab.c power.c identity.c
 
 # One-time migration of a user's setup from the shipped Vial firmware
 # (svalboard/vial-qmk v2025-11-01). Set to no to build without it.

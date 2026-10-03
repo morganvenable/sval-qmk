@@ -43,6 +43,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define FLASH_LEN (16 * 1024 * 1024)
 #define WEAR_LEVELING_BACKING_SIZE (128 * 1024)
+
+// Identity (identity.c): the USB serial is "sval:" + the board's stored 8-byte
+// serial as 16 hex digits, and the product string is the user's name when set.
+// Every keymap uses it, so drop the module's fixed SERIAL_NUMBER literal.
+#undef SERIAL_NUMBER
+#define SERIAL_NUMBER_LENGTH (5 + 16) // "sval:" + 16 hex digits
+#define USB_PRODUCT_STRING_RUNTIME
 // wiring of each half
 //Layout for svalboard v0 (different from lalboard_v2)
 //1 2 3 4 5 6

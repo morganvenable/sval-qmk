@@ -11,6 +11,7 @@
 #include "suspend.h"
 #include "scanlab.h"
 #include "sval.h"
+#include "identity.h"
 #include "nvm_via.h"
 
 // USB remote wakeup status bit (from USB spec, not exported by QMK headers)
@@ -163,6 +164,7 @@ void via_keycodes_upgrade_kb(uint8_t from) {
 // Runs after the EEPROM driver is up and before anything validates or resets
 // stored settings, which is the only point a foreign layout can still be read.
 void keyboard_pre_init_kb(void) {
+    identity_init();
 #ifdef SVAL_MIGRATE_VIAL
     sval_migrate_vial();
 #endif
@@ -502,6 +504,7 @@ static void sval_usb_wake_handler(void) {
 void housekeeping_task_kb(void) {
     sval_usb_wake_handler();
     scanlab_housekeeping();
+    identity_task();
 
     if (is_keyboard_master()) {
         sval_rgb_idle_task();
@@ -610,6 +613,10 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
     // New VIA API: data[0]=command, data[1]=channel, data[2]=value_id, data[3+]=value_data
     if (data[1] == SCANLAB_CHANNEL) {
         scanlab_via_command(data, length);
+        return;
+    }
+    if (data[1] == IDENTITY_CHANNEL) {
+        identity_via_command(data, length);
         return;
     }
     uint8_t command = data[0];
