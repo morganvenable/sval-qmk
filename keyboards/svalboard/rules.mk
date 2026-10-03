@@ -28,7 +28,6 @@ POINTING_DEVICE_DRIVER = custom
 # Use shared endpoint for proper hires scroll feature report handling
 MOUSE_SHARED_EP = yes
 
-REPEAT_KEY_ENABLE = yes
 LAYER_LOCK_ENABLE = yes
 
 # this turns on Manna-Harbour's automousekeys:
