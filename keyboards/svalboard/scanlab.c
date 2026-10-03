@@ -154,7 +154,7 @@ void scanlab_on_frame(const matrix_row_t *raw) {
 static inline uint8_t read_cols(void) {
     uint8_t v = 0;
     for (uint8_t c = 0; c < SCANLAB_COLS; c++) {
-        if (col_pins[c] != NO_PIN && readPin(col_pins[c])) v |= (1u << c);
+        if (col_pins[c] != NO_PIN && gpio_read_pin(col_pins[c])) v |= (1u << c);
     }
     return v;
 }

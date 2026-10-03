@@ -27,9 +27,9 @@ uint8_t sval_hw_rev(void) {
 #if defined(SVAL_HW_REV_FORCE)
         hw_rev_cache = SVAL_HW_REV_FORCE;
 #else
-        setPinInputHigh(SVAL_HW_REV_PIN);
+        gpio_set_pin_input_high(SVAL_HW_REV_PIN);
         wait_us(200);
-        hw_rev_cache = readPin(SVAL_HW_REV_PIN) ? SVAL_HW_REV_A : SVAL_HW_REV_FLIPFET;
+        hw_rev_cache = gpio_read_pin(SVAL_HW_REV_PIN) ? SVAL_HW_REV_A : SVAL_HW_REV_FLIPFET;
 #endif
     }
     return (uint8_t)hw_rev_cache;

@@ -49,27 +49,27 @@ uint8_t sval_pushed_mask(bool thumbs) {
 
 static inline void setPinOutput_writeLow(pin_t pin) {
     ATOMIC_BLOCK_FORCEON {
-        setPinOutput(pin);
-        writePinLow(pin);
+        gpio_set_pin_output(pin);
+        gpio_write_pin_low(pin);
     }
 }
 
 static inline void setPinOutput_writeHigh(pin_t pin) {
     ATOMIC_BLOCK_FORCEON {
-        setPinOutput(pin);
-        writePinHigh(pin);
+        gpio_set_pin_output(pin);
+        gpio_write_pin_high(pin);
     }
 }
 
 static inline void setPinInputHigh_atomic(pin_t pin) {
     ATOMIC_BLOCK_FORCEON {
-        setPinInputHigh(pin);
+        gpio_set_pin_input_high(pin);
     }
 }
 
 static inline uint8_t readMatrixPin(pin_t pin) {
     if (pin != NO_PIN) {
-        return (readPin(pin));
+        return (gpio_read_pin(pin));
     } else {
         return 1;
     }
@@ -107,9 +107,9 @@ void sval_row_drive_raw(uint8_t row, bool on) {
     pin_t pin = row_pins[row];
     if (pin == NO_PIN) return;
 #ifdef PFET_ROWS
-    if (on) writePinLow(pin); else writePinHigh(pin);
+    if (on) gpio_write_pin_low(pin); else gpio_write_pin_high(pin);
 #else
-    if (on) writePinHigh(pin); else writePinLow(pin);
+    if (on) gpio_write_pin_high(pin); else gpio_write_pin_low(pin);
 #endif
 }
 
@@ -216,7 +216,7 @@ void matrix_read_cols_on_row(matrix_row_t current_matrix[], uint8_t current_row)
     for (uint8_t col_index = 0; col_index < MATRIX_COLS; col_index++) {
         uint8_t pin_state;
         if (current_row == 0) {
-            pin_state = (readPin(col_pins[col_index]) == thumbs[col_index]) ? 1 : 0;  // read pin and match pushed_states define
+            pin_state = (gpio_read_pin(col_pins[col_index]) == thumbs[col_index]) ? 1 : 0;  // read pin and match pushed_states define
 	    if (col_index == 5) { // DD
 		if (scans_before_dd_detect >= 0) {
                    scans_before_dd_detect--;
@@ -229,7 +229,7 @@ void matrix_read_cols_on_row(matrix_row_t current_matrix[], uint8_t current_row)
 		pin_state &= 1;
 	    }
         } else {
-               pin_state = (readPin(col_pins[col_index]) == col_pushed_states_fingers[col_index]) ? 1 : 0; // read pin and match pushed_states define
+               pin_state = (gpio_read_pin(col_pins[col_index]) == col_pushed_states_fingers[col_index]) ? 1 : 0; // read pin and match pushed_states define
         }
 	// Populate the matrix row with the state of the col pin
         current_row_value |= (pin_state << col_index);
@@ -251,9 +251,9 @@ void matrix_init_custom(void) {
         pin_t pin = col_pins[col];
         if (pin != NO_PIN) {
             if (col == DOUBLEDOWN_COL){
-                setPinInputHigh(pin);
+                gpio_set_pin_input_high(pin);
             } else {
-                setPinInput(pin);
+                gpio_set_pin_input(pin);
             }
         }
     }
