@@ -857,11 +857,16 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         case sval_cmd_macro_buffer_set: {
             // Request:  [0xDF] [0x1F|0x20] [offset u32 LE] [count] [data... (set)]
             // Response: get [0xDF] [0x1F] [offset u32 LE] [count] [data...]
+            //               a refused get echoes the offset with count 0
             //           set [0xDF] [0x20] [status] (0 = ok, 1 = out of range)
             uint32_t offset = data[2] | (data[3] << 8) | ((uint32_t)data[4] << 16) | ((uint32_t)data[5] << 24);
             uint8_t  count  = data[6];
             if (length < 7 || count > length - 7 || offset + count > dynamic_keymap_macro_get_buffer_size()) {
-                data[2] = 1;
+                if (data[1] == sval_cmd_macro_buffer_get) {
+                    data[6] = 0;
+                } else {
+                    data[2] = 1;
+                }
                 break;
             }
             if (data[1] == sval_cmd_macro_buffer_get) {
