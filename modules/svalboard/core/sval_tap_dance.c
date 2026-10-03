@@ -37,7 +37,7 @@ static uint8_t dance_step(tap_dance_state_t *state) {
 #define TD_ENABLED(entry) ((entry).custom_tapping_term & 0x8000)
 
 static void on_dance(tap_dance_state_t *state, void *user_data) {
-    uint8_t index = (uintptr_t)user_data;
+    uint16_t index = (uintptr_t)user_data;
     if (sval_get_tap_dance(index, &td_entry) != 0)
         return;
     if (!TD_ENABLED(td_entry))
@@ -55,7 +55,7 @@ static void on_dance(tap_dance_state_t *state, void *user_data) {
 }
 
 static void on_dance_finished(tap_dance_state_t *state, void *user_data) {
-    uint8_t index = (uintptr_t)user_data;
+    uint16_t index = (uintptr_t)user_data;
     if (sval_get_tap_dance(index, &td_entry) != 0)
         return;
     if (!TD_ENABLED(td_entry))
@@ -110,7 +110,7 @@ static void on_dance_finished(tap_dance_state_t *state, void *user_data) {
 }
 
 static void on_dance_reset(tap_dance_state_t *state, void *user_data) {
-    uint8_t index = (uintptr_t)user_data;
+    uint16_t index = (uintptr_t)user_data;
     if (sval_get_tap_dance(index, &td_entry) != 0)
         return;
     if (!TD_ENABLED(td_entry))

@@ -14,7 +14,7 @@ static bool sval_key_override_disabled = false;
 // Storage for key override structures
 static key_override_t sval_key_overrides[SVAL_KEY_OVERRIDE_ENTRIES];
 
-static void sval_deserialize_key_override(uint8_t index, key_override_t *out) {
+static void sval_deserialize_key_override(uint16_t index, key_override_t *out) {
     sval_key_override_entry_t entry;
     if (sval_get_key_override(index, &entry) != 0) {
         memset(out, 0, sizeof(*out));

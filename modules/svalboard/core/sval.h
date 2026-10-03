@@ -15,7 +15,7 @@
 #endif
 
 // Sval protocol version
-#define SVAL_PROTOCOL_VERSION 0x00000001
+#define SVAL_PROTOCOL_VERSION 0x00000002 // v2: 16-bit entry and label indices; LABEL_GET returns one label per request
 
 // Keyboard UID - use VIAL_KEYBOARD_UID for backwards compatibility with .vil files
 #ifndef SVAL_KEYBOARD_UID
@@ -278,28 +278,28 @@ void sval_upgrade_keycodes(uint8_t from);
 bool sval_handle_command(uint8_t *data, uint8_t length);
 
 // Storage API - Tap Dance
-int sval_get_tap_dance(uint8_t index, sval_tap_dance_entry_t *entry);
-int sval_set_tap_dance(uint8_t index, const sval_tap_dance_entry_t *entry);
+int sval_get_tap_dance(uint16_t index, sval_tap_dance_entry_t *entry);
+int sval_set_tap_dance(uint16_t index, const sval_tap_dance_entry_t *entry);
 
 // Storage API - Combo
-int sval_get_combo(uint8_t index, sval_combo_entry_t *entry);
-int sval_set_combo(uint8_t index, const sval_combo_entry_t *entry);
+int sval_get_combo(uint16_t index, sval_combo_entry_t *entry);
+int sval_set_combo(uint16_t index, const sval_combo_entry_t *entry);
 
 // Storage API - Key Override
-int sval_get_key_override(uint8_t index, sval_key_override_entry_t *entry);
-int sval_set_key_override(uint8_t index, const sval_key_override_entry_t *entry);
+int sval_get_key_override(uint16_t index, sval_key_override_entry_t *entry);
+int sval_set_key_override(uint16_t index, const sval_key_override_entry_t *entry);
 
 // Storage API - Alt Repeat Key
-int sval_get_alt_repeat_key(uint8_t index, sval_alt_repeat_key_entry_t *entry);
-int sval_set_alt_repeat_key(uint8_t index, const sval_alt_repeat_key_entry_t *entry);
+int sval_get_alt_repeat_key(uint16_t index, sval_alt_repeat_key_entry_t *entry);
+int sval_set_alt_repeat_key(uint16_t index, const sval_alt_repeat_key_entry_t *entry);
 
 // Storage API - One-Shot
 void sval_get_one_shot(sval_one_shot_t *settings);
 void sval_set_one_shot(const sval_one_shot_t *settings);
 
 // Storage API - Leader
-int sval_get_leader(uint8_t index, sval_leader_entry_t *entry);
-int sval_set_leader(uint8_t index, const sval_leader_entry_t *entry);
+int sval_get_leader(uint16_t index, sval_leader_entry_t *entry);
+int sval_set_leader(uint16_t index, const sval_leader_entry_t *entry);
 
 // Administrative functions
 void sval_save(void);
@@ -361,10 +361,10 @@ bool sval_handle_fragment_set_selections(uint8_t *data, uint8_t length);
 // Storage API - Labels (v2: fixed SVAL_LABEL_SIZE-byte UTF-8 storage)
 // Get label for a specific type+index (returns actual length, 0 if empty)
 // Buffer receives exactly SVAL_LABEL_SIZE bytes from storage (null-padded if shorter)
-uint8_t sval_get_label(uint8_t label_type, uint8_t index, char *buffer, uint8_t buffer_size);
+uint8_t sval_get_label(uint8_t label_type, uint16_t index, char *buffer, uint8_t buffer_size);
 // Set label for a specific type+index (max SVAL_LABEL_SIZE bytes, truncated if longer)
 // Returns 0 on success, -1 on error (invalid type/index)
-int sval_set_label(uint8_t label_type, uint8_t index, const char *string, uint8_t length);
+int sval_set_label(uint8_t label_type, uint16_t index, const char *string, uint8_t length);
 // Clear label for a specific type+index (sets all SVAL_LABEL_SIZE bytes to 0x00)
 // Returns 0 on success, -1 on error (invalid type/index)
-int sval_clear_label(uint8_t label_type, uint8_t index);
+int sval_clear_label(uint8_t label_type, uint16_t index);

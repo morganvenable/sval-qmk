@@ -7,11 +7,11 @@
         "cols": 6
     },
     "sval": {
-        "tap_dance": 50,
-        "combo": 50,
-        "key_override": 30,
-        "alt_repeat_key": 32,
-        "leader": 32
+        "tap_dance": 256,
+        "combo": 256,
+        "key_override": 256,
+        "alt_repeat_key": 256,
+        "leader": 256
     },
     "fragment_schema_version": 1,
     "fragments": {

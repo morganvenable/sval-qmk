@@ -18,7 +18,7 @@ void sval_reload_leader(void) {
     // Update timeout from settings
     sval_leader_timeout = sval_get_leader_timeout();
 
-    for (uint8_t i = 0; i < SVAL_LEADER_ENTRIES; i++) {
+    for (uint16_t i = 0; i < SVAL_LEADER_ENTRIES; i++) {
         sval_get_leader(i, &leader_entries[i]);
     }
 }
@@ -34,7 +34,7 @@ bool leader_add_user(uint16_t keycode) {
 // Override QMK's leader_end_user callback
 // Called when leader sequence is complete - search for match and execute
 void leader_end_user(void) {
-    for (uint8_t i = 0; i < SVAL_LEADER_ENTRIES; i++) {
+    for (uint16_t i = 0; i < SVAL_LEADER_ENTRIES; i++) {
         sval_leader_entry_t *entry = &leader_entries[i];
 
         // Skip disabled entries
