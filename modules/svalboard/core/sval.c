@@ -10,7 +10,7 @@
 #include "eeprom.h"
 #include <string.h>
 #include "print.h"
-#include "version.h"
+#include "layout_stamp.h"
 #include "send_string.h"
 #include "wait.h"
 
@@ -36,23 +36,44 @@ static void sval_write_eeprom(uint16_t offset, const void *buf, uint16_t size) {
     eeconfig_update_kb_datablock(buf, offset, size);
 }
 
-// Magic header for EEPROM validation - derived from QMK_BUILDDATE
-// QMK_BUILDDATE format: "2019-11-05-11:29:54"
-// Use full timestamp (date + time) so every build gets unique magic
+// Bump only when the meaning of stored bytes changes without any offset, count
+// or entry size changing, e.g. a field inside an entry is reinterpreted.
+#ifndef SVAL_DATA_SCHEMA
+#    define SVAL_DATA_SCHEMA 0
+#endif
+
+// Magic header for EEPROM validation: a layout stamp over every offset and entry
+// size in the Sval data block, so the block resets exactly when it would
+// otherwise be misread. It used to be the build timestamp to the second, which
+// reset every combo, tap dance, override, leader, label and QMK setting on every
+// firmware update, even a rebuild of identical source.
+//
+// The first two bytes are fixed and are not valid BCD, so an old timestamp magic
+// can never be mistaken for a stamp.
 static void sval_get_magic(uint8_t *magic) {
-    char *p = QMK_BUILDDATE;
-    // Validate string length to prevent out-of-bounds access
-    size_t len = strlen(p);
-    if (len < 19) {
-        memset(magic, 0, SVAL_MAGIC_SIZE);
-        return;
-    }
-    magic[0] = ((p[2] & 0x0F) << 4) | (p[3] & 0x0F);  // year low 2 digits
-    magic[1] = ((p[5] & 0x0F) << 4) | (p[6] & 0x0F);  // month
-    magic[2] = ((p[8] & 0x0F) << 4) | (p[9] & 0x0F);  // day
-    magic[3] = ((p[11] & 0x0F) << 4) | (p[12] & 0x0F); // hour
-    magic[4] = ((p[14] & 0x0F) << 4) | (p[15] & 0x0F); // minute
-    magic[5] = ((p[17] & 0x0F) << 4) | (p[18] & 0x0F); // second
+    const uint32_t values[] = {
+        SVAL_TAP_DANCE_ENTRIES,      sizeof(sval_tap_dance_entry_t),
+        SVAL_COMBO_ENTRIES,          sizeof(sval_combo_entry_t),
+        SVAL_KEY_OVERRIDE_ENTRIES,   sizeof(sval_key_override_entry_t),
+        SVAL_ALT_REPEAT_KEY_ENTRIES, sizeof(sval_alt_repeat_key_entry_t),
+        sizeof(sval_one_shot_t),
+        SVAL_LEADER_ENTRIES,         sizeof(sval_leader_entry_t),
+        SVAL_MAGIC_OFFSET,
+        SVAL_QMK_SETTINGS_SIZE,
+        SVAL_FRAGMENT_SIZE,
+        SVAL_LABEL_SIZE,
+        DYNAMIC_KEYMAP_MACRO_COUNT,
+        DYNAMIC_KEYMAP_LAYER_COUNT,
+        SVAL_EEPROM_SIZE,
+        SVAL_DATA_SCHEMA,
+    };
+    uint32_t stamp = layout_stamp(values, sizeof(values) / sizeof(values[0]));
+    magic[0]       = 0xA5;
+    magic[1]       = 0x5A;
+    magic[2]       = (stamp >> 24) & 0xFF;
+    magic[3]       = (stamp >> 16) & 0xFF;
+    magic[4]       = (stamp >> 8) & 0xFF;
+    magic[5]       = stamp & 0xFF;
 }
 
 static bool sval_eeprom_is_valid(void) {
