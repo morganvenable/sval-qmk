@@ -382,6 +382,7 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void* in_data, uint8_t
 
 void keyboard_post_init_kb(void) {
     read_eeprom_kb();
+    sval_pointer_rest_apply(); // the sensor was initialised before the flags were read
     set_dpi_from_eeprom();
     keyboard_post_init_user();
     scanlab_init();
