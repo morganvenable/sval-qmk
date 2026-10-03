@@ -86,6 +86,9 @@ void scanlab_housekeeping(void) {
 #endif
 }
 
+static inline void put32(uint8_t *p, uint32_t v) {
+    p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF; p[2] = (v >> 16) & 0xFF; p[3] = (v >> 24) & 0xFF;
+}
 static inline void put16(uint8_t *p, uint16_t v) { p[0] = v & 0xFF; p[1] = v >> 8; }
 static inline uint16_t get16(const uint8_t *p) { return p[0] | (p[1] << 8); }
 
@@ -289,6 +292,25 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             put16(&rsp[19], global_saved_values.scan_postwait_us);
             rsp[21] = global_saved_values.turbo_scan;
             rsp[22] = is_keyboard_master() ? (sval_other_half_connected() ? 1 : 0) : 0;
+            return;
+        }
+        case SCANLAB_OP_IDLE: {
+            sval_idle_status_t st;
+            sval_idle_status(&st);
+            uint8_t stage;
+            sval_scan_period_now(&stage);
+            rsp[0] = global_saved_values.idle_flags;
+            rsp[1] = st.sensor_present;
+            rsp[2] = st.sensor_mode;
+            rsp[3] = st.sensor_config2;
+            rsp[4] = st.rgb_val_now;
+            rsp[5] = st.rgb_val_awake;
+            rsp[6] = st.rgb_stage;
+            rsp[7] = st.rgb_enabled;
+            rsp[8] = stage;
+            put32(&rsp[9],  last_input_activity_elapsed());
+            put32(&rsp[13], last_matrix_activity_elapsed());
+            put32(&rsp[17], last_pointing_device_activity_elapsed());
             return;
         }
         case SCANLAB_OP_POWER: {

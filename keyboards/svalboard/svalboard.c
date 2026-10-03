@@ -329,6 +329,16 @@ void sval_rgb_idle_task(void) {
 }
 
 __attribute__((weak)) void sval_pointer_rest_apply(void) {}
+__attribute__((weak)) void sval_pointer_status(sval_idle_status_t *st) { st->sensor_present = 0; }
+
+void sval_idle_status(sval_idle_status_t *st) {
+    memset(st, 0, sizeof(*st));
+    sval_pointer_status(st);
+    st->rgb_val_now   = rgblight_get_val();
+    st->rgb_val_awake = sval_rgb_awake_val();
+    st->rgb_stage     = rgb_idle_applied;
+    st->rgb_enabled   = rgblight_is_enabled();
+}
 
 void sval_set_active_layer(uint32_t layer, bool save) {
     if (layer > 15) layer = 15;

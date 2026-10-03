@@ -65,6 +65,7 @@ enum scanlab_op {
     SCANLAB_OP_REBOOT_GO  = 0x05, // set: args token u16; acks, then reboots into the bootloader
     SCANLAB_OP_STATUS    = 0x10, // get
     SCANLAB_OP_POWER     = 0x11, // get: pacing settings and measured frame/LED-on times
+    SCANLAB_OP_IDLE      = 0x12, // get: idle power diagnostics (sensor mode, RGB level, quiet times)
     SCANLAB_OP_SWEEP_ROW = 0x20, // get | hand<<3 | row
     SCANLAB_OP_PROBE_ON  = 0x40, // get | hand<<3 | row
     SCANLAB_OP_PROBE_OFF = 0x60, // get | hand<<3 | row

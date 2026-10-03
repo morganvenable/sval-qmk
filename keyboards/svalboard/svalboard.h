@@ -97,6 +97,19 @@ void write_eeprom_kb(void);
 void read_eeprom_kb(void);
 void change_turbo_scan(void);
 
+// Idle power diagnostics, reported by Scan Lab op 0x12.
+typedef struct {
+    uint8_t sensor_present;  // 1 if this half has a PMW33xx sensor
+    uint8_t sensor_mode;     // last Motion byte OP_MODE: 0 run, 1 rest1, 2 rest2, 3 rest3; bit7 valid, bit6 lifted
+    uint8_t sensor_config2;  // last value written to Config2 (0x20 = rest enabled)
+    uint8_t rgb_val_now;
+    uint8_t rgb_val_awake;
+    uint8_t rgb_stage;       // 0 awake, 1 dimmed, 2 off
+    uint8_t rgb_enabled;
+} sval_idle_status_t;
+void sval_idle_status(sval_idle_status_t *st);
+void sval_pointer_status(sval_idle_status_t *st); // weak: fills the sensor_* fields
+
 // Idle power features. Flags live in global_saved_values.idle_flags on both halves.
 void sval_pointer_rest_apply(void);   // push SVAL_IDLE_POINTER_REST into the sensor (weak no-op without one)
 void sval_rgb_idle_task(void);        // master: dim/restore the RGB by idle stage
