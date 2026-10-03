@@ -84,7 +84,7 @@ static bool svalboard_eeprom_is_valid(void) {
     return memcmp(stored, expected, SVALBOARD_MAGIC_SIZE) == 0;
 }
 
-static void svalboard_eeprom_set_valid(void) {
+void svalboard_eeprom_set_valid(void) {
     uint8_t magic[SVALBOARD_MAGIC_SIZE];
     svalboard_get_magic(magic);
     via_update_custom_config(magic, SVALBOARD_MAGIC_OFFSET, SVALBOARD_MAGIC_SIZE);
@@ -95,59 +95,77 @@ void write_eeprom_kb(void) {
 }
 #else
 static bool svalboard_eeprom_is_valid(void) { return true; }
-static void svalboard_eeprom_set_valid(void) {}
+void svalboard_eeprom_set_valid(void) {}
 void write_eeprom_kb(void) {}
 #endif
 
 #define HSV(c) (struct layer_hsv) { (c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF}
 
+// Factory defaults for every saved keyboard setting, in RAM only.
+void svalboard_saved_values_defaults(void) {
+    memset(&global_saved_values, 0, sizeof(global_saved_values));
+
+    global_saved_values.right_dpi_index = 3;
+    global_saved_values.left_dpi_index = 3;
+    global_saved_values.mh_timer_index = 3;
+    global_saved_values.left_scroll = true;
+    global_saved_values.auto_mouse = true;
+    global_saved_values.axis_scroll_lock = true;
+    global_saved_values.turbo_scan = 0;
+    global_saved_values.natural_scroll = false;
+    global_saved_values.left_automouse = true;
+    global_saved_values.right_automouse = true;
+    global_saved_values.automouse_threshold = 50;
+    global_saved_values.automouse_decay = 7;  // 70ms
+    // Revision B settles more slowly; start it on explicit conservative timing.
+    global_saved_values.scan_prewait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_PREWAIT_US : 0;
+    global_saved_values.scan_postwait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_POSTWAIT_US : 0;
+    global_saved_values.scan_period_us      = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_SCAN_PERIOD_US : 0;
+    global_saved_values.scan_idle_period_ms = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_MS : 0;
+    global_saved_values.scan_idle_after_ms  = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS : 0;
+    global_saved_values.scan_deep_after_s   = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_DEEP_AFTER_S : 0;
+    global_saved_values.scan_deep_period_ms = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_DEEP_PERIOD_MS : 0;
+    global_saved_values.idle_flags          = SVAL_IDLE_FLAGS_DEFAULT;
+    global_saved_values.scan_deep_clock_idx = 0;
+
+    // Layer colors
+    global_saved_values.layer_colors[0] = HSV(0x55FFFF);  // Green
+    global_saved_values.layer_colors[1] = HSV(0x15FFFF);  // Orange
+    global_saved_values.layer_colors[2] = HSV(0x95FFFF);  // Azure
+    global_saved_values.layer_colors[3] = HSV(0x0BB0FF);  // Coral
+    global_saved_values.layer_colors[4] = HSV(0x2BFFFF);  // Yellow
+    global_saved_values.layer_colors[5] = HSV(0x80FF80);  // Teal
+    global_saved_values.layer_colors[6] = HSV(0x00FFFF);  // Red
+    global_saved_values.layer_colors[7] = HSV(0x00FFFF);  // Red
+    global_saved_values.layer_colors[8] = HSV(0xEAFFFF);  // Pink
+    global_saved_values.layer_colors[9] = HSV(0xBFFF80);  // Purple
+    global_saved_values.layer_colors[10] = HSV(0x0BB0FF); // Coral
+    global_saved_values.layer_colors[11] = HSV(0x6AFFFF); // Spring Green
+    global_saved_values.layer_colors[12] = HSV(0x80FF80); // Teal
+    global_saved_values.layer_colors[13] = HSV(0x80FFFF); // Turquoise
+    global_saved_values.layer_colors[14] = HSV(0x2BFFFF); // Yellow
+    global_saved_values.layer_colors[15] = HSV(0xD5FFFF); // Magenta
+}
+
+#ifdef SVAL_MIGRATE_VIAL
+void sval_migrate_vial(void);                         // migrate_vial.c
+void sval_migrate_vial_diag(uint8_t *out, uint8_t len); // migrate_vial.c
+#endif
+
+// Runs after the EEPROM driver is up and before anything validates or resets
+// stored settings, which is the only point a foreign layout can still be read.
+void keyboard_pre_init_kb(void) {
+#ifdef SVAL_MIGRATE_VIAL
+    sval_migrate_vial();
+#endif
+    keyboard_pre_init_user();
+}
+
 void read_eeprom_kb(void) {
     // Check if EEPROM data is valid (matches current firmware version)
     if (!svalboard_eeprom_is_valid()) {
         // Fresh EEPROM - apply defaults
-        memset(&global_saved_values, 0, sizeof(global_saved_values));
-
-        global_saved_values.right_dpi_index = 3;
-        global_saved_values.left_dpi_index = 3;
-        global_saved_values.mh_timer_index = 3;
-        global_saved_values.left_scroll = true;
-        global_saved_values.auto_mouse = true;
-        global_saved_values.axis_scroll_lock = true;
-        global_saved_values.turbo_scan = 0;
-        global_saved_values.natural_scroll = false;
-        global_saved_values.left_automouse = true;
-        global_saved_values.right_automouse = true;
-        global_saved_values.automouse_threshold = 50;
-        global_saved_values.automouse_decay = 7;  // 70ms
-        // Revision B settles more slowly; start it on explicit conservative timing.
-        global_saved_values.scan_prewait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_PREWAIT_US : 0;
-        global_saved_values.scan_postwait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_POSTWAIT_US : 0;
-        global_saved_values.scan_period_us      = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_SCAN_PERIOD_US : 0;
-        global_saved_values.scan_idle_period_ms = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_MS : 0;
-        global_saved_values.scan_idle_after_ms  = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS : 0;
-        global_saved_values.scan_deep_after_s   = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_DEEP_AFTER_S : 0;
-        global_saved_values.scan_deep_period_ms = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_DEEP_PERIOD_MS : 0;
-        global_saved_values.idle_flags          = SVAL_IDLE_FLAGS_DEFAULT;
-        global_saved_values.scan_deep_clock_idx = 0;
-
-        // Layer colors
-        global_saved_values.layer_colors[0] = HSV(0x55FFFF);  // Green
-        global_saved_values.layer_colors[1] = HSV(0x15FFFF);  // Orange
-        global_saved_values.layer_colors[2] = HSV(0x95FFFF);  // Azure
-        global_saved_values.layer_colors[3] = HSV(0x0BB0FF);  // Coral
-        global_saved_values.layer_colors[4] = HSV(0x2BFFFF);  // Yellow
-        global_saved_values.layer_colors[5] = HSV(0x80FF80);  // Teal
-        global_saved_values.layer_colors[6] = HSV(0x00FFFF);  // Red
-        global_saved_values.layer_colors[7] = HSV(0x00FFFF);  // Red
-        global_saved_values.layer_colors[8] = HSV(0xEAFFFF);  // Pink
-        global_saved_values.layer_colors[9] = HSV(0xBFFF80);  // Purple
-        global_saved_values.layer_colors[10] = HSV(0x0BB0FF); // Coral
-        global_saved_values.layer_colors[11] = HSV(0x6AFFFF); // Spring Green
-        global_saved_values.layer_colors[12] = HSV(0x80FF80); // Teal
-        global_saved_values.layer_colors[13] = HSV(0x80FFFF); // Turquoise
-        global_saved_values.layer_colors[14] = HSV(0x2BFFFF); // Yellow
-        global_saved_values.layer_colors[15] = HSV(0xD5FFFF); // Magenta
-
+        svalboard_saved_values_defaults();
         write_eeprom_kb();
         svalboard_eeprom_set_valid();
     } else {
@@ -693,6 +711,12 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
             break;
 
         case id_custom_get_value:
+#ifdef SVAL_MIGRATE_VIAL
+            if (*value_id == 0xF0) { // Vial migration diagnostics
+                sval_migrate_vial_diag(value_data, length > 3 ? length - 3 : 0);
+                break;
+            }
+#endif
             switch (*value_id) {
                 case id_left_dpi:
                     value_data[0] = global_saved_values.left_dpi_index;

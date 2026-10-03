@@ -267,6 +267,9 @@ extern char sval_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][SVAL_LABEL_SIZE];
 
 // Public API
 void sval_init(void);
+// Stamp the stored Sval data block as current (layout stamp). For migrations that
+// write the block directly; normal code never needs it.
+void sval_eeprom_set_valid(void);
 
 // Protocol handler for 0xDF commands
 // Returns true if command was handled

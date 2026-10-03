@@ -84,7 +84,7 @@ static bool sval_eeprom_is_valid(void) {
     return memcmp(stored, expected, SVAL_MAGIC_SIZE) == 0;
 }
 
-static void sval_eeprom_set_valid(void) {
+void sval_eeprom_set_valid(void) {
     uint8_t magic[SVAL_MAGIC_SIZE];
     sval_get_magic(magic);
     sval_write_eeprom(SVAL_MAGIC_OFFSET, magic, SVAL_MAGIC_SIZE);

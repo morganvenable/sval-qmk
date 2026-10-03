@@ -87,6 +87,8 @@ void    sval_scan_stats(uint32_t *frame_us, uint16_t *led_us, uint8_t *stage); /
 typedef struct saved_values saved_values_t;
 
 extern saved_values_t global_saved_values;
+void svalboard_saved_values_defaults(void); // factory defaults into global_saved_values (RAM only)
+void svalboard_eeprom_set_valid(void);       // stamp the stored saved_values as current
 void output_keyboard_info(void);
 void increase_left_dpi(void);
 void increase_right_dpi(void);
