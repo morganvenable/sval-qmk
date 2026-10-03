@@ -122,7 +122,10 @@ uint16_t keycode_at_encodermap_location(uint8_t layer_num, uint8_t encoder_idx, 
 }
 #endif // ENCODER_MAP_ENABLE
 
-uint8_t dynamic_keymap_macro_get_count(void) {
+// Macro ids are 8-bit throughout (dynamic_keymap_macro_send, the macro keycodes).
+_Static_assert(DYNAMIC_KEYMAP_MACRO_COUNT <= 256, "at most 256 dynamic macros");
+
+uint16_t dynamic_keymap_macro_get_count(void) {
     return DYNAMIC_KEYMAP_MACRO_COUNT;
 }
 

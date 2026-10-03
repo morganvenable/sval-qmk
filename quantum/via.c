@@ -464,7 +464,10 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
         }
 #endif
         case id_dynamic_keymap_macro_get_count: {
-            command_data[0] = dynamic_keymap_macro_get_count();
+            // Low byte first, as before; the high byte (0 for counts under 256)
+            // follows, so a host reading both handles more than 255 macros.
+            command_data[0] = dynamic_keymap_macro_get_count() & 0xFF;
+            command_data[1] = dynamic_keymap_macro_get_count() >> 8;
             break;
         }
         case id_dynamic_keymap_macro_get_buffer_size: {
