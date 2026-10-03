@@ -3,6 +3,7 @@
 #include "via.h"
 #endif
 #include "version.h"
+#include "layout_stamp.h"
 #include "split_common/transactions.h"
 #include <string.h>
 #include QMK_KEYBOARD_H
@@ -42,21 +43,37 @@ bool sval_hw_rev_is_flipfet(void) {
 #define SVALBOARD_VIA_CONFIG_OFFSET 0
 #define SVALBOARD_VIA_CONFIG_SIZE sizeof(saved_values_t)
 
-// Magic bytes for EEPROM validation - derived from QMK_BUILDDATE
-// QMK_BUILDDATE format: "2019-11-05-11:29:54"
-// Use full timestamp so every build gets unique magic
+// Bump only when a saved_values field is reinterpreted without the struct
+// changing size (renamed, reordered or rescaled in place).
+#ifndef SVALBOARD_SAVED_VALUES_SCHEMA
+#    define SVALBOARD_SAVED_VALUES_SCHEMA 0
+#endif
+
+// Magic bytes for EEPROM validation: a layout stamp over the saved_values
+// geometry, so pointer, layer-colour and scan settings reset only when they
+// would otherwise be misread. It used to be the build timestamp to the second,
+// which reset them on every firmware update.
+//
+// The first two bytes are fixed and are not valid BCD, so an old timestamp magic
+// can never be mistaken for a stamp.
 #define SVALBOARD_MAGIC_SIZE 6
 #define SVALBOARD_MAGIC_OFFSET (SVALBOARD_VIA_CONFIG_OFFSET + SVALBOARD_VIA_CONFIG_SIZE)
 
 #if VIA_ENABLE
 static void svalboard_get_magic(uint8_t *magic) {
-    char *p = QMK_BUILDDATE;
-    magic[0] = ((p[2] & 0x0F) << 4) | (p[3] & 0x0F);  // year low 2 digits
-    magic[1] = ((p[5] & 0x0F) << 4) | (p[6] & 0x0F);  // month
-    magic[2] = ((p[8] & 0x0F) << 4) | (p[9] & 0x0F);  // day
-    magic[3] = ((p[11] & 0x0F) << 4) | (p[12] & 0x0F); // hour
-    magic[4] = ((p[14] & 0x0F) << 4) | (p[15] & 0x0F); // minute
-    magic[5] = ((p[17] & 0x0F) << 4) | (p[18] & 0x0F); // second
+    const uint32_t values[] = {
+        SVALBOARD_VIA_CONFIG_OFFSET,
+        SVALBOARD_VIA_CONFIG_SIZE,
+        DYNAMIC_KEYMAP_LAYER_COUNT,
+        SVALBOARD_SAVED_VALUES_SCHEMA,
+    };
+    uint32_t stamp = layout_stamp(values, sizeof(values) / sizeof(values[0]));
+    magic[0]       = 0xA5;
+    magic[1]       = 0x5B;
+    magic[2]       = (stamp >> 24) & 0xFF;
+    magic[3]       = (stamp >> 16) & 0xFF;
+    magic[4]       = (stamp >> 8) & 0xFF;
+    magic[5]       = stamp & 0xFF;
 }
 
 static bool svalboard_eeprom_is_valid(void) {
