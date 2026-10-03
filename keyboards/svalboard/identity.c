@@ -21,6 +21,7 @@
 
 #include "svalboard.h"
 #include "via.h"
+#include "client_wrapper.h"
 #include "util.h"
 #include "identity.h"
 #include "hardware_id.h"
@@ -288,20 +289,23 @@ const char *usb_product_string(void) {
 //   [0] id_custom_get_value / id_custom_set_value  [1] channel 0x49  [2] op  [3..] data
 // get op 0 INFO   -> [3] protocol 1, [4] available, [5] name_len, [6] name max bytes,
 //                    [7] serial source, [8..15] serial
-// get op 1 NAME   req [3] offset -> [3] status 0, [4] count, [5..] bytes (<= 24)
+// get op 1 NAME   req [3] offset -> [3] status 0, [4] count, [5..] bytes
 // set op 1 STAGE  req [3] offset, [4] count, [5..] bytes  -> [3] status
+// A name chunk is at most 27 bytes in a bare report and 21 when the host sends
+// VIA inside the client wrapper, which costs 6 bytes of the reply.
 // set op 2 COMMIT req [3] total length -> [3] identity_status_t
 // set op 3 REBOOT -> [3] 0; reboots ~100 ms later so the new name enumerates
 // Status 0 = OK, 1 = bad request / invalid, 2 = unavailable, 3 = write failed.
 
-#define NAME_CHUNK 24
 static char     staged[IDENTITY_NAME_MAX_BYTES];
 static uint32_t reboot_at;
 
 void identity_via_command(uint8_t *data, uint8_t length) {
     uint8_t  cmd = data[0], op = data[2];
-    uint8_t *v   = &data[3];
+    uint8_t *v     = &data[3];
     if (length < 3 + 13) return;
+    // Room for name bytes after [cmd][channel][op][status/offset][count].
+    uint8_t chunk = length - 5 - (client_wrapper_in_via() ? CLIENT_WRAPPER_OVERHEAD : 0);
 
     if (cmd == id_custom_get_value && op == IDENTITY_OP_INFO) {
         identity_serial_source_t src;
@@ -315,13 +319,13 @@ void identity_via_command(uint8_t *data, uint8_t length) {
     } else if (cmd == id_custom_get_value && op == IDENTITY_OP_NAME) {
         const char *name = identity_name();
         uint8_t     len = strlen(name), off = v[0];
-        uint8_t     n = off < len ? MIN(NAME_CHUNK, len - off) : 0;
+        uint8_t     n = off < len ? MIN(chunk, len - off) : 0;
         v[0]          = 0;
         v[1]          = n;
         memcpy(&v[2], name + off, n);
     } else if (cmd == id_custom_set_value && op == IDENTITY_OP_NAME) {
         uint8_t off = v[0], n = v[1];
-        if (n > NAME_CHUNK || off + n > IDENTITY_NAME_MAX_BYTES) {
+        if (n > chunk || off + n > IDENTITY_NAME_MAX_BYTES) {
             v[0] = IDENTITY_INVALID;
             return;
         }

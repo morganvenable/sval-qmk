@@ -47,6 +47,10 @@ bool client_wrapper_valid_id(uint32_t id) {
     return age < ((uint32_t)CLIENT_WRAPPER_TTL_SECS * 1000);
 }
 
+bool client_wrapper_in_via(void) {
+    return wrapper_pending;
+}
+
 // Override raw_hid_send to wrap responses when needed
 void raw_hid_send(uint8_t *data, uint8_t length) {
     if (wrapper_pending) {

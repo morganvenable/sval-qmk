@@ -32,6 +32,12 @@ void client_wrapper_init(void);
 // Returns true if fully handled, false if VIA should process (for wrapped VIA commands)
 bool client_wrapper_receive(uint8_t *data, uint8_t length);
 
+// True while VIA is processing a command that arrived inside the wrapper. VIA
+// still sees the full report length, but the reply loses its last 6 bytes to
+// the wrapper header, so handlers that fill a reply must leave that room.
+bool client_wrapper_in_via(void);
+#define CLIENT_WRAPPER_OVERHEAD 6
+
 // Allocate a new client ID
 uint32_t client_wrapper_allocate_id(void);
 
