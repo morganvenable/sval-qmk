@@ -797,6 +797,51 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         case sval_cmd_fragment_set_selections:
             return sval_handle_fragment_set_selections(data, length);
 
+        case sval_cmd_table_scan: {
+            // TABLE_SCAN (v3): the next entry in use at or after a start index.
+            // Request:  [0xDF] [0x21] [table] [start lo] [start hi]
+            //   table: 0 tap dance, 1 combo, 2 key override, 3 alt-repeat key, 4 leader
+            // Response: [0xDF] [0x21] [table] [found] [index lo] [index hi] [entry...]
+            //   found = 0: none in use at or after start. Entries not returned are
+            //   unused (all zero). A host reads a table by scanning from index + 1.
+            uint8_t  table = data[2];
+            uint16_t i     = data[3] | (data[4] << 8);
+            bool     found = false;
+            uint8_t  entry[sizeof(sval_leader_entry_t)] = {0}; // the largest entry
+            for (; !found; i++) {
+                memset(entry, 0, sizeof(entry));
+                if (table == 0 && i < SVAL_TAP_DANCE_ENTRIES) {
+                    sval_tap_dance_entry_t *e = (void *)entry;
+                    sval_get_tap_dance(i, e);
+                    found = e->on_tap || e->on_hold || e->on_double_tap || e->on_tap_hold;
+                } else if (table == 1 && i < SVAL_COMBO_ENTRIES) {
+                    sval_combo_entry_t *e = (void *)entry;
+                    sval_get_combo(i, e);
+                    found = e->input[0] || e->output;
+                } else if (table == 2 && i < SVAL_KEY_OVERRIDE_ENTRIES) {
+                    sval_key_override_entry_t *e = (void *)entry;
+                    sval_get_key_override(i, e);
+                    found = e->trigger || e->replacement;
+                } else if (table == 3 && i < SVAL_ALT_REPEAT_KEY_ENTRIES) {
+                    sval_alt_repeat_key_entry_t *e = (void *)entry;
+                    sval_get_alt_repeat_key(i, e);
+                    found = e->keycode || e->alt_keycode;
+                } else if (table == 4 && i < SVAL_LEADER_ENTRIES) {
+                    sval_leader_entry_t *e = (void *)entry;
+                    sval_get_leader(i, e);
+                    found = e->sequence[0] || e->output;
+                } else {
+                    break; // past the end of the table (or no such table)
+                }
+                if (found) break;
+            }
+            data[3] = found;
+            data[4] = i & 0xFF;
+            data[5] = i >> 8;
+            memcpy(&data[6], entry, found ? sizeof(entry) : 0);
+            break;
+        }
+
         case sval_cmd_macro_buffer_size: {
             // Request:  [0xDF] [0x1E]
             // Response: [0xDF] [0x1E] [size u32 LE]

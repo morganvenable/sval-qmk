@@ -21,7 +21,8 @@
 
 // Sval protocol version
 // v2: 16-bit entry and label indices; LABEL_GET returns one label per request.
-// v3: macro buffer commands with 32-bit offsets (the buffer passes 64 KB).
+// v3: macro buffer commands with 32-bit offsets (the buffer passes 64 KB), and
+//     TABLE_SCAN, so a host reads only the entries in use.
 #define SVAL_PROTOCOL_VERSION 0x00000003
 
 // Keyboard UID - use VIAL_KEYBOARD_UID for backwards compatibility with .vil files
@@ -81,6 +82,7 @@ enum sval_command_id {
     sval_cmd_macro_buffer_size = 0x1E, // v3: 32-bit offsets, the whole buffer
     sval_cmd_macro_buffer_get  = 0x1F,
     sval_cmd_macro_buffer_set  = 0x20,
+    sval_cmd_table_scan        = 0x21, // v3: next used entry at or after an index
     sval_cmd_error             = 0xFF,
 };
 
