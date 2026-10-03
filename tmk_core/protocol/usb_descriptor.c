@@ -1200,6 +1200,65 @@ const USB_Descriptor_String_t PROGMEM ProductString = {
 
 // clang-format on
 
+#ifdef USB_PRODUCT_STRING_RUNTIME
+// A keyboard can name itself at runtime (e.g. a user-chosen name kept in
+// flash): return a NUL-terminated UTF-8 string, or NULL for the compiled
+// PRODUCT. Read when the host asks for the descriptor, so a change shows up on
+// the next enumeration.
+__attribute__((weak)) const char* usb_product_string(void) {
+    return NULL;
+}
+
+#    ifndef USB_PRODUCT_STRING_MAX_UNITS
+#        define USB_PRODUCT_STRING_MAX_UNITS 126 // a string descriptor holds at most 126 UTF-16 units
+#    endif
+static uint8_t ProductStringRuntime[sizeof(USB_Descriptor_Header_t) + USB_PRODUCT_STRING_MAX_UNITS * 2];
+
+// UTF-8 to UTF-16, surrogate pairs above the BMP; malformed bytes become U+FFFD.
+static const void* product_string_runtime(uint16_t* size) {
+    const uint8_t* s = (const uint8_t*)usb_product_string();
+    if (!s || !*s) return NULL;
+    uint16_t* out   = (uint16_t*)(ProductStringRuntime + sizeof(USB_Descriptor_Header_t));
+    uint16_t  units = 0;
+    while (*s && units < USB_PRODUCT_STRING_MAX_UNITS) {
+        uint32_t cp;
+        uint8_t  extra;
+        if (*s < 0x80) {
+            cp = *s, extra = 0;
+        } else if ((*s & 0xE0) == 0xC0) {
+            cp = *s & 0x1F, extra = 1;
+        } else if ((*s & 0xF0) == 0xE0) {
+            cp = *s & 0x0F, extra = 2;
+        } else if ((*s & 0xF8) == 0xF0) {
+            cp = *s & 0x07, extra = 3;
+        } else {
+            cp = 0xFFFD, extra = 0;
+        }
+        s++;
+        for (; extra; extra--, s++) {
+            if ((*s & 0xC0) != 0x80) {
+                cp = 0xFFFD;
+                break;
+            }
+            cp = (cp << 6) | (*s & 0x3F);
+        }
+        if (cp >= 0x10000) {
+            if (units + 2 > USB_PRODUCT_STRING_MAX_UNITS) break;
+            cp -= 0x10000;
+            out[units++] = 0xD800 | (cp >> 10);
+            out[units++] = 0xDC00 | (cp & 0x3FF);
+        } else {
+            out[units++] = cp;
+        }
+    }
+    USB_Descriptor_String_t* desc = (USB_Descriptor_String_t*)ProductStringRuntime;
+    desc->Header.Type             = DTYPE_String;
+    desc->Header.Size             = sizeof(USB_Descriptor_Header_t) + units * 2;
+    *size                         = desc->Header.Size;
+    return ProductStringRuntime;
+}
+#endif // USB_PRODUCT_STRING_RUNTIME
+
 #if defined(SERIAL_NUMBER)
 // clang-format off
 const USB_Descriptor_String_t PROGMEM SerialNumberString = {
@@ -1310,6 +1369,16 @@ uint16_t get_usb_descriptor(const uint16_t wValue, const uint16_t wIndex, const 
                 case 0x02:
                     Address = &ProductString;
                     Size    = pgm_read_byte(&ProductString.Header.Size);
+#ifdef USB_PRODUCT_STRING_RUNTIME
+                    {
+                        uint16_t    runtime_size;
+                        const void* runtime = product_string_runtime(&runtime_size);
+                        if (runtime) {
+                            Address = runtime;
+                            Size    = runtime_size;
+                        }
+                    }
+#endif // USB_PRODUCT_STRING_RUNTIME
 
                     break;
 #ifdef HAS_SERIAL_NUMBER
