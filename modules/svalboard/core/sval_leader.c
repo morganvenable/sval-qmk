@@ -1,31 +1,31 @@
 // Copyright 2025 Ira Cooper <ira@wakeful.net>
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "viable.h"
-#include "viable_qmk_settings.h"
+#include "sval.h"
+#include "sval_qmk_settings.h"
 #include "quantum.h"
 #include "leader.h"
 
 #ifdef LEADER_ENABLE
 
 // Dynamic timeout variable - referenced by LEADER_TIMEOUT macro
-uint16_t viable_leader_timeout = 300;
+uint16_t sval_leader_timeout = 300;
 
 // RAM cache of leader entries for fast matching
-static viable_leader_entry_t leader_entries[VIABLE_LEADER_ENTRIES];
+static sval_leader_entry_t leader_entries[SVAL_LEADER_ENTRIES];
 
-void viable_reload_leader(void) {
+void sval_reload_leader(void) {
     // Update timeout from settings
-    viable_leader_timeout = viable_get_leader_timeout();
+    sval_leader_timeout = sval_get_leader_timeout();
 
-    for (uint8_t i = 0; i < VIABLE_LEADER_ENTRIES; i++) {
-        viable_get_leader(i, &leader_entries[i]);
+    for (uint8_t i = 0; i < SVAL_LEADER_ENTRIES; i++) {
+        sval_get_leader(i, &leader_entries[i]);
     }
 }
 
 // Per-key timing: reset timer on each keypress if enabled
 bool leader_add_user(uint16_t keycode) {
-    if (viable_get_leader_per_key_timing()) {
+    if (sval_get_leader_per_key_timing()) {
         leader_reset_timer();
     }
     return false;  // Don't end sequence early
@@ -34,11 +34,11 @@ bool leader_add_user(uint16_t keycode) {
 // Override QMK's leader_end_user callback
 // Called when leader sequence is complete - search for match and execute
 void leader_end_user(void) {
-    for (uint8_t i = 0; i < VIABLE_LEADER_ENTRIES; i++) {
-        viable_leader_entry_t *entry = &leader_entries[i];
+    for (uint8_t i = 0; i < SVAL_LEADER_ENTRIES; i++) {
+        sval_leader_entry_t *entry = &leader_entries[i];
 
         // Skip disabled entries
-        if (!(entry->options & viable_leader_enabled)) {
+        if (!(entry->options & sval_leader_enabled)) {
             continue;
         }
 
@@ -74,7 +74,7 @@ void leader_end_user(void) {
 
         if (match) {
             // Execute the output keycode
-            viable_keycode_tap(entry->output);
+            sval_keycode_tap(entry->output);
             return;
         }
     }
@@ -83,6 +83,6 @@ void leader_end_user(void) {
 #else
 
 // Stub when leader is disabled
-void viable_reload_leader(void) {}
+void sval_reload_leader(void) {}
 
 #endif // LEADER_ENABLE

@@ -1,6 +1,6 @@
 {
     "modules": [
-        "viable-kb/core"
+        "svalboard/core"
     ],
     "config": {
         "features": {

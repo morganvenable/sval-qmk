@@ -1,45 +1,45 @@
 // Copyright 2025 Ira Cooper <ira@wakeful.net>
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "viable.h"
+#include "sval.h"
 #include "quantum.h"
 
 #ifdef REPEAT_KEY_ENABLE
 
 // Storage for alt repeat key entries
-static viable_alt_repeat_key_entry_t viable_alt_repeat_entries[VIABLE_ALT_REPEAT_KEY_ENTRIES];
+static sval_alt_repeat_key_entry_t sval_alt_repeat_entries[SVAL_ALT_REPEAT_KEY_ENTRIES];
 
 // Track which entries are enabled
-static bool viable_ark_entry_enabled[VIABLE_ALT_REPEAT_KEY_ENTRIES];
+static bool sval_ark_entry_enabled[SVAL_ALT_REPEAT_KEY_ENTRIES];
 
-void viable_reload_alt_repeat_key(void) {
-    memset(viable_alt_repeat_entries, 0, sizeof(viable_alt_repeat_entries));
-    memset(viable_ark_entry_enabled, 0, sizeof(viable_ark_entry_enabled));
+void sval_reload_alt_repeat_key(void) {
+    memset(sval_alt_repeat_entries, 0, sizeof(sval_alt_repeat_entries));
+    memset(sval_ark_entry_enabled, 0, sizeof(sval_ark_entry_enabled));
 
     // Load from EEPROM
-    for (size_t i = 0; i < VIABLE_ALT_REPEAT_KEY_ENTRIES; ++i) {
-        viable_alt_repeat_key_entry_t entry;
-        if (viable_get_alt_repeat_key(i, &entry) == 0) {
-            memcpy(&viable_alt_repeat_entries[i], &entry, sizeof(entry));
-            viable_ark_entry_enabled[i] = (entry.options & viable_ark_enabled) != 0;
+    for (size_t i = 0; i < SVAL_ALT_REPEAT_KEY_ENTRIES; ++i) {
+        sval_alt_repeat_key_entry_t entry;
+        if (sval_get_alt_repeat_key(i, &entry) == 0) {
+            memcpy(&sval_alt_repeat_entries[i], &entry, sizeof(entry));
+            sval_ark_entry_enabled[i] = (entry.options & sval_ark_enabled) != 0;
         }
     }
 }
 
 // Look up an alt repeat key for the given keycode and modifiers
 // Returns the alt keycode if found, or KC_NO if not found
-uint16_t viable_get_alt_repeat_keycode(uint16_t keycode, uint8_t mods) {
-    for (size_t i = 0; i < VIABLE_ALT_REPEAT_KEY_ENTRIES; ++i) {
-        if (!viable_ark_entry_enabled[i]) continue;
+uint16_t sval_get_alt_repeat_keycode(uint16_t keycode, uint8_t mods) {
+    for (size_t i = 0; i < SVAL_ALT_REPEAT_KEY_ENTRIES; ++i) {
+        if (!sval_ark_entry_enabled[i]) continue;
 
-        viable_alt_repeat_key_entry_t *entry = &viable_alt_repeat_entries[i];
+        sval_alt_repeat_key_entry_t *entry = &sval_alt_repeat_entries[i];
 
         // Check if keycode matches
         if (entry->keycode != keycode) continue;
 
         // Check modifiers
         uint8_t check_mods = mods;
-        if (entry->options & viable_ark_option_ignore_mod_handedness) {
+        if (entry->options & sval_ark_option_ignore_mod_handedness) {
             // Collapse left/right mod distinction
             if (check_mods & (MOD_BIT(KC_LSFT) | MOD_BIT(KC_RSFT))) {
                 check_mods = (check_mods & ~(MOD_BIT(KC_LSFT) | MOD_BIT(KC_RSFT))) | MOD_BIT(KC_LSFT);
@@ -59,7 +59,7 @@ uint16_t viable_get_alt_repeat_keycode(uint16_t keycode, uint8_t mods) {
         if ((check_mods & entry->allowed_mods) != entry->allowed_mods) continue;
 
         // Found a match
-        bool default_to_alt = (entry->options & viable_ark_option_default_to_alt) != 0;
+        bool default_to_alt = (entry->options & sval_ark_option_default_to_alt) != 0;
         return default_to_alt ? entry->keycode : entry->alt_keycode;
     }
 
@@ -67,14 +67,14 @@ uint16_t viable_get_alt_repeat_keycode(uint16_t keycode, uint8_t mods) {
 }
 
 // Check if we should use the reverse mapping (for bidirectional entries)
-uint16_t viable_get_reverse_alt_repeat_keycode(uint16_t keycode, uint8_t mods) {
-    for (size_t i = 0; i < VIABLE_ALT_REPEAT_KEY_ENTRIES; ++i) {
-        if (!viable_ark_entry_enabled[i]) continue;
+uint16_t sval_get_reverse_alt_repeat_keycode(uint16_t keycode, uint8_t mods) {
+    for (size_t i = 0; i < SVAL_ALT_REPEAT_KEY_ENTRIES; ++i) {
+        if (!sval_ark_entry_enabled[i]) continue;
 
-        viable_alt_repeat_key_entry_t *entry = &viable_alt_repeat_entries[i];
+        sval_alt_repeat_key_entry_t *entry = &sval_alt_repeat_entries[i];
 
         // Only check bidirectional entries
-        if (!(entry->options & viable_ark_option_bidirectional)) continue;
+        if (!(entry->options & sval_ark_option_bidirectional)) continue;
 
         // Check if alt_keycode matches (reverse direction)
         if (entry->alt_keycode != keycode) continue;
@@ -86,16 +86,16 @@ uint16_t viable_get_reverse_alt_repeat_keycode(uint16_t keycode, uint8_t mods) {
     return KC_NO;
 }
 
-// QMK callback to integrate viable alt repeat entries with QMK's repeat key system
+// QMK callback to integrate sval alt repeat entries with QMK's repeat key system
 uint16_t get_alt_repeat_key_keycode_user(uint16_t keycode, uint8_t mods) {
-    // First check viable's dynamically-configured entries
-    uint16_t alt = viable_get_alt_repeat_keycode(keycode, mods);
+    // First check sval's dynamically-configured entries
+    uint16_t alt = sval_get_alt_repeat_keycode(keycode, mods);
     if (alt != KC_NO) {
         return alt;
     }
 
     // Also check reverse mapping for bidirectional entries
-    alt = viable_get_reverse_alt_repeat_keycode(keycode, mods);
+    alt = sval_get_reverse_alt_repeat_keycode(keycode, mods);
     if (alt != KC_NO) {
         return alt;
     }
@@ -106,5 +106,5 @@ uint16_t get_alt_repeat_key_keycode_user(uint16_t keycode, uint8_t mods) {
 
 #else
 // Stubs when REPEAT_KEY_ENABLE is not defined
-void viable_reload_alt_repeat_key(void) {}
+void sval_reload_alt_repeat_key(void) {}
 #endif

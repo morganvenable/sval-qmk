@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SVALBOARD
 
 // Keyboard UID for profile matching (same as original Vial UID for .vil compatibility)
-#define VIABLE_KEYBOARD_UID {0x1B, 0x18, 0x7D, 0xF2, 0x21, 0xF6, 0x29, 0x48}
+#define SVAL_KEYBOARD_UID {0x1B, 0x18, 0x7D, 0xF2, 0x21, 0xF6, 0x29, 0x48}
 
 #define POINTING_DEVICE_HIRES_SCROLL_ENABLE 1
 #define POINTING_DEVICE_HIRES_SCROLL_MULTIPLIER 120
@@ -135,13 +135,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define RP2040_BOOTLOADER_DOUBLE_TAP_RESET
 #define RP2040_BOOTLOADER_DOUBLE_TAP_RESET_TIMEOUT 500 // Timeout window in ms in which the double tap can occur.
 
-// Macro count (Viable entry counts are now in each keymap's viable.json)
+// Macro count (Sval entry counts are now in each keymap's sval.json)
 #define DYNAMIC_KEYMAP_MACRO_COUNT 50
 
-// Viable defaults for Svalboard - sane mod-tap experience
-#define VIABLE_DEFAULT_NKRO 1
-#define VIABLE_DEFAULT_PERMISSIVE_HOLD 1
-#define VIABLE_DEFAULT_CHORDAL_HOLD 1
+// Sval defaults for Svalboard - sane mod-tap experience
+#define SVAL_DEFAULT_NKRO 1
+#define SVAL_DEFAULT_PERMISSIVE_HOLD 1
+#define SVAL_DEFAULT_CHORDAL_HOLD 1
 
 #define USB_MAX_POWER_CONSUMPTION 500
 #define USB_SUSPEND_WAKEUP_DELAY 500

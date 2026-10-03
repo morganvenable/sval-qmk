@@ -75,6 +75,6 @@ enum layer {
     MBO = MH_AUTO_BUTTONS_LAYER,
 };
 
-// Empty keymap - all keys configured via VIA/Viable
+// Empty keymap - all keys configured via VIA/Sval
 const uint16_t PROGMEM keymaps[DYNAMIC_KEYMAP_LAYER_COUNT][MATRIX_ROWS][MATRIX_COLS] = {
 };

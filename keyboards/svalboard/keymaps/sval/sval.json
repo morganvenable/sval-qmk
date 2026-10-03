@@ -6,7 +6,7 @@
         "rows": 10,
         "cols": 6
     },
-    "viable": {
+    "sval": {
         "tap_dance": 50,
         "combo": 50,
         "key_override": 30,

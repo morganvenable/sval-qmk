@@ -4,7 +4,7 @@
 
 When multiple applications talk to a keyboard simultaneously over USB HID, responses can go to the wrong client. USB HID broadcasts responses to all listeners - there's no built-in request/response correlation.
 
-Example: Viable GUI downloads a keyboard definition (many sequential chunk requests). A layer indicator pings for layer state mid-download. The layer response arrives during the definition download, corrupting the data stream.
+Example: Sval GUI downloads a keyboard definition (many sequential chunk requests). A layer indicator pings for layer state mid-download. The layer response arrives during the definition download, corrupting the data stream.
 
 ## Solution
 
@@ -63,7 +63,7 @@ Error codes:
 | Byte | Meaning |
 |------|---------|
 | 0xFE | VIA |
-| 0xDF | Viable |
+| 0xDF | Sval |
 | 0xFF | Error |
 
 Additional protocols may be defined (e.g., 0x01 for XAP).
@@ -94,7 +94,7 @@ Bootstrap is indicated by `client_id = 0x00000000`, not a protocol byte.
 
 ## Protocol-Specific Rules
 
-- **Viable (0xDF)**: Wrapper REQUIRED. Unwrapped `[0xDF]...` packets MUST be rejected.
+- **Sval (0xDF)**: Wrapper REQUIRED. Unwrapped `[0xDF]...` packets MUST be rejected.
 - **VIA (0xFE)**: Wrapper optional. Legacy `[0xFE]...` packets allowed for backward compatibility.
 
 ## Frame Size
@@ -104,7 +104,7 @@ Bootstrap is indicated by `client_id = 0x00000000`, not a protocol byte.
 - Available for inner protocol: 26 bytes
 
 For buffer/chunk operations, subtract command overhead from 26 bytes:
-- Viable definition_chunk: `[0x0E] [offset:2] [size:1]` = 4 bytes → 22 bytes for data
+- Sval definition_chunk: `[0x0E] [offset:2] [size:1]` = 4 bytes → 22 bytes for data
 - VIA keymap buffer: `[cmd] [offset:2] [size:1]` = 4 bytes → 22 bytes for data
 
 ---
@@ -161,7 +161,7 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
             via_raw_hid_receive(data, length);  // Legacy VIA
             break;
         case 0xDF:
-            // Legacy Viable - REJECTED
+            // Legacy Sval - REJECTED
             break;
     }
 }
@@ -207,11 +207,11 @@ class ClientWrapper:
 
 ---
 
-# Viable Protocol Update
+# Sval Protocol Update
 
 ## definition_chunk Size Parameter
 
-The `viable_cmd_definition_chunk` (0x0E) command accepts client-specified size:
+The `sval_cmd_definition_chunk` (0x0E) command accepts client-specified size:
 
 ```
 Inner payload: [0x0E] [offset:2] [size:1]
@@ -233,8 +233,8 @@ Clients request chunk size based on available space (22 bytes when wrapped).
 - [ ] Client can filter responses by client ID
 - [ ] Expired client ID returns error 0x01
 - [ ] Wrapped VIA commands work
-- [ ] Wrapped Viable commands work
+- [ ] Wrapped Sval commands work
 - [ ] Legacy VIA (unwrapped) still works
-- [ ] Legacy Viable (unwrapped) is rejected
+- [ ] Legacy Sval (unwrapped) is rejected
 - [ ] Multiple clients get different IDs
 - [ ] Client renewal before expiry works

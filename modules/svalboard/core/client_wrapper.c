@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "client_wrapper.h"
-#include "viable.h"
+#include "sval.h"
 #include "raw_hid.h"
 #include "host.h"
 #include "timer.h"
@@ -141,14 +141,14 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
     uint8_t protocol = data[5];
 
     switch (protocol) {
-        case VIABLE_PREFIX: {
-            // Viable (0xDF) - handle directly
+        case SVAL_PREFIX: {
+            // Sval (0xDF) - handle directly
             // Inner payload starts at data[5] (includes protocol byte)
             uint8_t *inner = &data[5];
             uint8_t inner_len = length - 5;
 
-            viable_handle_command(inner, inner_len);
-            // Response: wrapper header preserved, Viable response in inner
+            sval_handle_command(inner, inner_len);
+            // Response: wrapper header preserved, Sval response in inner
             host_raw_hid_send(data, length);
             return true;
         }

@@ -39,4 +39,4 @@ VIA_ENABLE = yes
 # Allow VIA to read matrix state for Matrix Tester (note: enables keylogger attack vector)
 VIA_INSECURE = yes
 
-# Note: Viable module is enabled via keymap.json with "modules": ["viable-kb/core"]
+# Note: Sval module is enabled via keymap.json with "modules": ["svalboard/core"]

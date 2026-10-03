@@ -4,7 +4,7 @@
 
 The Client ID protocol solves a fundamental problem: **multiple applications can't reliably talk to the same keyboard at the same time**.
 
-When you run the Viable GUI to configure your keyboard, and also have a layer indicator app showing which layer you're on, their messages get mixed up. The keyboard sends a response, but USB HID broadcasts it to *all* listening apps. Your layer indicator might receive data meant for the GUI, corrupting a keymap download.
+When you run the Sval GUI to configure your keyboard, and also have a layer indicator app showing which layer you're on, their messages get mixed up. The keyboard sends a response, but USB HID broadcasts it to *all* listening apps. Your layer indicator might receive data meant for the GUI, corrupting a keymap download.
 
 This protocol gives each application a unique ID. The keyboard includes this ID in every response, so apps can tell which responses are theirs.
 
@@ -56,7 +56,7 @@ ttl_seconds = struct.unpack("<H", response[29:31])[0]
 
 ```python
 VIA_PREFIX = 0xFE
-VIABLE_PREFIX = 0xDF
+SVAL_PREFIX = 0xDF
 
 # Wrapped command: [0xDD] [client_id:4] [protocol:1] [payload...]
 def send_wrapped(device, client_id, protocol, payload):
@@ -95,7 +95,7 @@ Response: [0xDD] [client_id:4] [protocol:1] [response...]
 | Byte | Protocol |
 |------|----------|
 | 0xFE | VIA |
-| 0xDF | Viable |
+| 0xDF | Sval |
 | 0xFF | Error |
 
 **Error response:**
@@ -127,7 +127,7 @@ This leaves 26 bytes for your inner protocol. For buffer operations, subtract co
 
 **VIA backward compatibility:** Legacy VIA commands (`[0xFE]...` without wrapper) still work for compatibility with existing apps. However, they won't benefit from client ID isolation.
 
-**Viable requires wrapper:** Unlike VIA, Viable commands MUST use the wrapper. Unwrapped `[0xDF]...` packets are rejected. This ensures all Viable communication is properly isolated.
+**Sval requires wrapper:** Unlike VIA, Sval commands MUST use the wrapper. Unwrapped `[0xDF]...` packets are rejected. This ensures all Sval communication is properly isolated.
 
 ## How Expiry Works
 
@@ -159,7 +159,7 @@ The keyboard mixes its internal timer into client IDs. When validating an ID, it
 
 ## Example: Secondary Client App
 
-A minimal client app that coexists with the Viable GUI:
+A minimal client app that coexists with the Sval GUI:
 
 ```python
 import hid
@@ -233,4 +233,4 @@ while True:
     time.sleep(0.1)
 ```
 
-This app can run alongside the Viable GUI without interference. Each app has its own client ID and can identify its own responses.
+This app can run alongside the Sval GUI without interference. Each app has its own client ID and can identify its own responses.
