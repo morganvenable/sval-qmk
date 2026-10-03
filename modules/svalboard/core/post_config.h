@@ -27,6 +27,15 @@
 #    define SVAL_LEADER_ENTRIES 0
 #endif
 
+// USB serial. Hosts detect a Sval board by the "sval:" magic in the serial string
+// (sval-gui util.py), so when a build drops the fixed SERIAL_NUMBER literal in favour
+// of the chip's hardware ID, the magic is carried over as a prefix. The result is
+// "sval:<hardware id>": still matched by every existing host, but unique per board and
+// unchanged by a reflash, so a browser's WebHID grant survives a firmware update.
+#ifndef SERIAL_NUMBER_PREFIX
+#    define SERIAL_NUMBER_PREFIX "sval:"
+#endif
+
 // QMK settings storage size (sval_qmk_settings_t)
 #define SVAL_QMK_SETTINGS_SIZE 44
 

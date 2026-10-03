@@ -13,7 +13,8 @@
 // device instance, so two boards were indistinguishable and each firmware
 // generation that changed the literal cost a WebHID re-grant. With the hardware
 // ID the serial is stable across reflashes and unique per board.
-// keybard-ng matches on usage page 0xFF61/0x62, not on the serial.
+// The module re-attaches the "sval:" magic as a prefix, so serial-based host
+// detection still matches; keybard-ng matches on usage page 0xFF61/0x62 anyway.
 #undef SERIAL_NUMBER
 
 // Prototype boards without the revision strap: report revision B so the board

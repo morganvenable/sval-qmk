@@ -1151,8 +1151,16 @@ const USB_Descriptor_String_t PROGMEM SerialNumberString = {
 #            error Dynamically setting the serial number on AVR is unsupported as LUFA requires the string to be in PROGMEM.
 #        endif // defined(__AVR__)
 
+// An optional fixed prefix in front of the hardware ID. Hosts that recognise a
+// keyboard by a magic substring in its serial keep working while the rest of the
+// string stays unique per board and stable across reflashes.
+#        ifndef SERIAL_NUMBER_PREFIX
+#            define SERIAL_NUMBER_PREFIX ""
+#        endif
+#        define SERIAL_NUMBER_PREFIX_LENGTH (sizeof(SERIAL_NUMBER_PREFIX) - 1)
+
 #        ifndef SERIAL_NUMBER_LENGTH
-#            define SERIAL_NUMBER_LENGTH (sizeof(hardware_id_t) * 2)
+#            define SERIAL_NUMBER_LENGTH (SERIAL_NUMBER_PREFIX_LENGTH + (sizeof(hardware_id_t) * 2))
 #        endif
 
 #        define SERIAL_NUMBER_DESCRIPTOR_SIZE                                            \
@@ -1169,18 +1177,25 @@ void set_serial_number_descriptor(void) {
     is_set = true;
 
     static const char        hex_str[] = "0123456789ABCDEF";
+    static const char        prefix[]  = SERIAL_NUMBER_PREFIX;
     hardware_id_t            id        = get_hardware_id();
     USB_Descriptor_String_t* desc      = (USB_Descriptor_String_t*)SerialNumberString;
 
-    // Copy across nibbles from the hardware ID as unicode hex characters
-    int      length = MIN(sizeof(id) * 2, SERIAL_NUMBER_LENGTH);
-    uint8_t* p      = (uint8_t*)&id;
-    for (int i = 0; i < length; i += 2) {
-        desc->UnicodeString[i + 0] = hex_str[p[i / 2] >> 4];
-        desc->UnicodeString[i + 1] = hex_str[p[i / 2] & 0xF];
+    // Copy across the fixed prefix, if any, then nibbles from the hardware ID as
+    // unicode hex characters
+    int prefix_length = MIN((int)SERIAL_NUMBER_PREFIX_LENGTH, SERIAL_NUMBER_LENGTH);
+    for (int i = 0; i < prefix_length; i++) {
+        desc->UnicodeString[i] = prefix[i];
     }
 
-    desc->Header.Size = sizeof(USB_Descriptor_Header_t) + (length * sizeof(wchar_t)); // includes header, don't count null terminator
+    int      length = MIN((int)(sizeof(id) * 2), SERIAL_NUMBER_LENGTH - prefix_length);
+    uint8_t* p      = (uint8_t*)&id;
+    for (int i = 0; i < length; i += 2) {
+        desc->UnicodeString[prefix_length + i + 0] = hex_str[p[i / 2] >> 4];
+        desc->UnicodeString[prefix_length + i + 1] = hex_str[p[i / 2] & 0xF];
+    }
+
+    desc->Header.Size = sizeof(USB_Descriptor_Header_t) + ((prefix_length + length) * sizeof(wchar_t)); // includes header, don't count null terminator
     desc->Header.Type = DTYPE_String;
 }
 
