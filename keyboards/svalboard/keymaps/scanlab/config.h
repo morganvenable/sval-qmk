@@ -8,6 +8,14 @@
 #undef PRODUCT
 #define PRODUCT "Svalboard ScanLab"
 
+// Derive the USB serial from the chip's unique hardware ID instead of the
+// module's fixed literal. Measured: the literal put every board on one Windows
+// device instance, so two boards were indistinguishable and each firmware
+// generation that changed the literal cost a WebHID re-grant. With the hardware
+// ID the serial is stable across reflashes and unique per board.
+// keybard-ng matches on usage page 0xFF61/0x62, not on the serial.
+#undef SERIAL_NUMBER
+
 // Prototype boards without the revision strap: report revision B so the board
 // boots on explicit conservative timing. Build with -DSVAL_HW_REV_FORCE=0 to
 // test a revision A board, or remove this once the strap is fitted.
