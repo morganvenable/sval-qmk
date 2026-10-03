@@ -30,10 +30,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "hardware/structs/clocks.h"
 
 #define SVAL_CLK_FULL_HZ 125000000u
-#define SVAL_CLK_LOW_HZ   48000000u
+#define SVAL_CLK_USB_HZ   48000000u
+#define SVAL_CLK_XOSC_HZ  12000000u
 
 static bool     clock_low = false;
+static uint32_t low_hz    = SVAL_CLK_USB_HZ;
 static uint32_t pio_div_saved[2][4];
+
+uint8_t sval_deep_clock_mhz(void) {
+    switch (global_saved_values.scan_deep_clock_idx) {
+        case 1:  return 24;
+        case 2:  return 12;
+        default: return 48;
+    }
+}
 
 // Scale the divider of every enabled state machine so (clk_sys / div) stays
 // constant across a clock change; restore the exact saved values on the way back.
@@ -57,15 +67,23 @@ static void pio_reclock(uint32_t from_hz, uint32_t to_hz, bool restore) {
 }
 
 bool    sval_clock_is_low(void) { return clock_low; }
-uint8_t sval_clock_mhz(void) { return clock_low ? (SVAL_CLK_LOW_HZ / 1000000u) : (SVAL_CLK_FULL_HZ / 1000000u); }
+uint8_t sval_clock_mhz(void) { return (clock_low ? low_hz : SVAL_CLK_FULL_HZ) / 1000000u; }
 
 void sval_clock_low(void) {
     if (clock_low) return;
-    // Same sequence as the pico-sdk's set_sys_clock_48mhz().
-    clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, SVAL_CLK_LOW_HZ, SVAL_CLK_LOW_HZ);
+    uint32_t hz = (uint32_t)sval_deep_clock_mhz() * 1000000u;
+    // 48 and 24 MHz come from the USB PLL (the pico-sdk's set_sys_clock_48mhz sequence,
+    // with the clk_sys divider for 24); 12 MHz is the crystal directly. The USB PLL stays
+    // up in every case because USB needs it.
+    if (hz == SVAL_CLK_XOSC_HZ) {
+        clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC, SVAL_CLK_XOSC_HZ, SVAL_CLK_XOSC_HZ);
+    } else {
+        clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB, SVAL_CLK_USB_HZ, hz);
+    }
     pll_deinit(pll_sys);
-    clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, SVAL_CLK_LOW_HZ, SVAL_CLK_LOW_HZ);
-    pio_reclock(SVAL_CLK_FULL_HZ, SVAL_CLK_LOW_HZ, false);
+    clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, hz, hz);
+    pio_reclock(SVAL_CLK_FULL_HZ, hz, false);
+    low_hz    = hz;
     clock_low = true;
 }
 
@@ -75,7 +93,7 @@ void sval_clock_full(void) {
     pll_init(pll_sys, 1, 1500000000u, 6, 2);
     clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, SVAL_CLK_FULL_HZ, SVAL_CLK_FULL_HZ);
     clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, SVAL_CLK_FULL_HZ, SVAL_CLK_FULL_HZ);
-    pio_reclock(SVAL_CLK_LOW_HZ, SVAL_CLK_FULL_HZ, true);
+    pio_reclock(low_hz, SVAL_CLK_FULL_HZ, true);
     clock_low = false;
 }
 

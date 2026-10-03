@@ -49,7 +49,8 @@ struct __attribute__((__packed__)) saved_values {
     uint16_t scan_idle_after_ms;  // Light idle: timeout since last raw matrix change (0 = never)
     uint16_t scan_deep_after_s;   // Deep idle: timeout in seconds (0 = never)
     uint16_t scan_deep_period_ms; // Deep idle: frame period in ms (<= active = no change)
-    uint8_t  idle_flags;          // SVAL_IDLE_* bits: pointer rest, RGB dim, CPU sleep
+    uint8_t  idle_flags;          // SVAL_IDLE_* bits: pointer rest, RGB dim, CPU sleep, low clock, long naps
+    uint8_t  scan_deep_clock_idx; // deep-idle clock when SVAL_IDLE_LOW_CLOCK: 0 = 48 MHz, 1 = 24 MHz, 2 = 12 MHz
 };
 
 // RPC structure for split keyboard sync
@@ -63,6 +64,7 @@ typedef struct __attribute__((__packed__)) _presence_rpc_t {
     uint16_t scan_deep_after_s;
     uint16_t scan_deep_period_ms;
     uint8_t  idle_flags;
+    uint8_t  scan_deep_clock_idx;
 } presence_rpc_t;
 
 #define SVAL_TURBO_CHOICES 7
@@ -114,7 +116,9 @@ void sval_pointer_status(sval_idle_status_t *st); // weak: fills the sensor_* fi
 void     sval_clock_low(void);        // clk_sys/clk_peri from the USB PLL at 48 MHz, system PLL off, PIO dividers rescaled
 void     sval_clock_full(void);       // back to 125 MHz (no-op when already there)
 bool     sval_clock_is_low(void);
-uint8_t  sval_clock_mhz(void);
+uint8_t  sval_clock_mhz(void);        // clock in force now
+uint8_t  sval_deep_clock_mhz(void);   // configured deep-idle clock (48/24/12)
+bool     sval_rgb_idle_quiesced(void); // master: RGB has reached its deep-idle state and the last write is done
 uint32_t sval_deep_nap_us(void);      // longest nap allowed in deep idle on this half
 void     sval_sleep_gating_init(void); // stop clocking unused blocks while the core is in WFI
 

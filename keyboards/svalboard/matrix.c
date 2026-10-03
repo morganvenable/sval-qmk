@@ -268,8 +268,13 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     if (!scanlab_active()) {
         uint32_t period  = sval_scan_period_now(&idle_stage);
         uint8_t  flags   = global_saved_values.idle_flags;
-        // Deep idle may run the core at 48 MHz; any other state needs full speed first.
-        if (idle_stage == 2 && (flags & SVAL_IDLE_LOW_CLOCK)) sval_clock_low(); else sval_clock_full();
+        // Deep idle may run the core slowly, once the RGB has finished its last write at full
+        // speed; any other state needs full speed first.
+        if (idle_stage == 2 && (flags & SVAL_IDLE_LOW_CLOCK)) {
+            if (sval_rgb_idle_quiesced()) sval_clock_low();
+        } else {
+            sval_clock_full();
+        }
         uint32_t elapsed = now - frame_start_us;
         if (period && elapsed < period) {
             // Not due yet. With CPU sleep on, nap until the frame is due instead of spinning;

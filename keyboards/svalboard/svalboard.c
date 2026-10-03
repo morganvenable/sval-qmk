@@ -111,6 +111,7 @@ void read_eeprom_kb(void) {
         global_saved_values.scan_deep_after_s   = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_DEEP_AFTER_S : 0;
         global_saved_values.scan_deep_period_ms = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_DEEP_PERIOD_MS : 0;
         global_saved_values.idle_flags          = SVAL_IDLE_FLAGS_DEFAULT;
+        global_saved_values.scan_deep_clock_idx = 0;
 
         // Layer colors
         global_saved_values.layer_colors[0] = HSV(0x55FFFF);  // Green
@@ -201,11 +202,11 @@ void output_keyboard_info(void) {
             global_saved_values.scan_deep_period_ms, global_saved_values.scan_deep_after_s,
             (unsigned long)frame_us, led_us, stage);
     send_string(output_buffer);
-    sprintf(output_buffer, "Idle power: pointer rest %s, RGB dim %s, CPU sleep %s, 48 MHz in deep idle %s, long naps %s; clock now %d MHz\n",
+    sprintf(output_buffer, "Idle power: pointer rest %s, RGB dim %s, CPU sleep %s, low clock in deep idle %s (%d MHz), long naps %s; clock now %d MHz\n",
             (global_saved_values.idle_flags & SVAL_IDLE_POINTER_REST) ? "on" : "off",
             (global_saved_values.idle_flags & SVAL_IDLE_RGB_DIM) ? "on" : "off",
             (global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) ? "on" : "off",
-            (global_saved_values.idle_flags & SVAL_IDLE_LOW_CLOCK) ? "on" : "off",
+            (global_saved_values.idle_flags & SVAL_IDLE_LOW_CLOCK) ? "on" : "off", sval_deep_clock_mhz(),
             (global_saved_values.idle_flags & SVAL_IDLE_LONG_NAP) ? "on" : "off",
             sval_clock_mhz());
     send_string(output_buffer);
@@ -281,7 +282,14 @@ void set_dpi_from_eeprom(void) {
 // ---- RGB idle dimming (master). Light idle divides the brightness, deep idle turns the
 // strip off; the first input restores it. Layer colour changes while dimmed keep using the
 // awake brightness so the dimmed value never reaches EEPROM.
-static uint8_t rgb_idle_applied = 0;   // 0 awake, 1 dimmed, 2 off
+static uint8_t  rgb_idle_applied = 0;   // 0 awake, 1 dimmed, 2 off
+static uint32_t rgb_last_write_ms = 0;
+
+bool sval_rgb_idle_quiesced(void) {
+    if (!is_keyboard_master()) return true;
+    if (!(global_saved_values.idle_flags & SVAL_IDLE_RGB_DIM)) return true;
+    return rgb_idle_applied == 2 && timer_elapsed32(rgb_last_write_ms) > 5;
+}
 static uint8_t rgb_awake_val    = 0;
 static uint8_t rgb_dim_val      = 0;
 static bool    rgb_awake_enabled = false;
@@ -292,6 +300,7 @@ uint8_t sval_rgb_awake_val(void) {
 
 static void sval_rgb_idle_restore(void) {
     if (!rgb_idle_applied) return;
+    sval_clock_full(); // WS2812 timing needs the clock the driver was set up for
     if (rgb_awake_enabled && !rgblight_is_enabled()) rgblight_enable_noeeprom();
     // Only undo our own change; if someone adjusted the brightness while dimmed, keep theirs.
     if (rgb_idle_applied == 2 || rgblight_get_val() == rgb_dim_val) {
@@ -328,7 +337,8 @@ void sval_rgb_idle_task(void) {
     } else {
         rgblight_disable_noeeprom();
     }
-    rgb_idle_applied = want;
+    rgb_last_write_ms = timer_read32();
+    rgb_idle_applied  = want;
 }
 
 __attribute__((weak)) void sval_pointer_rest_apply(void) {}
@@ -372,6 +382,7 @@ void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen
         global_saved_values.idle_flags = in->idle_flags;
         sval_pointer_rest_apply();
     }
+    global_saved_values.scan_deep_clock_idx = in->scan_deep_clock_idx;
 }
 
 // Scan Lab requests from the master run here on the other half.
@@ -433,7 +444,8 @@ void housekeeping_task_kb(void) {
         if (timer_elapsed(last_ping) > 500) {
             presence_rpc_t rpcout = {global_saved_values.turbo_scan, global_saved_values.scan_prewait_us, global_saved_values.scan_postwait_us,
                                      global_saved_values.scan_period_us, global_saved_values.scan_idle_period_ms, global_saved_values.scan_idle_after_ms,
-                                     global_saved_values.scan_deep_after_s, global_saved_values.scan_deep_period_ms, global_saved_values.idle_flags};
+                                     global_saved_values.scan_deep_after_s, global_saved_values.scan_deep_period_ms, global_saved_values.idle_flags,
+                                     global_saved_values.scan_deep_clock_idx};
             presence_rpc_t rpcin = {0};
             if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rpc_t), &rpcin)) {
                 if (!is_connected) {
@@ -519,6 +531,7 @@ enum sval_via_value_id {
     id_idle_cpu_sleep = 27,       // toggle: sleep the core between paced frames
     id_idle_low_clock = 28,       // toggle: 48 MHz system clock in deep idle
     id_idle_long_nap = 29,        // toggle: long naps in deep idle
+    id_scan_deep_clock_idx = 30,  // u8 dropdown: deep-idle clock 0 = 48 MHz, 1 = 24 MHz, 2 = 12 MHz
     id_tapping_term = 16,
     id_permissive_hold = 17,
     id_hold_on_other_key = 18,
@@ -610,6 +623,9 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                     break;
                 case id_scan_deep_period_ms:
                     global_saved_values.scan_deep_period_ms = value_data[0] | (value_data[1] << 8);
+                    break;
+                case id_scan_deep_clock_idx:
+                    global_saved_values.scan_deep_clock_idx = value_data[0] > 2 ? 2 : value_data[0];
                     break;
                 case id_idle_pointer_rest:
                 case id_idle_rgb_dim:
@@ -709,6 +725,9 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 case id_scan_deep_period_ms:
                     value_data[0] = global_saved_values.scan_deep_period_ms & 0xFF;
                     value_data[1] = (global_saved_values.scan_deep_period_ms >> 8) & 0xFF;
+                    break;
+                case id_scan_deep_clock_idx:
+                    value_data[0] = global_saved_values.scan_deep_clock_idx;
                     break;
                 case id_idle_pointer_rest:
                 case id_idle_rgb_dim:

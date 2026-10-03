@@ -546,7 +546,7 @@
                             "content": ["id_idle_cpu_sleep", 0, 27]
                         },
                         {
-                            "label": "48 MHz In Deep Idle",
+                            "label": "Low Clock In Deep Idle",
                             "type": "toggle",
                             "content": ["id_idle_low_clock", 0, 28]
                         },
@@ -554,6 +554,12 @@
                             "label": "Long Naps In Deep Idle",
                             "type": "toggle",
                             "content": ["id_idle_long_nap", 0, 29]
+                        },
+                        {
+                            "label": "Deep Idle Clock",
+                            "type": "dropdown",
+                            "options": ["48 MHz", "24 MHz", "12 MHz"],
+                            "content": ["id_scan_deep_clock_idx", 0, 30]
                         }
                     ]
                 }

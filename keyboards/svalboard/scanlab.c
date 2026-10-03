@@ -312,6 +312,7 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             put32(&rsp[13], last_matrix_activity_elapsed());
             put32(&rsp[17], last_pointing_device_activity_elapsed());
             rsp[21] = sval_clock_mhz();
+            rsp[22] = sval_deep_clock_mhz();
             return;
         }
         case SCANLAB_OP_POWER: {
