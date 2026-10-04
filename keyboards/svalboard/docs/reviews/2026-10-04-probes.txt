@@ -1,0 +1,27 @@
+Session TTL
+ID issued at 65535ms: valid at age 65537ms=0; advertised TTL=120000ms
+Identity validation and failed save
+invalid UTF8 case 0 accepted=1
+invalid UTF8 case 1 accepted=1
+invalid UTF8 case 2 accepted=1
+failed name save: first=3 retry=0 flash attempts=1 visible name=old
+Alt repeat reverse modifier matching
+reverse mapping requiring Shift fires without modifiers: keycode=4
+Tap dance editing during a hold
+A remains held after editing dance to B before reset=1
+Sniper divisor overflow
+2x,3x,5x hold plus toggle: divisor=132 instead of 900
+Scroll tail flush
+idle frame after deadline: wheel output=0 buffered ticks=9
+PS2 button hold
+physical button held: initial buttons=1 next poll without packet=0
+Reset validity and subsequent boot
+reset then boot: keymap reset calls=2 (second reset erases post-reset edits)
+Boost motion arithmetic
+positive input 200 at boost 255 becomes -14536 rather than a saturated positive report
+Disable auto mouse while active
+auto mouse flag disabled while active: mouse layer remains=1
+Migration macro no-op encoding
+unsupported custom action translated to bytes 00 FF: new internal NUL=1
+Migration settings reset side effect
+copied magic options 0101 become 0480 when migration calls real settings reset

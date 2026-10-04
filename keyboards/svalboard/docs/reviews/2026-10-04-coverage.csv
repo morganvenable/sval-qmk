@@ -1,0 +1,144 @@
+change,path,category,review_scope
+A,.github/workflows/build-firmware.yml,CI,Workflow execution and privileges
+D,.github/workflows/ci_build_major_branch.yml,CI,Workflow execution and privileges
+A,.github/workflows/ci_build_major_branch.yml.disabled,CI,Workflow execution and privileges
+A,.github/workflows/release.yml,CI,Workflow execution and privileges
+M,.gitignore,Other,Ignore rules or existing regression suite
+A,keyboards/svalboard/.noci,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/axis_scale.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/axis_scale.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/azoteq.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/halconf.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/left/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/left/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/left/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/mcuconf.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/right/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/right/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/right/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/azoteq/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/docs/release/README.md,Board documentation,Claims and supported behavior
+A,keyboards/svalboard/docs/release/announcement.md,Board documentation,Claims and supported behavior
+A,keyboards/svalboard/docs/release/firmware-changes.md,Board documentation,Claims and supported behavior
+A,keyboards/svalboard/docs/scan-lab.md,Board documentation,Claims and supported behavior
+A,keyboards/svalboard/identity.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/identity.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/info.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymap.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/README.md,Board documentation,Claims and supported behavior
+A,keyboards/svalboard/keymaps/blank/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/blank/keymap.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/blank/keymap.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/blank/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/blank/sval.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/default/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/default/keymap.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/default/keymap.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/default/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/keymap_support.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/keymap_support.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/scanlab/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/scanlab/keymap.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/scanlab/keymap.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/scanlab/readme.md,Board documentation,Claims and supported behavior
+A,keyboards/svalboard/keymaps/scanlab/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/scanlab/sval.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/sval/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/sval/keymap.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/sval/keymap.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/sval/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/keymaps/sval/sval.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/left/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/left/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/left/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/matrix.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/migrate_vial.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/pimoroni/.noci,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/pimoroni/left/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/pimoroni/right/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/pimoroni/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/power.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/readme.md,Board documentation,Claims and supported behavior
+A,keyboards/svalboard/right/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/right/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/right/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/scanlab.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/scanlab.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/svalboard.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/svalboard.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/tools/flash.sh,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/.noci,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/halconf.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/mcuconf.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3360/left/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3360/left/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3360/left/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3360/right/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3360/right/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3360/right/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3360/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3389/left/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3389/left/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3389/left/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3389/right/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3389/right/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3389/right/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/pmw3389/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackball/trackball.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/.noci,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/left/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/left/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/left/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/right/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/right/keyboard.json,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/right/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
+A,keyboards/svalboard/trackpoint/trackpoint.c,Board and keymaps,Source/configuration/definition or empty CI marker
+A,modules/svalboard/core/README.md,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/client_wrapper.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/client_wrapper.h,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/docs/CLIENT_ID_USER_GUIDE.md,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/docs/QMK_PATCHES.md,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/post_config.h,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/qmk_module.json,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/rules.mk,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval.h,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_alt_repeat_key.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_combo.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_compress.py,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_config.py,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_definition.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_fragments.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_key_override.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_leader.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_qmk_settings.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_qmk_settings.h,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/core/sval_tap_dance.c,Sval module,Source/integration or protocol documentation
+A,modules/svalboard/pointing_device_ps2/pointing_device_ps2.c,PS2 module,Driver and configuration
+A,modules/svalboard/pointing_device_ps2/pointing_device_ps2.h,PS2 module,Driver and configuration
+A,modules/svalboard/pointing_device_ps2/qmk_module.json,PS2 module,Driver and configuration
+A,modules/svalboard/pointing_device_ps2/rules.mk,PS2 module,Driver and configuration
+M,quantum/action_util.c,QMK core,Patch and dependent upstream paths
+M,quantum/action_util.h,QMK core,Patch and dependent upstream paths
+M,quantum/dynamic_keymap.c,QMK core,Patch and dependent upstream paths
+M,quantum/dynamic_keymap.h,QMK core,Patch and dependent upstream paths
+A,quantum/keycode_upgrade.h,QMK core,Patch and dependent upstream paths
+M,quantum/keymap_introspection.c,QMK core,Patch and dependent upstream paths
+A,quantum/layout_stamp.h,QMK core,Patch and dependent upstream paths
+M,quantum/nvm/eeprom/nvm_dynamic_keymap.c,QMK core,Patch and dependent upstream paths
+M,quantum/nvm/eeprom/nvm_eeprom_via_internal.h,QMK core,Patch and dependent upstream paths
+M,quantum/nvm/eeprom/nvm_via.c,QMK core,Patch and dependent upstream paths
+M,quantum/nvm/nvm_dynamic_keymap.h,QMK core,Patch and dependent upstream paths
+M,quantum/nvm/nvm_via.h,QMK core,Patch and dependent upstream paths
+M,quantum/raw_hid.c,QMK core,Patch and dependent upstream paths
+M,quantum/via.c,QMK core,Patch and dependent upstream paths
+M,quantum/via.h,QMK core,Patch and dependent upstream paths
+A,tests/sval_storage/test_regressions.py,Other,Ignore rules or existing regression suite
+M,tmk_core/protocol/usb_descriptor.c,QMK core,Patch and dependent upstream paths
