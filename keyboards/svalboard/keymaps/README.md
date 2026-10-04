@@ -1,11 +1,11 @@
-Keymaps Information:
+# Svalboard keymaps
 
-Svalboard keeps keymap_support.c up to date, with the most recent developments
-on the board.  If you want to see an example keymap, look at the vial keymap.
+The maintained everyday configuration is **`sval`**, using the `svalboard/core` community module and `sval.json` definition. It supports the matching Keybard client. Base-board **`blank`** builds are included in the release workflow; **`scanlab`** is a diagnostic keymap.
 
-You do not have to use vial with Svalboard, but the vial, and vial_secure
-keymaps will be kept up to date, others may be out of date.
+Build an appropriate side/sensor variant, for example:
 
-The API between Svalboard and a keymap may change over time.  Please feel
-free to talk to us on Discord about changes you may need, or that have
-impacted you.
+```sh
+qmk compile -kb svalboard/trackball/pmw3389/right -km sval
+```
+
+See the [launch compendium](../docs/release/README.md) for features, benefits, firmware selection, and the supported shipped-Vial migration. See the [board README](../readme.md) for bootloader and handedness instructions. Other historical keymaps may not track the maintained board API.

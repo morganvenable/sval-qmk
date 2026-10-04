@@ -8,17 +8,17 @@ Keyboard Maintainer: [morganvenable](https://github.com/svalboard/vial-qmk) [@_c
 Hardware Supported: RP2040, Svalboard Alpha, Svalboard Lightly
 Hardware Availability: [Store](https://www.svalboard.com)
 
-Build example for this keyboard (after setting up your build environment):
-for Vial:
-e.g.
+See the [Svalboard QMK + Keybard launch compendium](docs/release/README.md) for the complete feature guide, update/migration instructions, and firmware changes with benefits.
+
+Build examples for the maintained Sval keymap (after setting up your build environment):
 ```
-make svalboard/right:vial
-make svalboard/left:vial
+make svalboard/right:sval
+make svalboard/left:sval
 ```
 or
 ```
-make svalboard/trackpoint/right:vial
-make svalboard/trackpoint/left:vial
+make svalboard/trackpoint/right:sval
+make svalboard/trackpoint/left:sval
 ```
 
 --------------------------------------------------------------
@@ -47,4 +47,4 @@ See the [build environment setup](https://docs.qmk.fm/#/getting_started_build_to
 To enter bootloader mode, simply double tap reset in 500ms or less.  The device will come up as a mass storage device titled RPI-RP2.  Drag the desired UF2 file to the drive and it will immediately reboot and enumerate as Svalboard.
 
 ## Svalboard-specific firmware features
-See [Svalboard firmware features](docs/firmware_features.md) pages for information.
+See the [launch feature compendium](docs/release/README.md) and [firmware-change catalog](docs/release/firmware-changes.md).

@@ -1,19 +1,12 @@
-# Sval Module
+# Sval: dynamic QMK configuration for Keybard
 
-Sval is a QMK community module that provides dynamic configuration of advanced QMK features via USB HID protocol. It's designed to work with the Vial GUI (or compatible tools) to allow users to configure tap dance, combos, key overrides, and QMK settings without recompiling firmware.
+Sval is a QMK community module for configuring tap dances, combos, key overrides, alternate-repeat mappings, leader sequences, one-shot behavior, and supported QMK settings over USB. The matching Keybard client also edits keymaps/macros and exposes firmware-defined hardware menus.
 
-## Features
+For the complete user-facing feature and benefit guide, read the [Svalboard QMK + Keybard launch compendium](../../../keyboards/svalboard/docs/release/README.md). The [fork-change catalog](../../../keyboards/svalboard/docs/release/firmware-changes.md) distinguishes upstream QMK features from this fork's integration and core patches.
 
-- Dynamic Tap Dance configuration
-- Dynamic Combo configuration
-- Dynamic Key Override configuration
-- Dynamic Alt Repeat Key configuration
-- One-Shot key settings
-- QMK Settings (tapping term, mouse keys, magic settings, etc.)
+## Build integration
 
-## Installation
-
-Add to your keymap's `keymap.json`:
+Enable the module in your keymap's `keymap.json`:
 
 ```json
 {
@@ -21,140 +14,63 @@ Add to your keymap's `keymap.json`:
 }
 ```
 
-## Configuration
+Place a `sval.json` definition in the same keymap directory. Its `sval` object determines feature counts; build scripts generate the feature flags, configuration header, and compressed definition. The maintained Svalboard keymaps configure 256 entries for each table:
 
-All configuration options are set in your keyboard's `config.h`.
-
-### Keyboard UID
-
-The keyboard UID is used to match saved profiles (.vil files) to the correct keyboard. If your keyboard previously used Vial, define the same UID for backwards compatibility:
-
-```c
-// Use the same UID as your Vial keymap for .vil compatibility
-#define VIAL_KEYBOARD_UID {0x1B, 0x18, 0x7D, 0xF2, 0x21, 0xF6, 0x29, 0x48}
+```json
+{
+    "sval": {
+        "tap_dance": 256,
+        "combo": 256,
+        "key_override": 256,
+        "alt_repeat_key": 256,
+        "leader": 256
+    }
+}
 ```
 
-Sval will automatically use `VIAL_KEYBOARD_UID` if defined. You can also define `SVAL_KEYBOARD_UID` directly:
+This example shows the count object, not a complete keyboard definition. Use the [maintained Svalboard definition](../../../keyboards/svalboard/keymaps/sval/sval.json) for the matrix, menus, custom keycodes, fragments, and other required fields. A missing `sval.json` is a build error.
 
-```c
-#define SVAL_KEYBOARD_UID {0x1B, 0x18, 0x7D, 0xF2, 0x21, 0xF6, 0x29, 0x48}
-```
+The keyboard sets the layer/macro counts and storage capacity. The launch Svalboard build provides 16 layers, 256 macros, and 128 KiB of logical settings storage shared by the features and macro buffer. These are board settings, not the defaults for every keyboard using the module.
 
-If neither is defined, the UID defaults to all zeros.
+## Defaults and custom hooks
 
-### Entry Counts
+Default configuration includes `SVAL_DEFAULT_NKRO`, `SVAL_DEFAULT_PERMISSIVE_HOLD`, `SVAL_DEFAULT_CHORDAL_HOLD`, `SVAL_DEFAULT_HOLD_ON_OTHER_KEY`, and `SVAL_DEFAULT_RETRO_TAPPING`. A default flag or stored schema field alone does not establish that the corresponding upstream behavior is enabled and wired; see the catalog's [scope notes](../../../keyboards/svalboard/docs/release/firmware-changes.md#scope-and-compatibility).
 
-Control how many entries are available for each dynamic feature. More entries use more EEPROM space.
+The module provides per-key `_sval` hooks for tapping behavior where implemented. Check [`sval_qmk_settings.c`](sval_qmk_settings.c) and [`sval_tap_dance.c`](sval_tap_dance.c) before overriding a QMK hook already owned by Sval.
 
-```c
-// Tap dance entries (default: 16, each uses 10 bytes)
-#define SVAL_TAP_DANCE_ENTRIES 50
+Define `SVAL_KEYBOARD_UID` for file/device identification; a legacy `VIAL_KEYBOARD_UID` is accepted as a fallback. The UID identifies the definition family, while the board's persistent USB serial identifies the individual hardware.
 
-// Combo entries (default: 16, each uses 12 bytes)
-#define SVAL_COMBO_ENTRIES 50
-
-// Key override entries (default: 16, each uses 12 bytes)
-#define SVAL_KEY_OVERRIDE_ENTRIES 30
-
-// Alt repeat key entries (default: 32, each uses 6 bytes)
-#define SVAL_ALT_REPEAT_KEY_ENTRIES 32
-```
-
-### Default Settings
-
-These settings are applied when EEPROM is reset (e.g., after flashing new firmware). Users can change them via the GUI, but these are the starting values.
-
-#### NKRO (N-Key Rollover)
-
-```c
-// Enable NKRO by default (requires NKRO_ENABLE in rules.mk)
-// Set to 0 to default to 6KRO, 1 to default to NKRO
-#define SVAL_DEFAULT_NKRO 1
-```
-
-If not defined, defaults to 1 (NKRO on) when `NKRO_ENABLE` is set.
-
-#### Tapping Behavior
-
-These control mod-tap and layer-tap behavior. See [QMK Tap-Hold documentation](https://docs.qmk.fm/#/tap_hold) for details.
-
-```c
-// Permissive Hold: Trigger hold action if another key is pressed and released
-// while the tap-hold key is held, even within tapping term
-#define SVAL_DEFAULT_PERMISSIVE_HOLD 1
-
-// Chordal Hold: Allows comfortable same-hand rolls with mod-taps
-// Recommended for most users
-#define SVAL_DEFAULT_CHORDAL_HOLD 1
-
-// Hold On Other Key Press: Immediately select hold action when another key
-// is pressed (more aggressive than permissive hold)
-#define SVAL_DEFAULT_HOLD_ON_OTHER_KEY 0
-
-// Retro Tapping: If hold action is triggered but no other key is pressed,
-// send the tap action on release
-#define SVAL_DEFAULT_RETRO_TAPPING 0
-```
-
-### Example Configuration
-
-Here's a complete example for a keyboard that wants generous dynamic feature storage and sensible mod-tap defaults:
-
-```c
-// config.h
-
-// Generous entry counts for power users
-#define SVAL_TAP_DANCE_ENTRIES 50
-#define SVAL_COMBO_ENTRIES 50
-#define SVAL_KEY_OVERRIDE_ENTRIES 30
-
-// Sane defaults for mod-tap heavy usage
-#define SVAL_DEFAULT_NKRO 1
-#define SVAL_DEFAULT_PERMISSIVE_HOLD 1
-#define SVAL_DEFAULT_CHORDAL_HOLD 1
-```
-
-## EEPROM Layout
-
-Sval stores data in the keyboard's EEPROM datablock. The layout is:
+## Storage and update behavior
 
 | Section | Size |
-|---------|------|
-| Tap Dance | entries × 10 bytes |
-| Combo | entries × 12 bytes |
-| Key Override | entries × 12 bytes |
-| Alt Repeat Key | entries × 6 bytes |
-| One-Shot | 3 bytes |
-| Magic (version) | 6 bytes |
-| QMK Settings | 40 bytes |
+| --- | --- |
+| Tap dances | entry count × 10 bytes |
+| Combos | entry count × 12 bytes |
+| Key overrides | entry count × 12 bytes |
+| Alternate repeat | entry count × 6 bytes |
+| One-shot settings | 3 bytes |
+| Leaders | entry count × 14 bytes |
+| Sval validity stamp | 6 bytes |
+| QMK settings | 44 bytes |
+| Fragment selections | 21 bytes |
+| Tap-dance labels | tap-dance count × 16 bytes |
+| Macro labels | macro count × 16 bytes |
+| Layer labels | layer count × 16 bytes |
 
-With default entry counts (16 each), this uses approximately 689 bytes.
+The implementation is in [`sval.h`](sval.h) and [`post_config.h`](post_config.h). Keymap/macro storage and board custom configuration occupy separate regions of the shared logical EEPROM.
 
-## EEPROM Reset Behavior
+Sval validity uses a **layout stamp**, not a build timestamp. Compatible updates preserve settings; changes to geometry or schema can invalidate the relevant data. VIA also stores a keycode version so supported renumberings can be translated. This does not guarantee preservation across arbitrary firmware versions.
 
-Sval uses the build timestamp as a version marker. When firmware is flashed, if the timestamp differs from what's stored in EEPROM, all Sval settings are reset to defaults. This ensures a clean state when firmware changes might affect data layout.
+On Svalboard, [`migrate_vial.c`](../../../keyboards/svalboard/migrate_vial.c) implements the supported one-time shipped-Vial migration. The module alone does not provide a general Vial importer.
 
-## Protocol
+## Host protocol and compatibility
 
-Sval uses the `0xDF` prefix for its USB HID protocol, separate from VIA's `0xFE` prefix. This allows it to coexist with VIA while providing additional functionality.
+Firmware advertises the `sval:` USB serial prefix and dedicated HID usage. The matching host bootstraps a client ID through wrapper prefix `0xDD`, then sends Sval commands under `0xDF` or wrapped VIA commands under `0xFE`. Unwrapped Sval commands are ignored. See [Client ID protocol](docs/CLIENT_ID_PROTOCOL.md).
 
-## GUI Support
+Current Sval protocol version **3** includes 16-bit table indices, sparse table/label reads, and 32-bit macro-buffer offsets. The full macro capacity requires a compatible Sval client. Legacy VIA macro commands retain their 16-bit addressing limit.
 
-Sval is designed to work with the Vial GUI. The GUI auto-detects Sval support via the `sval:` prefix in the USB serial string.
+The maintained module name is `svalboard/core`, the regular keymap is `sval`, and definitions use `sval.json`. Earlier names in historical files or internal client identifiers are not an alternative supported mixed firmware/client pair. A generic Vial GUI is not the recommended client for this protocol.
 
 ## License
 
-GPL-2.0-or-later
-
-## Sval naming and client compatibility
-
-Build the Svalboard configuration with `make svalboard/left:sval` (or the
-corresponding right/sensor variant). The module identifier is `svalboard/core`,
-and keymap definitions are named `sval.json` with a `sval` feature-count object.
-Firmware advertises the `sval:` serial prefix. Use a matching Sval GUI or a
-Keybard build that accepts the `sval` feature-count object.
-
-This naming change preserves numeric HID command IDs, keyboard UID, keycode
-values, and EEPROM layout. It does not add a settings migration mechanism.
-Export settings before flashing: the existing build-timestamp reset behavior
-still applies. The previous firmware and clients are not a supported mixed pair.
+GPL-2.0-or-later. See the individual source headers for attribution.
