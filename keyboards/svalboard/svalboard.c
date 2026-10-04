@@ -10,6 +10,7 @@
 #include "usb_main.h"
 #include "suspend.h"
 #include "scanlab.h"
+#include "keytest.h"
 #include "sval.h"
 #include "identity.h"
 #include "nvm_via.h"
@@ -504,6 +505,9 @@ static void sval_usb_wake_handler(void) {
 void housekeeping_task_kb(void) {
     sval_usb_wake_handler();
     scanlab_housekeeping();
+#ifdef SVAL_KEYTEST
+    keytest_task();
+#endif
     identity_task();
 
     if (is_keyboard_master()) {
@@ -610,6 +614,14 @@ enum sval_via_value_id {
 };
 
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
+    if (length >= 3 && data[1] == KEYTEST_CHANNEL) {
+#ifdef SVAL_KEYTEST
+        keytest_command(data, length);
+#else
+        data[0] = id_unhandled;
+#endif
+        return;
+    }
     // New VIA API: data[0]=command, data[1]=channel, data[2]=value_id, data[3+]=value_data
     if (data[1] == SCANLAB_CHANNEL) {
         scanlab_via_command(data, length);

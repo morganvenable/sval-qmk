@@ -47,3 +47,9 @@ VIA_ENABLE = yes
 VIA_INSECURE = yes
 
 # Note: Sval module is enabled via keymap.json with "modules": ["svalboard/core"]
+
+# On-device action-path tests; opt in with -e SVAL_KEYTEST=yes.
+ifeq ($(strip $(SVAL_KEYTEST)), yes)
+  SRC += keytest.c
+  OPT_DEFS += -DSVAL_KEYTEST
+endif

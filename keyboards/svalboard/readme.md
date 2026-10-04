@@ -48,3 +48,5 @@ To enter bootloader mode, simply double tap reset in 500ms or less.  The device 
 
 ## Svalboard-specific firmware features
 See the [launch feature compendium](docs/release/README.md) and [firmware-change catalog](docs/release/firmware-changes.md).
+
+For automated action and persistence checks without physical keypresses, see [on-device key-event tests](docs/keytest.md).
