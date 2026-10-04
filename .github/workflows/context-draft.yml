@@ -1,0 +1,41 @@
+name: Context Layer Firmware Draft
+
+on:
+  push:
+    branches: [feat/context-layers]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compile and execute context regression harnesses
+        run: python3 -m unittest discover -s tests/sval_storage -p 'test_context_layer.py' -v
+
+  pmw3389:
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [left, right]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Build PMW3389 ${{ matrix.side }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 -m pip install --break-system-packages -r requirements.txt
+          make svalboard/trackball/pmw3389/${{ matrix.side }}:sval
+      - uses: actions/upload-artifact@v4
+        with:
+          name: context-pmw3389-${{ matrix.side }}-${{ github.sha }}
+          path: svalboard_trackball_pmw3389_${{ matrix.side }}_sval.uf2
+          if-no-files-found: error
+          retention-days: 30

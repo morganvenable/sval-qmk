@@ -83,6 +83,10 @@ enum sval_command_id {
     sval_cmd_macro_buffer_get  = 0x1F,
     sval_cmd_macro_buffer_set  = 0x20,
     sval_cmd_table_scan        = 0x21, // v3: next used entry at or after an index
+    sval_cmd_context_layer_set    = 0x26,
+    sval_cmd_context_layer_status = 0x27,
+    sval_cmd_context_layer_renew  = 0x28,
+    sval_cmd_context_layer_clear  = 0x29,
     sval_cmd_error             = 0xFF,
 };
 
@@ -92,7 +96,8 @@ enum sval_feature_flags {
     sval_flag_layer_lock  = (1 << 1),
     sval_flag_oneshot     = (1 << 2),
     sval_flag_leader      = (1 << 3),
-    // bits 4-7 reserved
+    sval_flag_context_layer = (1 << 5),
+    // bits 4, 6-7 reserved
 };
 
 // Keyboard definition chunk size (fits in 32-byte HID packet with header)
@@ -381,3 +386,7 @@ int sval_set_label(uint8_t label_type, uint16_t index, const char *string, uint8
 // Clear label for a specific type+index (sets all SVAL_LABEL_SIZE bytes to 0x00)
 // Returns 0 on success, -1 on error (invalid type/index)
 int sval_clear_label(uint8_t label_type, uint16_t index);
+
+// Volatile application layer, independent of manual layer_state.
+uint8_t sval_context_layer(void);
+bool sval_context_layer_command(uint8_t *data, uint8_t length);

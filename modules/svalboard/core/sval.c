@@ -244,6 +244,7 @@ uint8_t sval_get_feature_flags(void) {
 #ifdef LEADER_ENABLE
     flags |= sval_flag_leader;
 #endif
+    flags |= sval_flag_context_layer;
     return flags;
 }
 
@@ -527,6 +528,9 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
 
     uint8_t command_id = data[1];
 
+    if (command_id >= sval_cmd_context_layer_set && command_id <= sval_cmd_context_layer_clear) {
+        return sval_context_layer_command(data, length);
+    }
     switch (command_id) {
         case sval_cmd_get_info: {
             // Response: [0xDF] [0x00] [ver0-3] [uid0-7] [flags]
