@@ -5,8 +5,10 @@ invalid UTF8 case 0 accepted=1
 invalid UTF8 case 1 accepted=1
 invalid UTF8 case 2 accepted=1
 failed name save: first=3 retry=0 flash attempts=1 visible name=old
-Alt repeat reverse modifier matching
-reverse mapping requiring Shift fires without modifiers: keycode=4
+Alt repeat modifier and default semantics
+allowed_mods=0 with Ctrl: forward=5 reverse=4 (both should fall through)
+allowing Shift incorrectly requires it: plain A maps to 1 (transparent)
+default-to-alt: A maps to 4 (itself), unrelated C maps to 1 (transparent)
 Tap dance editing during a hold
 A remains held after editing dance to B before reset=1
 Sniper divisor overflow
@@ -25,3 +27,5 @@ Migration macro no-op encoding
 unsupported custom action translated to bytes 00 FF: new internal NUL=1
 Migration settings reset side effect
 copied magic options 0101 become 0480 when migration calls real settings reset
+Interrupted keycode upgrade at byte boundary
+power cut after first byte: reboot retains 75F0 instead of 751C, stamps version 9, total byte writes=1

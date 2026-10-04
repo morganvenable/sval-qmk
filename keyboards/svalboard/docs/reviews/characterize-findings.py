@@ -36,21 +36,38 @@ int main(void){now=65535; uint32_t id=client_wrapper_allocate_id(); now=131072; 
 run('Identity validation and failed save', '''
 #define IDENTITY_NAME_MAX_BYTES 64
 typedef enum {IDENTITY_OK,IDENTITY_INVALID,IDENTITY_UNAVAILABLE,IDENTITY_WRITE_FAILED} identity_status_t;
-static struct { char name[64]; uint8_t name_len;} current;
+static struct { char name[64]; uint8_t name_len;} current={.name="old",.name_len=3};
 static char name_z[65]="old"; static bool region_ok=true; static int saves;
 void identity_init(void){} bool save(void){saves++;return false;}
 '''+f('keyboards/svalboard/identity.c','utf8_valid')+'\n'+f('keyboards/svalboard/identity.c','identity_set_name')+'''
 int main(void){uint8_t bad[][4]={{0xC0,0xAF},{0xED,0xA0,0x80},{0xF4,0x90,0x80,0x80}}; uint8_t n[]={2,3,4};for(int i=0;i<3;i++){printf("invalid UTF8 case %d accepted=%d\\n",i,utf8_valid(bad[i],n[i]));assert(utf8_valid(bad[i],n[i]));} int first=identity_set_name("new",3),second=identity_set_name("new",3); printf("failed name save: first=%d retry=%d flash attempts=%d visible name=%s\\n",first,second,saves,name_z);assert(first==IDENTITY_WRITE_FAILED && second==IDENTITY_OK && saves==1 && !strcmp(name_z,"old"));}
 ''')
-run('Alt repeat reverse modifier matching', '''
+run('Alt repeat modifier and default semantics', '''
+#include "'''+str(root/'quantum/keycodes.h')+'''"
+#define MOD_BIT(kc) (1u << ((kc) & 7))
 #define SVAL_ALT_REPEAT_KEY_ENTRIES 1
-#define KC_NO 0
+#define sval_ark_option_default_to_alt 1
 #define sval_ark_option_bidirectional 2
+#define sval_ark_option_ignore_mod_handedness 4
 static bool sval_ark_entry_enabled[]={true};
 typedef struct { uint16_t keycode,alt_keycode; uint8_t allowed_mods,options;} sval_alt_repeat_key_entry_t;
-static sval_alt_repeat_key_entry_t sval_alt_repeat_entries[]={{4,5,2,2}};
-'''+f('modules/svalboard/core/sval_alt_repeat_key.c','sval_get_reverse_alt_repeat_keycode')+'''
-int main(void){uint16_t out=sval_get_reverse_alt_repeat_keycode(5,0);printf("reverse mapping requiring Shift fires without modifiers: keycode=%u\\n",out);assert(out==4);}
+static sval_alt_repeat_key_entry_t sval_alt_repeat_entries[]={{KC_A,KC_B,0,2}};
+'''+ '\n'.join(f('modules/svalboard/core/sval_alt_repeat_key.c',n) for n in ['sval_get_alt_repeat_keycode','sval_get_reverse_alt_repeat_keycode','get_alt_repeat_key_keycode_user'])+'''
+int main(void){
+ uint16_t forward=get_alt_repeat_key_keycode_user(KC_A,MOD_BIT(KC_LCTL));
+ uint16_t reverse=get_alt_repeat_key_keycode_user(KC_B,MOD_BIT(KC_LCTL));
+ printf("allowed_mods=0 with Ctrl: forward=%u reverse=%u (both should fall through)\\n",forward,reverse);
+ assert(forward==KC_B && reverse==KC_A);
+ sval_alt_repeat_entries[0].allowed_mods=MOD_BIT(KC_LSFT);
+ uint16_t plain=get_alt_repeat_key_keycode_user(KC_A,0);
+ printf("allowing Shift incorrectly requires it: plain A maps to %u (transparent)\\n",plain);
+ assert(plain==KC_TRANSPARENT);
+ sval_alt_repeat_entries[0].allowed_mods=0;
+ sval_alt_repeat_entries[0].options=sval_ark_option_default_to_alt;
+ uint16_t match=get_alt_repeat_key_keycode_user(KC_A,0),fallback=get_alt_repeat_key_keycode_user(KC_C,0);
+ printf("default-to-alt: A maps to %u (itself), unrelated C maps to %u (transparent)\\n",match,fallback);
+ assert(match==KC_A && fallback==KC_TRANSPARENT);
+}
 ''')
 run('Tap dance editing during a hold', '''
 #define SVAL_TAP_DANCE_ENTRIES 1
@@ -103,14 +120,14 @@ int main(void){report_mouse_t zero={0};report_mouse_t first=ps2_mouse_get_report
 ''')
 run('Reset validity and subsequent boot', '''
 #define SVAL_EEPROM_SIZE 128
-static uint8_t mem[128];static int keymap_resets;
+static uint8_t mem[128];static int keymap_resets;static uint16_t keymap_value=42;
 void sval_write_eeprom(uint16_t i,void *v,uint16_t n){memcpy(mem+i,v,n);}
-void dynamic_keymap_reset(void){keymap_resets++;}void dynamic_keymap_macro_reset(void){}
+void dynamic_keymap_reset(void){keymap_resets++;keymap_value=0;}void dynamic_keymap_macro_reset(void){}
 void sval_reload_tap_dance(void){}void sval_reload_combo(void){}void sval_reload_key_override(void){}void sval_reload_alt_repeat_key(void){}void sval_reload_leader(void){}void sval_reload_labels(void){}
 void client_wrapper_init(void){}bool sval_eeprom_is_valid(void){return mem[100]==0xA5;}
 void sval_qmk_settings_reset(void){}void sval_qmk_settings_init(void){}void sval_eeprom_set_valid(void){mem[100]=0xA5;}
 '''+f('modules/svalboard/core/sval.c','sval_reset')+'\n'+f('modules/svalboard/core/sval.c','sval_init')+'''
-int main(void){sval_eeprom_set_valid();sval_reset();assert(!sval_eeprom_is_valid());sval_init();printf("reset then boot: keymap reset calls=%d (second reset erases post-reset edits)\\n",keymap_resets);assert(keymap_resets==2);}
+int main(void){sval_eeprom_set_valid();sval_reset();assert(!sval_eeprom_is_valid());keymap_value=7;sval_init();printf("reset then boot: keymap reset calls=%d (second reset erases post-reset edits)\\n",keymap_resets);assert(keymap_resets==2 && keymap_value==0);}
 ''')
 run('Boost motion arithmetic', '''
 #include "'''+str(root/'keyboards/svalboard/axis_scale.h')+'''"
@@ -196,4 +213,32 @@ static sval_qmk_settings_t settings;static keymap_config_t keymap_config;static 
 void sval_qmk_settings_save(void){}void sval_qmk_settings_apply(void){}void clear_keyboard(void){}void eeconfig_update_keymap(keymap_config_t *k){saved=k->raw;}
 ''' +f('modules/svalboard/core/sval_qmk_settings.c','sval_qmk_settings_reset')+'''
 int main(void){keymap_config.raw=0x101;saved=keymap_config.raw;sval_qmk_settings_reset();printf("copied magic options 0101 become %04X when migration calls real settings reset\\n",saved);assert(!(saved & 0x101));}
+''')
+
+run('Interrupted keycode upgrade at byte boundary', '''
+#include "'''+str(root/'quantum/keycode_upgrade.h')+'''"
+#define DYNAMIC_KEYMAP_LAYER_COUNT 1
+#define MATRIX_ROWS 1
+#define MATRIX_COLS 1
+static uint8_t persisted[2]={0x74,0xF0},version=7;
+static int writes;static bool interrupt_write=true;static jmp_buf power_cut;
+void *dynamic_keymap_key_to_eeprom_address(uint8_t l,uint8_t r,uint8_t c){return persisted;}
+uint8_t eeprom_read_byte(const void *p){return *(const uint8_t *)p;}
+void eeprom_update_byte(void *p,uint8_t v){*(uint8_t *)p=v;writes++;if(interrupt_write)longjmp(power_cut,1);}
+'''+ '\n'.join(f('quantum/nvm/eeprom/nvm_dynamic_keymap.c',n) for n in ['nvm_dynamic_keymap_read_keycode','nvm_dynamic_keymap_update_keycode'])+'''
+uint16_t dynamic_keymap_get_keycode(uint8_t l,uint8_t r,uint8_t c){return nvm_dynamic_keymap_read_keycode(l,r,c);}
+void dynamic_keymap_set_keycode(uint8_t l,uint8_t r,uint8_t c,uint16_t k){nvm_dynamic_keymap_update_keycode(l,r,c,k);}
+void via_init_kb(void){}void via_set_layout_options_kb(uint32_t o){}uint32_t via_get_layout_options(void){return 0;}
+bool via_eeprom_is_valid(void){return true;}void eeconfig_init_via(void){assert(false);}
+uint8_t nvm_via_read_keycodes_version(void){return version;}void nvm_via_update_keycodes_version(uint8_t v){version=v;}
+void via_keycodes_upgrade_kb(uint8_t from){}
+'''+f('quantum/dynamic_keymap.c','dynamic_keymap_upgrade_keycodes')+'\n'+f('quantum/via.c','via_init')+'''
+int main(void){
+ assert(keycode_upgrade(0x74F0,7)==QK_STENO_MODE_BOLT);
+ if(!setjmp(power_cut))via_init();
+ assert(version==7 && dynamic_keymap_get_keycode(0,0,0)==0x75F0);
+ interrupt_write=false;via_init();
+ printf("power cut after first byte: reboot retains %04X instead of %04X, stamps version %u, total byte writes=%d\\n",dynamic_keymap_get_keycode(0,0,0),QK_STENO_MODE_BOLT,version,writes);
+ assert(dynamic_keymap_get_keycode(0,0,0)==0x75F0 && version==KEYCODE_UPGRADE_CURRENT && writes==1);
+}
 ''')
