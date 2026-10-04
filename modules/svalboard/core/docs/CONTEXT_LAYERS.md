@@ -35,6 +35,13 @@ during held keys, and complex synthetic gesture combinations need separate
 hardware validation. A switch cannot preserve OS application focus or redirect
 key releases back to an earlier window.
 
+The Svalboard custom `MT(mod, KC_TRNS)` helper removes the highest manual layer
+while resolving its transparent tap. It does not remove the independent app
+contribution. Do not use that special transparent mod-tap form on app layers in
+this draft; use an explicit tap keycode or an ordinary `KC_TRNS` assignment.
+Ordinary key and modifier release caching is covered by the regression harness;
+this custom helper is not.
+
 Normal `layer_state`, layer hooks, RGB layer indicators, standard Keybard active
 layer displays, and layer-constrained feature logic see manual state only. The
 companion reports the app layer separately. The diagnostic effective mask is a
