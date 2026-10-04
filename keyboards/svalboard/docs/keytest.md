@@ -29,6 +29,21 @@ python keyboards/svalboard/tools/keytest.py --serial YOUR_SERIAL info
 
 The host needs access to the device's Raw HID interface, usage page `0xFF61`, usage `0x62`. On Linux this may require the usual HID udev permissions. Close Keybard and other configuration clients while testing; this runner serializes commands and does not coordinate concurrent writers. Selection is automatic only when exactly one matching device is present. `--serial` makes selection and post-reboot reconnection explicit.
 
+### Windows USB devices from WSL
+
+An empty Linux `/dev/hidraw*` listing does not mean the board is unreachable. When Windows owns USB, run the same host script with Windows Python and its installed `hidapi` package:
+
+```sh
+keytest_ps=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
+keytest_python_win=$("$keytest_ps" -NoProfile -Command '(Get-Command python.exe).Source' | tr -d '\r')
+"$(wslpath -u "$keytest_python_win")" \
+  "$(wslpath -w "$PWD/keyboards/svalboard/tools/keytest.py")" list
+```
+
+Use that interpreter/script pair for the other commands too. Convert Linux output, backup, and scenario paths with `wslpath -w` before passing them to Windows Python. If WSL interop reports `UtilBindVsockAnyPort: socket failed`, the Linux execution sandbox may be blocking interop; retry through the environment's approved Windows-interoperability execution path instead of treating it as a missing device.
+
+For the first instrumented installation, an existing Scan Lab image can enter its bootloader using its established channel `0x53` ARM/GO exchange. The existing `tools/flash.sh` already supports copying via Windows PowerShell. Select the target by exact serial, verify the bootloader volume is unambiguous, and use the matching keyboard/side image. Subsequent instrumented builds can use `keytest.py bootloader` directly.
+
 ## Verify application and persistence in one loop
 
 This example tests matrix position `(0, 0)` on layer 0 with basic HID usage `0x04` (A):
@@ -146,3 +161,15 @@ python3 -m unittest discover -s tests/sval_keytest -v
 ```
 
 These tests compile the complete instrumentation C file against a fake clock, driver, and action executor, checking timing, bounds, isolation, overflow, and cleanup. Python tests check decoding, behavioral assertions, and persistence-failure rollback. They validate the test instrument; actual QMK feature behavior must be exercised on an instrumented board. No hardware result should be inferred from the native mocks.
+
+## Hardware verification, 2026-10-04
+
+The harness was installed and exercised on a USB-connected PMW3389-left test board through Windows HID, without physical keypresses. [Captured evidence](keytest-hardware-result.json) records the firmware revision, image hash, input timestamps, and actual NKRO reports at the host-driver boundary.
+
+- Replaced an F13 binding with A through VIA; observed A-down and all-up reports.
+- Rebooted and reconnected; confirmed the saved binding and the same A-down/all-up behavior.
+- Restored F13 and rebooted; a separate control sequence produced F13-down/all-up reports.
+- Compared pre-flash and post-test snapshots: all 1,920 keymap bytes, four populated feature entries, 48 queried board-setting responses, and identity metadata matched.
+- The board was left running the instrumented image with capture inactive and its original binding restored.
+
+This validates the real injection/capture and reboot-persistence loop. It does not extend the result to every configurable feature or to interrupted flash writes.
