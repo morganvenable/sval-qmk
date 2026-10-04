@@ -44,8 +44,7 @@ static void sval_write_eeprom(uint16_t offset, const void *buf, uint16_t size) {
 
 static uint16_t decode_keycode(uint16_t kc) {
     // Map 0xFF01 => 0x0100; 0xFF02 => 0x0200, etc.
-    if (kc > 0xFF00)
-        return (kc & 0xFF) << 8;
+    if (kc > 0xFF00) return (kc & 0xFF) << 8;
     return kc;
 }
 
@@ -65,20 +64,7 @@ static uint16_t decode_keycode(uint16_t kc) {
 // can never be mistaken for a stamp.
 static void sval_get_magic(uint8_t *magic) {
     const uint32_t values[] = {
-        SVAL_TAP_DANCE_ENTRIES,      sizeof(sval_tap_dance_entry_t),
-        SVAL_COMBO_ENTRIES,          sizeof(sval_combo_entry_t),
-        SVAL_KEY_OVERRIDE_ENTRIES,   sizeof(sval_key_override_entry_t),
-        SVAL_ALT_REPEAT_KEY_ENTRIES, sizeof(sval_alt_repeat_key_entry_t),
-        sizeof(sval_one_shot_t),
-        SVAL_LEADER_ENTRIES,         sizeof(sval_leader_entry_t),
-        SVAL_MAGIC_OFFSET,
-        SVAL_QMK_SETTINGS_SIZE,
-        SVAL_FRAGMENT_SIZE,
-        SVAL_LABEL_SIZE,
-        DYNAMIC_KEYMAP_MACRO_COUNT,
-        DYNAMIC_KEYMAP_LAYER_COUNT,
-        SVAL_EEPROM_SIZE,
-        SVAL_DATA_SCHEMA,
+        SVAL_TAP_DANCE_ENTRIES, sizeof(sval_tap_dance_entry_t), SVAL_COMBO_ENTRIES, sizeof(sval_combo_entry_t), SVAL_KEY_OVERRIDE_ENTRIES, sizeof(sval_key_override_entry_t), SVAL_ALT_REPEAT_KEY_ENTRIES, sizeof(sval_alt_repeat_key_entry_t), sizeof(sval_one_shot_t), SVAL_LEADER_ENTRIES, sizeof(sval_leader_entry_t), SVAL_MAGIC_OFFSET, SVAL_QMK_SETTINGS_SIZE, SVAL_FRAGMENT_SIZE, SVAL_LABEL_SIZE, DYNAMIC_KEYMAP_MACRO_COUNT, DYNAMIC_KEYMAP_LAYER_COUNT, SVAL_EEPROM_SIZE, SVAL_DATA_SCHEMA,
     };
     uint32_t stamp = layout_stamp(values, sizeof(values) / sizeof(values[0]));
     magic[0]       = 0xA5;
@@ -107,13 +93,13 @@ void sval_eeprom_set_valid(void) {
 // version `from` to the current numbering (keycode_upgrade.h). Called from the
 // keyboard's via_keycodes_upgrade_kb() during via_init(), before sval_init()
 // loads the tables. Idempotent, like every keycode upgrade.
-#define UPGRADE(field)                                   \
-    do {                                                 \
+#define UPGRADE(field)                                       \
+    do {                                                     \
         uint16_t upgraded_ = keycode_upgrade((field), from); \
-        if (upgraded_ != (field)) {                      \
-            (field) = upgraded_;                         \
-            changed = true;                              \
-        }                                                \
+        if (upgraded_ != (field)) {                          \
+            (field) = upgraded_;                             \
+            changed = true;                                  \
+        }                                                    \
     } while (0)
 void sval_upgrade_keycodes(uint8_t from) {
     if (sval_eeprom_is_valid()) {
@@ -131,7 +117,8 @@ void sval_upgrade_keycodes(uint8_t from) {
             sval_combo_entry_t e;
             bool               changed = false;
             sval_get_combo(i, &e);
-            for (uint8_t k = 0; k < 4; k++) UPGRADE(e.input[k]);
+            for (uint8_t k = 0; k < 4; k++)
+                UPGRADE(e.input[k]);
             UPGRADE(e.output);
             if (changed) sval_set_combo(i, &e);
         }
@@ -155,7 +142,8 @@ void sval_upgrade_keycodes(uint8_t from) {
             sval_leader_entry_t e;
             bool                changed = false;
             sval_get_leader(i, &e);
-            for (uint8_t k = 0; k < 5; k++) UPGRADE(e.sequence[k]);
+            for (uint8_t k = 0; k < 5; k++)
+                UPGRADE(e.sequence[k]);
             UPGRADE(e.output);
             if (changed) sval_set_leader(i, &e);
         }
@@ -251,60 +239,52 @@ uint8_t sval_get_feature_flags(void) {
 // Storage functions - Tap Dance
 int sval_get_tap_dance(uint16_t index, sval_tap_dance_entry_t *entry) {
     if (index >= SVAL_TAP_DANCE_ENTRIES) return -1;
-    sval_read_eeprom(SVAL_TAP_DANCE_OFFSET + index * sizeof(sval_tap_dance_entry_t),
-                       entry, sizeof(sval_tap_dance_entry_t));
+    sval_read_eeprom(SVAL_TAP_DANCE_OFFSET + index * sizeof(sval_tap_dance_entry_t), entry, sizeof(sval_tap_dance_entry_t));
     return 0;
 }
 
 int sval_set_tap_dance(uint16_t index, const sval_tap_dance_entry_t *entry) {
     if (index >= SVAL_TAP_DANCE_ENTRIES) return -1;
-    sval_write_eeprom(SVAL_TAP_DANCE_OFFSET + index * sizeof(sval_tap_dance_entry_t),
-                        entry, sizeof(sval_tap_dance_entry_t));
+    sval_write_eeprom(SVAL_TAP_DANCE_OFFSET + index * sizeof(sval_tap_dance_entry_t), entry, sizeof(sval_tap_dance_entry_t));
     return 0;
 }
 
 // Storage functions - Combo
 int sval_get_combo(uint16_t index, sval_combo_entry_t *entry) {
     if (index >= SVAL_COMBO_ENTRIES) return -1;
-    sval_read_eeprom(SVAL_COMBO_OFFSET + index * sizeof(sval_combo_entry_t),
-                       entry, sizeof(sval_combo_entry_t));
+    sval_read_eeprom(SVAL_COMBO_OFFSET + index * sizeof(sval_combo_entry_t), entry, sizeof(sval_combo_entry_t));
     return 0;
 }
 
 int sval_set_combo(uint16_t index, const sval_combo_entry_t *entry) {
     if (index >= SVAL_COMBO_ENTRIES) return -1;
-    sval_write_eeprom(SVAL_COMBO_OFFSET + index * sizeof(sval_combo_entry_t),
-                        entry, sizeof(sval_combo_entry_t));
+    sval_write_eeprom(SVAL_COMBO_OFFSET + index * sizeof(sval_combo_entry_t), entry, sizeof(sval_combo_entry_t));
     return 0;
 }
 
 // Storage functions - Key Override
 int sval_get_key_override(uint16_t index, sval_key_override_entry_t *entry) {
     if (index >= SVAL_KEY_OVERRIDE_ENTRIES) return -1;
-    sval_read_eeprom(SVAL_KEY_OVERRIDE_OFFSET + index * sizeof(sval_key_override_entry_t),
-                       entry, sizeof(sval_key_override_entry_t));
+    sval_read_eeprom(SVAL_KEY_OVERRIDE_OFFSET + index * sizeof(sval_key_override_entry_t), entry, sizeof(sval_key_override_entry_t));
     return 0;
 }
 
 int sval_set_key_override(uint16_t index, const sval_key_override_entry_t *entry) {
     if (index >= SVAL_KEY_OVERRIDE_ENTRIES) return -1;
-    sval_write_eeprom(SVAL_KEY_OVERRIDE_OFFSET + index * sizeof(sval_key_override_entry_t),
-                        entry, sizeof(sval_key_override_entry_t));
+    sval_write_eeprom(SVAL_KEY_OVERRIDE_OFFSET + index * sizeof(sval_key_override_entry_t), entry, sizeof(sval_key_override_entry_t));
     return 0;
 }
 
 // Storage functions - Alt Repeat Key
 int sval_get_alt_repeat_key(uint16_t index, sval_alt_repeat_key_entry_t *entry) {
     if (index >= SVAL_ALT_REPEAT_KEY_ENTRIES) return -1;
-    sval_read_eeprom(SVAL_ALT_REPEAT_KEY_OFFSET + index * sizeof(sval_alt_repeat_key_entry_t),
-                       entry, sizeof(sval_alt_repeat_key_entry_t));
+    sval_read_eeprom(SVAL_ALT_REPEAT_KEY_OFFSET + index * sizeof(sval_alt_repeat_key_entry_t), entry, sizeof(sval_alt_repeat_key_entry_t));
     return 0;
 }
 
 int sval_set_alt_repeat_key(uint16_t index, const sval_alt_repeat_key_entry_t *entry) {
     if (index >= SVAL_ALT_REPEAT_KEY_ENTRIES) return -1;
-    sval_write_eeprom(SVAL_ALT_REPEAT_KEY_OFFSET + index * sizeof(sval_alt_repeat_key_entry_t),
-                        entry, sizeof(sval_alt_repeat_key_entry_t));
+    sval_write_eeprom(SVAL_ALT_REPEAT_KEY_OFFSET + index * sizeof(sval_alt_repeat_key_entry_t), entry, sizeof(sval_alt_repeat_key_entry_t));
     return 0;
 }
 
@@ -320,37 +300,35 @@ void sval_set_one_shot(const sval_one_shot_t *settings) {
 // Storage functions - Leader
 int sval_get_leader(uint16_t index, sval_leader_entry_t *entry) {
     if (index >= SVAL_LEADER_ENTRIES) return -1;
-    sval_read_eeprom(SVAL_LEADER_OFFSET + index * sizeof(sval_leader_entry_t),
-                       entry, sizeof(sval_leader_entry_t));
+    sval_read_eeprom(SVAL_LEADER_OFFSET + index * sizeof(sval_leader_entry_t), entry, sizeof(sval_leader_entry_t));
     return 0;
 }
 
 int sval_set_leader(uint16_t index, const sval_leader_entry_t *entry) {
     if (index >= SVAL_LEADER_ENTRIES) return -1;
-    sval_write_eeprom(SVAL_LEADER_OFFSET + index * sizeof(sval_leader_entry_t),
-                        entry, sizeof(sval_leader_entry_t));
+    sval_write_eeprom(SVAL_LEADER_OFFSET + index * sizeof(sval_leader_entry_t), entry, sizeof(sval_leader_entry_t));
     return 0;
 }
 
 // Storage functions - Labels (v2: fixed SVAL_LABEL_SIZE-byte arrays)
 
 // Helper: Get pointer to label array and count for a given type
-static char* sval_get_label_array(uint8_t label_type, uint16_t *count, uint16_t *eeprom_offset) {
+static char *sval_get_label_array(uint8_t label_type, uint16_t *count, uint16_t *eeprom_offset) {
     switch (label_type) {
         case sval_label_type_layer:
-            *count = DYNAMIC_KEYMAP_LAYER_COUNT;
+            *count         = DYNAMIC_KEYMAP_LAYER_COUNT;
             *eeprom_offset = SVAL_LAYER_LABEL_OFFSET;
-            return (char*)sval_layer_labels;
+            return (char *)sval_layer_labels;
         case sval_label_type_tap_dance:
-            *count = SVAL_TAP_DANCE_ENTRIES;
+            *count         = SVAL_TAP_DANCE_ENTRIES;
             *eeprom_offset = SVAL_TD_LABEL_OFFSET;
-            return (char*)sval_td_labels;
+            return (char *)sval_td_labels;
         case sval_label_type_macro:
-            *count = DYNAMIC_KEYMAP_MACRO_COUNT;
+            *count         = DYNAMIC_KEYMAP_MACRO_COUNT;
             *eeprom_offset = SVAL_MACRO_LABEL_OFFSET;
-            return (char*)sval_macro_labels;
+            return (char *)sval_macro_labels;
         default:
-            *count = 0;
+            *count         = 0;
             *eeprom_offset = 0;
             return NULL;
     }
@@ -369,7 +347,7 @@ uint8_t sval_get_label(uint8_t label_type, uint16_t index, char *buffer, uint8_t
 
     uint16_t count;
     uint16_t eeprom_offset;
-    char *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
+    char    *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
 
     if (!labels || index >= count) {
         buffer[0] = '\0';
@@ -404,7 +382,7 @@ int sval_set_label(uint8_t label_type, uint16_t index, const char *string, uint8
 
     uint16_t count;
     uint16_t eeprom_offset;
-    char *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
+    char    *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
 
     if (!labels || index >= count) return -1;
 
@@ -429,7 +407,7 @@ int sval_set_label(uint8_t label_type, uint16_t index, const char *string, uint8
 int sval_clear_label(uint8_t label_type, uint16_t index) {
     uint16_t count;
     uint16_t eeprom_offset;
-    char *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
+    char    *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
 
     if (!labels || index >= count) return -1;
 
@@ -446,16 +424,13 @@ int sval_clear_label(uint8_t label_type, uint16_t index) {
 // Reload all label arrays from EEPROM into RAM
 void sval_reload_labels(void) {
     // Load layer labels
-    sval_read_eeprom(SVAL_LAYER_LABEL_OFFSET, sval_layer_labels,
-                      DYNAMIC_KEYMAP_LAYER_COUNT * SVAL_LABEL_SIZE);
+    sval_read_eeprom(SVAL_LAYER_LABEL_OFFSET, sval_layer_labels, DYNAMIC_KEYMAP_LAYER_COUNT * SVAL_LABEL_SIZE);
 
     // Load tap dance labels
-    sval_read_eeprom(SVAL_TD_LABEL_OFFSET, sval_td_labels,
-                      SVAL_TAP_DANCE_ENTRIES * SVAL_LABEL_SIZE);
+    sval_read_eeprom(SVAL_TD_LABEL_OFFSET, sval_td_labels, SVAL_TAP_DANCE_ENTRIES * SVAL_LABEL_SIZE);
 
     // Load macro labels
-    sval_read_eeprom(SVAL_MACRO_LABEL_OFFSET, sval_macro_labels,
-                      DYNAMIC_KEYMAP_MACRO_COUNT * SVAL_LABEL_SIZE);
+    sval_read_eeprom(SVAL_MACRO_LABEL_OFFSET, sval_macro_labels, DYNAMIC_KEYMAP_MACRO_COUNT * SVAL_LABEL_SIZE);
 }
 
 void sval_save(void) {
@@ -489,12 +464,7 @@ void sval_keycode_down(uint16_t keycode) {
     if (keycode <= QK_MODS_MAX) {
         register_code16(keycode);
     } else {
-        action_exec((keyevent_t){
-            .type = KEY_EVENT,
-            .key = (keypos_t){.row = SVAL_MATRIX_MAGIC, .col = SVAL_MATRIX_MAGIC},
-            .pressed = 1,
-            .time = (timer_read() | 1)
-        });
+        action_exec((keyevent_t){.type = KEY_EVENT, .key = (keypos_t){.row = SVAL_MATRIX_MAGIC, .col = SVAL_MATRIX_MAGIC}, .pressed = 1, .time = (timer_read() | 1)});
     }
 }
 
@@ -504,12 +474,7 @@ void sval_keycode_up(uint16_t keycode) {
     if (keycode <= QK_MODS_MAX) {
         unregister_code16(keycode);
     } else {
-        action_exec((keyevent_t){
-            .type = KEY_EVENT,
-            .key = (keypos_t){.row = SVAL_MATRIX_MAGIC, .col = SVAL_MATRIX_MAGIC},
-            .pressed = 0,
-            .time = (timer_read() | 1)
-        });
+        action_exec((keyevent_t){.type = KEY_EVENT, .key = (keypos_t){.row = SVAL_MATRIX_MAGIC, .col = SVAL_MATRIX_MAGIC}, .pressed = 0, .time = (timer_read() | 1)});
     }
 }
 
@@ -536,10 +501,10 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Response: [0xDF] [0x00] [ver0-3] [uid0-7] [flags]
             // Entry counts are now in sval.json (parsed from keyboard definition)
             uint8_t uid[] = SVAL_KEYBOARD_UID;
-            data[2] = SVAL_PROTOCOL_VERSION & 0xFF;
-            data[3] = (SVAL_PROTOCOL_VERSION >> 8) & 0xFF;
-            data[4] = (SVAL_PROTOCOL_VERSION >> 16) & 0xFF;
-            data[5] = (SVAL_PROTOCOL_VERSION >> 24) & 0xFF;
+            data[2]       = SVAL_PROTOCOL_VERSION & 0xFF;
+            data[3]       = (SVAL_PROTOCOL_VERSION >> 8) & 0xFF;
+            data[4]       = (SVAL_PROTOCOL_VERSION >> 16) & 0xFF;
+            data[5]       = (SVAL_PROTOCOL_VERSION >> 24) & 0xFF;
             memcpy(&data[6], uid, 8);
             data[14] = sval_get_feature_flags();
             break;
@@ -548,7 +513,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         case sval_cmd_tap_dance_get: {
             // Request:  [0xDF] [0x01] [index lo] [index hi]
             // Response: [0xDF] [0x01] [index lo] [index hi] [10 bytes entry]
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t               idx   = data[2] | (data[3] << 8);
             sval_tap_dance_entry_t entry = {0};
             sval_get_tap_dance(idx, &entry);
             memcpy(&data[4], &entry, sizeof(entry));
@@ -562,7 +527,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
                 data[1] = sval_cmd_error;
                 return false;
             }
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t               idx = data[2] | (data[3] << 8);
             sval_tap_dance_entry_t entry;
             memcpy(&entry, &data[4], sizeof(entry));
             data[2] = sval_set_tap_dance(idx, &entry) == 0 ? 0 : 1;
@@ -573,7 +538,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         case sval_cmd_combo_get: {
             // Request:  [0xDF] [0x03] [index lo] [index hi]
             // Response: [0xDF] [0x03] [index lo] [index hi] [12 bytes entry]
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t           idx   = data[2] | (data[3] << 8);
             sval_combo_entry_t entry = {0};
             sval_get_combo(idx, &entry);
             memcpy(&data[4], &entry, sizeof(entry));
@@ -587,7 +552,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
                 data[1] = sval_cmd_error;
                 return false;
             }
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t           idx = data[2] | (data[3] << 8);
             sval_combo_entry_t entry;
             memcpy(&entry, &data[4], sizeof(entry));
             data[2] = sval_set_combo(idx, &entry) == 0 ? 0 : 1;
@@ -598,7 +563,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         case sval_cmd_key_override_get: {
             // Request:  [0xDF] [0x05] [index lo] [index hi]
             // Response: [0xDF] [0x05] [index lo] [index hi] [12 bytes entry]
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t                  idx   = data[2] | (data[3] << 8);
             sval_key_override_entry_t entry = {0};
             sval_get_key_override(idx, &entry);
             memcpy(&data[4], &entry, sizeof(entry));
@@ -612,7 +577,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
                 data[1] = sval_cmd_error;
                 return false;
             }
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t                  idx = data[2] | (data[3] << 8);
             sval_key_override_entry_t entry;
             memcpy(&entry, &data[4], sizeof(entry));
             data[2] = sval_set_key_override(idx, &entry) == 0 ? 0 : 1;
@@ -623,7 +588,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         case sval_cmd_alt_repeat_key_get: {
             // Request:  [0xDF] [0x07] [index lo] [index hi]
             // Response: [0xDF] [0x07] [index lo] [index hi] [6 bytes entry]
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t                    idx   = data[2] | (data[3] << 8);
             sval_alt_repeat_key_entry_t entry = {0};
             sval_get_alt_repeat_key(idx, &entry);
             memcpy(&data[4], &entry, sizeof(entry));
@@ -637,7 +602,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
                 data[1] = sval_cmd_error;
                 return false;
             }
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t                    idx = data[2] | (data[3] << 8);
             sval_alt_repeat_key_entry_t entry;
             memcpy(&entry, &data[4], sizeof(entry));
             data[2] = sval_set_alt_repeat_key(idx, &entry) == 0 ? 0 : 1;
@@ -660,7 +625,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Request: [0xDF] [0x0A] [timeout_lo] [timeout_hi] [tap_toggle]
             // Response: [0xDF] [0x0A]
             sval_one_shot_t settings;
-            settings.timeout = data[2] | (data[3] << 8);
+            settings.timeout    = data[2] | (data[3] << 8);
             settings.tap_toggle = data[4];
             sval_set_one_shot(&settings);
             break;
@@ -684,18 +649,18 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Request: [0xDF] [0x0D]
             // Response: [0xDF] [0x0D] [size0] [size1] [size2] [size3]
             uint32_t size = sval_get_definition_size();
-            data[2] = size & 0xFF;
-            data[3] = (size >> 8) & 0xFF;
-            data[4] = (size >> 16) & 0xFF;
-            data[5] = (size >> 24) & 0xFF;
+            data[2]       = size & 0xFF;
+            data[3]       = (size >> 8) & 0xFF;
+            data[4]       = (size >> 16) & 0xFF;
+            data[5]       = (size >> 24) & 0xFF;
             break;
         }
 
         case sval_cmd_definition_chunk: {
             // Request: [0xDF] [0x0E] [offset_lo] [offset_hi] [size]
             // Response: [0xDF] [0x0E] [offset_lo] [offset_hi] [actual_size] [data...]
-            uint16_t offset = data[2] | (data[3] << 8);
-            uint8_t requested_size = data[4];
+            uint16_t offset         = data[2] | (data[3] << 8);
+            uint8_t  requested_size = data[4];
 
             // Clamp to maximum chunk size
             if (requested_size == 0 || requested_size > SVAL_DEFINITION_CHUNK_SIZE) {
@@ -710,7 +675,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             }
 
             uint8_t actual_size = sval_get_definition_chunk(offset, &data[5], requested_size);
-            data[4] = actual_size;
+            data[4]             = actual_size;
             break;
         }
 
@@ -726,7 +691,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Request: [0xDF] [0x11] [qsid_lo] [qsid_hi]
             // Response: [0xDF] [0x11] [status] [value bytes...]
             uint16_t qsid = data[2] | (data[3] << 8);
-            data[2] = sval_qmk_settings_get(qsid, &data[3], length - 3);
+            data[2]       = sval_qmk_settings_get(qsid, &data[3], length - 3);
             break;
         }
 
@@ -734,7 +699,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Request: [0xDF] [0x12] [qsid_lo] [qsid_hi] [value bytes...]
             // Response: [0xDF] [0x12] [status]
             uint16_t qsid = data[2] | (data[3] << 8);
-            data[2] = sval_qmk_settings_set(qsid, &data[4], length - 4);
+            data[2]       = sval_qmk_settings_set(qsid, &data[4], length - 4);
             break;
         }
 
@@ -748,7 +713,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         case sval_cmd_leader_get: {
             // Request:  [0xDF] [0x14] [index lo] [index hi]
             // Response: [0xDF] [0x14] [index lo] [index hi] [14 bytes entry]
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t            idx   = data[2] | (data[3] << 8);
             sval_leader_entry_t entry = {0};
             sval_get_leader(idx, &entry);
             memcpy(&data[4], &entry, sizeof(entry));
@@ -762,7 +727,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
                 data[1] = sval_cmd_error;
                 return false;
             }
-            uint16_t idx = data[2] | (data[3] << 8);
+            uint16_t            idx = data[2] | (data[3] << 8);
             sval_leader_entry_t entry;
             memcpy(&entry, &data[4], sizeof(entry));
             data[2] = sval_set_leader(idx, &entry) == 0 ? 0 : 1;
@@ -774,20 +739,17 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Request: [0xDF] [0x16]
             // Response: [0xDF] [0x16] [state0] [state1] [state2] [state3]
             uint32_t state = layer_state;
-            data[2] = state & 0xFF;
-            data[3] = (state >> 8) & 0xFF;
-            data[4] = (state >> 16) & 0xFF;
-            data[5] = (state >> 24) & 0xFF;
+            data[2]        = state & 0xFF;
+            data[3]        = (state >> 8) & 0xFF;
+            data[4]        = (state >> 16) & 0xFF;
+            data[5]        = (state >> 24) & 0xFF;
             break;
         }
 
         case sval_cmd_layer_state_set: {
             // Request: [0xDF] [0x17] [state0] [state1] [state2] [state3]
             // Response: [0xDF] [0x17]
-            uint32_t new_state = data[2] |
-                                (data[3] << 8) |
-                                (data[4] << 16) |
-                                (data[5] << 24);
+            uint32_t new_state = data[2] | (data[3] << 8) | (data[4] << 16) | (data[5] << 24);
             layer_state_set(new_state);
             break;
         }
@@ -808,9 +770,9 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Response: [0xDF] [0x21] [table] [found] [index lo] [index hi] [entry...]
             //   found = 0: none in use at or after start. Entries not returned are
             //   unused (all zero). A host reads a table by scanning from index + 1.
-            uint8_t  table = data[2];
-            uint16_t i     = data[3] | (data[4] << 8);
-            bool     found = false;
+            uint8_t  table                              = data[2];
+            uint16_t i                                  = data[3] | (data[4] << 8);
+            bool     found                              = false;
             uint8_t  entry[sizeof(sval_leader_entry_t)] = {0}; // the largest entry
             for (; !found; i++) {
                 memset(entry, 0, sizeof(entry));
@@ -850,10 +812,10 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Request:  [0xDF] [0x1E]
             // Response: [0xDF] [0x1E] [size u32 LE]
             uint32_t size = dynamic_keymap_macro_get_buffer_size();
-            data[2] = size & 0xFF;
-            data[3] = (size >> 8) & 0xFF;
-            data[4] = (size >> 16) & 0xFF;
-            data[5] = (size >> 24) & 0xFF;
+            data[2]       = size & 0xFF;
+            data[3]       = (size >> 8) & 0xFF;
+            data[4]       = (size >> 16) & 0xFF;
+            data[5]       = (size >> 24) & 0xFF;
             break;
         }
 
@@ -906,7 +868,8 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
                 return false;
             }
             uint16_t i = start;
-            while (i < count && sval_label_is_empty(labels + (i * SVAL_LABEL_SIZE))) i++;
+            while (i < count && sval_label_is_empty(labels + (i * SVAL_LABEL_SIZE)))
+                i++;
             data[3] = i < count;
             data[4] = i & 0xFF;
             data[5] = i >> 8;
@@ -919,22 +882,22 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // LABEL_SET (v2)
             // Request: [0xDF] [0x1C] [type] [index lo] [index hi] [SVAL_LABEL_SIZE-byte label]
             // Response: [0xDF] [0x1C] [status]
-            if (length < 5 + SVAL_LABEL_SIZE) {  // 2 header + 3 params + label bytes
+            if (length < 5 + SVAL_LABEL_SIZE) { // 2 header + 3 params + label bytes
                 data[1] = sval_cmd_error;
                 return false;
             }
 
-            uint8_t  label_type = data[2];
-            uint16_t index      = data[3] | (data[4] << 8);
-            const uint8_t *label = &data[5];
+            uint8_t        label_type = data[2];
+            uint16_t       index      = data[3] | (data[4] << 8);
+            const uint8_t *label      = &data[5];
 
             // Validate UTF-8 sequences
             // Accept: valid UTF-8 (including multi-byte), 0x00 as null terminator
             // Reject: C0/C1 overlong encodings, F5+ invalid lead bytes,
             //         invalid continuation bytes, control chars 0x01-0x1F (except tab)
             {
-                bool in_null_tail = false;
-                uint8_t i = 0;
+                bool    in_null_tail = false;
+                uint8_t i            = 0;
                 while (i < SVAL_LABEL_SIZE) {
                     uint8_t c = label[i];
                     if (c == 0x00) {
@@ -966,11 +929,11 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
                     // Multi-byte UTF-8 sequence
                     uint8_t expected_cont = 0;
                     if (c >= 0xC2 && c <= 0xDF) {
-                        expected_cont = 1;  // 2-byte sequence
+                        expected_cont = 1; // 2-byte sequence
                     } else if (c >= 0xE0 && c <= 0xEF) {
-                        expected_cont = 2;  // 3-byte sequence
+                        expected_cont = 2; // 3-byte sequence
                     } else if (c >= 0xF0 && c <= 0xF4) {
-                        expected_cont = 3;  // 4-byte sequence
+                        expected_cont = 3; // 4-byte sequence
                     } else {
                         // Invalid lead byte (0x80-0xC1, 0xF5+)
                         data[2] = 0x03;
@@ -1014,22 +977,22 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             }
 
             // Attempt to set label
-            int result = sval_set_label(label_type, index, (const char*)label, SVAL_LABEL_SIZE);
+            int result = sval_set_label(label_type, index, (const char *)label, SVAL_LABEL_SIZE);
 
             // Map result to status code
             if (result == 0) {
-                data[2] = 0x00;  // Success
+                data[2] = 0x00; // Success
             } else {
                 // Determine error type by checking parameters
                 uint16_t count;
                 uint16_t eeprom_offset;
-                char *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
+                char    *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
                 if (!labels) {
-                    data[2] = 0x01;  // Invalid type
+                    data[2] = 0x01; // Invalid type
                 } else if (index >= count) {
-                    data[2] = 0x02;  // Index out of range
+                    data[2] = 0x02; // Index out of range
                 } else {
-                    data[2] = 0x01;  // Generic error
+                    data[2] = 0x01; // Generic error
                 }
             }
             break;
@@ -1052,18 +1015,18 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
 
             // Map result to status code
             if (result == 0) {
-                data[2] = 0x00;  // Success
+                data[2] = 0x00; // Success
             } else {
                 // Determine error type by checking parameters
                 uint16_t count;
                 uint16_t eeprom_offset;
-                char *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
+                char    *labels = sval_get_label_array(label_type, &count, &eeprom_offset);
                 if (!labels) {
-                    data[2] = 0x01;  // Invalid type
+                    data[2] = 0x01; // Invalid type
                 } else if (index >= count) {
-                    data[2] = 0x02;  // Index out of range
+                    data[2] = 0x02; // Index out of range
                 } else {
-                    data[2] = 0x01;  // Generic error
+                    data[2] = 0x01; // Generic error
                 }
             }
             break;
@@ -1085,14 +1048,14 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
     // Every host packet reaches this hook, including the ones VIA handles below.
     sval_host_packet_kb();
     switch (data[0]) {
-        case WRAPPER_PREFIX:  // 0xDD - Client ID wrapper
+        case WRAPPER_PREFIX: // 0xDD - Client ID wrapper
             return client_wrapper_receive(data, length);
 
-        case SVAL_PREFIX:  // 0xDF - Legacy Sval - REJECTED (wrapper required)
+        case SVAL_PREFIX: // 0xDF - Legacy Sval - REJECTED (wrapper required)
             return true;  // "Handled" by ignoring
 
         default:
-            return false;  // Let VIA handle
+            return false; // Let VIA handle
     }
 }
 
@@ -1118,7 +1081,6 @@ uint16_t keymap_key_to_keycode(uint8_t layer, keypos_t key) {
     return dynamic_keymap_get_keycode(layer, key.row, key.col);
 }
 
-
 // Override dynamic_keymap_macro_send to support extended keycodes and binary delay
 void dynamic_keymap_macro_send(uint8_t id) {
     if (id >= dynamic_keymap_macro_get_count()) {
@@ -1127,7 +1089,7 @@ void dynamic_keymap_macro_send(uint8_t id) {
 
     // Check the last byte of the buffer for validity
     uint32_t macro_size = dynamic_keymap_macro_get_buffer_size();
-    uint8_t last_byte;
+    uint8_t  last_byte;
     dynamic_keymap_macro_get_buffer(macro_size - 1, 1, &last_byte);
     if (last_byte != 0) {
         return;
@@ -1154,40 +1116,38 @@ void dynamic_keymap_macro_send(uint8_t id) {
             break;
         }
         memset(data, 0, sizeof(data));
-        dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[0]);
+        dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t *)&data[0]);
         if (data[0] == 0) {
             break;
         }
         if (data[0] == SS_QMK_PREFIX) {
             if (offset >= macro_size) break;
-            dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[1]);
-            if (data[1] == 0)
-                break;
+            dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t *)&data[1]);
+            if (data[1] == 0) break;
             if (data[1] == SS_TAP_CODE || data[1] == SS_DOWN_CODE || data[1] == SS_UP_CODE) {
                 if (offset >= macro_size) break;
-                dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[2]);
-                if (data[2] != 0)
-                    send_string(data);
+                dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t *)&data[2]);
+                if (data[2] != 0) send_string(data);
             } else if (data[1] == VIAL_MACRO_EXT_TAP || data[1] == VIAL_MACRO_EXT_DOWN || data[1] == VIAL_MACRO_EXT_UP) {
                 if (offset >= macro_size) break;
-                dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[2]);
+                dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t *)&data[2]);
                 if (data[2] != 0) {
                     if (offset >= macro_size) break;
-                    dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t*)&data[3]);
+                    dynamic_keymap_macro_get_buffer(offset++, 1, (uint8_t *)&data[3]);
                     if (data[3] != 0) {
                         uint16_t kc;
                         memcpy(&kc, &data[2], sizeof(kc));
                         kc = decode_keycode(kc);
                         switch (data[1]) {
-                        case VIAL_MACRO_EXT_TAP:
-                            sval_keycode_tap(kc);
-                            break;
-                        case VIAL_MACRO_EXT_DOWN:
-                            sval_keycode_down(kc);
-                            break;
-                        case VIAL_MACRO_EXT_UP:
-                            sval_keycode_up(kc);
-                            break;
+                            case VIAL_MACRO_EXT_TAP:
+                                sval_keycode_tap(kc);
+                                break;
+                            case VIAL_MACRO_EXT_DOWN:
+                                sval_keycode_down(kc);
+                                break;
+                            case VIAL_MACRO_EXT_UP:
+                                sval_keycode_up(kc);
+                                break;
                         }
                     }
                 }
@@ -1197,8 +1157,7 @@ void dynamic_keymap_macro_send(uint8_t id) {
                 dynamic_keymap_macro_get_buffer(offset++, 1, &d0);
                 if (offset >= macro_size) break;
                 dynamic_keymap_macro_get_buffer(offset++, 1, &d1);
-                if (d0 == 0 || d1 == 0)
-                    break;
+                if (d0 == 0 || d1 == 0) break;
                 int ms = (d0 - 1) + (d1 - 1) * 255;
                 wait_ms(ms);
             }

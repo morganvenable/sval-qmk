@@ -347,7 +347,7 @@ uint8_t layer_switch_get_layer(keypos_t key) {
     action_t action;
     action.code = ACTION_TRANSPARENT;
 
-#ifdef SVAL_ENABLE
+#    ifdef SVAL_ENABLE
     // The host owns a separate, temporary contribution. Never feed it into
     // layer_state: MO/TG/TO and tri-layer hooks must operate only on manual state.
     uint8_t app_layer = sval_context_layer();
@@ -359,7 +359,7 @@ uint8_t layer_switch_get_layer(keypos_t key) {
         if (action_for_key(app_layer, key).code != ACTION_TRANSPARENT) return app_layer;
         // The normal lookup below supplies the existing default/base fallback.
     }
-#endif
+#    endif
     layer_state_t layers = layer_state | default_layer_state;
     /* check top layer first */
     for (int8_t i = MAX_LAYER - 1; i >= 0; i--) {

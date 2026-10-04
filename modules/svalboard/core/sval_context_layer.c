@@ -11,20 +11,21 @@
 #endif
 
 #define CONTEXT_LAYER_LEASE_MS 5000
-static uint8_t app_layer = UINT8_MAX;
+static uint8_t  app_layer = UINT8_MAX;
 static uint16_t app_transaction;
 static uint32_t app_renewed_at;
 
 uint8_t sval_context_layer(void) {
     if (app_layer != UINT8_MAX && timer_elapsed32(app_renewed_at) >= CONTEXT_LAYER_LEASE_MS) {
-        app_layer = UINT8_MAX;
+        app_layer       = UINT8_MAX;
         app_transaction = 0;
     }
     return app_layer;
 }
 
 static void write_u32(uint8_t *data, uint32_t value) {
-    for (uint8_t i = 0; i < 4; ++i) data[i] = value >> (8 * i);
+    for (uint8_t i = 0; i < 4; ++i)
+        data[i] = value >> (8 * i);
 }
 
 bool sval_context_layer_command(uint8_t *data, uint8_t length) {
@@ -33,16 +34,16 @@ bool sval_context_layer_command(uint8_t *data, uint8_t length) {
     sval_context_layer();
     if (command == sval_cmd_context_layer_status) {
         if (length < 22) return false;
-        uint32_t age = timer_elapsed32(app_renewed_at);
+        uint32_t age       = timer_elapsed32(app_renewed_at);
         uint16_t remaining = app_layer != UINT8_MAX && age < CONTEXT_LAYER_LEASE_MS ? CONTEXT_LAYER_LEASE_MS - age : 0;
-        data[2] = 0;
-        data[3] = 1;
-        data[4] = DYNAMIC_KEYMAP_LAYER_COUNT;
-        data[5] = app_layer;
-        data[6] = app_transaction;
-        data[7] = app_transaction >> 8;
-        data[8] = remaining;
-        data[9] = remaining >> 8;
+        data[2]            = 0;
+        data[3]            = 1;
+        data[4]            = DYNAMIC_KEYMAP_LAYER_COUNT;
+        data[5]            = app_layer;
+        data[6]            = app_transaction;
+        data[7]            = app_transaction >> 8;
+        data[8]            = remaining;
+        data[9]            = remaining >> 8;
         write_u32(&data[10], layer_state);
         write_u32(&data[14], default_layer_state);
         uint32_t effective = layer_state | default_layer_state;
@@ -51,24 +52,24 @@ bool sval_context_layer_command(uint8_t *data, uint8_t length) {
         return true;
     }
     if (command == sval_cmd_context_layer_clear) {
-        app_layer = UINT8_MAX;
+        app_layer       = UINT8_MAX;
         app_transaction = 0;
-        data[2] = 0;
+        data[2]         = 0;
         return true;
     }
     if (length < 4) return false;
     uint16_t transaction = data[2] | ((uint16_t)data[3] << 8);
-    data[2] = 1;
+    data[2]              = 1;
     if (!transaction) return true;
     if (command == sval_cmd_context_layer_set) {
         if (length < 5) return false;
         if (data[4] >= DYNAMIC_KEYMAP_LAYER_COUNT || data[4] >= MAX_LAYER) return true;
-        app_layer = data[4];
+        app_layer       = data[4];
         app_transaction = transaction;
     } else if (command != sval_cmd_context_layer_renew || app_layer == UINT8_MAX || transaction != app_transaction) {
         return true;
     }
     app_renewed_at = timer_read32();
-    data[2] = 0;
+    data[2]        = 0;
     return true;
 }

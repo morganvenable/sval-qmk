@@ -57,14 +57,13 @@ static void init_keys(void) { for(unsigned i=0;i<32;i++) for(unsigned k=0;k<2;k+
 
 class ContextLayerRegressions(unittest.TestCase):
     def test_layer_ownership_priority_and_cached_release(self):
-        context = '\n'.join(line for line in (ROOT / 'modules/svalboard/core/sval_context_layer.c').read_text().splitlines()
-                            if not line.startswith('#include'))
-        functions = ''.join(layer_function(name) for name in [
-            'layer_switch_get_layer', 'update_source_layers_cache_impl',
-            'read_source_layers_cache_impl', 'update_source_layers_cache',
-            'read_source_layers_cache', 'store_or_get_action', 'layer_on',
-            'layer_off', 'layer_move', 'layer_clear'])
-        run_c(PRELUDE + MOCKS + context + functions + HELPERS + r'''
+        context = '\n'.join(line for line in (ROOT / 'modules/svalboard/core/sval_context_layer.c').read_text().splitlines() if not line.startswith('#include'))
+        functions = ''.join(
+            layer_function(name)
+            for name in ['layer_switch_get_layer', 'update_source_layers_cache_impl', 'read_source_layers_cache_impl', 'update_source_layers_cache', 'read_source_layers_cache', 'store_or_get_action', 'layer_on', 'layer_off', 'layer_move', 'layer_clear']
+        )
+        run_c(
+            PRELUDE + MOCKS + context + functions + HELPERS + r'''
 int main(void) {
  keypos_t k={0,0}; init_keys(); keys[9][0]=9; keys[2][0]=2; keys[10][0]=10;
  assert(layer_switch_get_layer(k)==0);
@@ -98,4 +97,5 @@ int main(void) {
  for(unsigned n=0;n<5;n++) {packet[1]=0x26;packet[2]=1;packet[3]=0;assert(!sval_context_layer_command(packet,n));}
  return 0;
 }
-''')
+'''
+        )
