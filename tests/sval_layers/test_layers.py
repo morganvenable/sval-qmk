@@ -29,8 +29,7 @@ def harness():
         start = source.index('        case sval_cmd_' + command + ':')
         end = source.index('\n        case ', start + 1)
         cases += source[start:end]
-    wrapper = '\n'.join(line for line in (CORE / 'client_wrapper.c').read_text().splitlines()
-                        if not line.startswith('#include'))
+    wrapper = '\n'.join(line for line in (CORE / 'client_wrapper.c').read_text().splitlines() if not line.startswith('#include'))
     return r'''
 #include <assert.h>
 #include <stdint.h>
@@ -43,7 +42,9 @@ static uint32_t layer_state, default_layer_state;
 static uint8_t sent[32];
 static uint32_t timer_read32(void) { return 100; }
 static void host_raw_hid_send(uint8_t *p,uint8_t n) { assert(n==32); memcpy(sent,p,n); }
-''' + declarations + '\n' + version + '\n' + function(source, 'sval_get_feature_flags') + '''
+''' + declarations + '\n' + version + '\n' + function(
+        source, 'sval_get_feature_flags'
+    ) + '''
 bool sval_handle_command(uint8_t *data,uint8_t length) {
  switch(data[1]) {
 ''' + cases + '''
@@ -103,6 +104,5 @@ class LayerReportingTests(unittest.TestCase):
             source.write_text(harness())
             for flags in ([], ['-DCAPS_WORD_ENABLE', '-DLAYER_LOCK_ENABLE', '-DONESHOT_ENABLE', '-DLEADER_ENABLE']):
                 with self.subTest(flags=flags):
-                    subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsanitize=undefined',
-                                    '-I', str(CORE), *flags, str(source), '-o', str(path / 'layers')], check=True)
+                    subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsanitize=undefined', '-I', str(CORE), *flags, str(source), '-o', str(path / 'layers')], check=True)
                     subprocess.run([str(path / 'layers')], check=True)

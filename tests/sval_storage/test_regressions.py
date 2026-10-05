@@ -27,9 +27,7 @@ def run_c(source):
     with tempfile.TemporaryDirectory() as directory:
         path = pathlib.Path(directory)
         (path / 'test.c').write_text(source)
-        subprocess.run(['cc', '-std=gnu11', '-Wall', '-Wextra', '-Werror',
-                        '-Wno-unused-parameter', '-fsanitize=undefined',
-                        str(path / 'test.c'), '-o', str(path / 'test')], check=True)
+        subprocess.run(['cc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-fsanitize=undefined', str(path / 'test.c'), '-o', str(path / 'test')], check=True)
         subprocess.run([str(path / 'test')], check=True)
 
 
@@ -50,7 +48,8 @@ class StorageRegressions(unittest.TestCase):
         start = source.index('        case sval_cmd_macro_buffer_get:')
         end = source.index('        case sval_cmd_label_get:', start)
         handler = 'bool handle(uint8_t *data, uint8_t length) { switch(data[1]) {\n' + source[start:end] + '\n} return true; }'
-        run_c(PRELUDE + '''
+        run_c(
+            PRELUDE + '''
 #define DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE 70000u
 #define DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR 20000u
 #define sval_cmd_macro_buffer_get 31
@@ -88,7 +87,8 @@ int main(void) {
  assert(b[0]==7 && b[65536]==7 && b[69999]==7);
  return 0;
 }
-''')
+'''
+        )
 
     def test_migration_retry_and_commit(self):
         migration = function('keyboards/svalboard/migrate_vial.c', 'sval_migrate_vial')
@@ -133,7 +133,8 @@ struct layer_hsv { uint8_t hue,sat,val; };
         import re
         for name in ['sval_tap_dance_entry_t', 'sval_combo_entry_t', 'sval_key_override_entry_t', 'sval_alt_repeat_key_entry_t']:
             declarations += re.search(r'typedef struct[^{}]*\{[^}]*\}\s*' + name + ';', header).group() + '\n'
-        run_c(PRELUDE + flags + '\n' + declarations + '''
+        run_c(
+            PRELUDE + flags + '\n' + declarations + '''
 struct { uint8_t flags; } current;
 static bool save_ok=true, alloc_ok=true, match=true;
 static unsigned saved_flags, copies, stamps, allocations;
@@ -198,7 +199,8 @@ int main(void) {
  identity_mark_legacy_store_checked(); assert(current.flags==IDENTITY_FLAG_LEGACY_STORE_PENDING);
  return 0;
 }
-''')
+'''
+        )
 
 
 if __name__ == '__main__':

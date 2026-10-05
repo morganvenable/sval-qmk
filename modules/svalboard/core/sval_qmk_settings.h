@@ -25,4 +25,4 @@ void sval_qmk_settings_reset(void);
 uint16_t sval_get_tapping_term(void);
 uint16_t sval_get_combo_term(void);
 uint16_t sval_get_leader_timeout(void);
-bool sval_get_leader_per_key_timing(void);
+bool     sval_get_leader_per_key_timing(void);

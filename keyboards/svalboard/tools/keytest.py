@@ -13,8 +13,7 @@ import time
 
 CHANNEL = 0x54
 INFO, BEGIN, ENQUEUE, RUN, READ, CLEAR, ABORT, REBOOT, STATE, SELECT_LAYER, ACK = range(11)
-ERRORS = {1: "invalid request/transition", 2: "capture inactive", 3: "busy/physical key held",
-          4: "event queue full", 5: "capture record missing", 6: "session aborted"}
+ERRORS = {1: "invalid request/transition", 2: "capture inactive", 3: "busy/physical key held", 4: "event queue full", 5: "capture record missing", 6: "session aborted"}
 
 
 def devices():
@@ -89,10 +88,20 @@ class Device:
         if r[0] != 1:
             raise RuntimeError("Unsupported keytest protocol; build with SVAL_KEYTEST=yes")
         self._instrumented = True
-        return dict(version=r[0], active=bool(r[1] & 1), running=bool(r[1] & 2),
-                    aborted=bool(r[1] & 4), rows=r[2], cols=r[3], capacity=r[4],
-                    queued=r[6], layers=r[19], first=struct.unpack_from("<I", r, 7)[0],
-                    next=struct.unpack_from("<I", r, 11)[0], lost=struct.unpack_from("<I", r, 15)[0])
+        return dict(
+            version=r[0],
+            active=bool(r[1] & 1),
+            running=bool(r[1] & 2),
+            aborted=bool(r[1] & 4),
+            rows=r[2],
+            cols=r[3],
+            capacity=r[4],
+            queued=r[6],
+            layers=r[19],
+            first=struct.unpack_from("<I", r, 7)[0],
+            next=struct.unpack_from("<I", r, 11)[0],
+            lost=struct.unpack_from("<I", r, 15)[0]
+        )
 
     def begin(self):
         self.info()
@@ -183,8 +192,7 @@ def decode_record(seq, kind, timestamp, data):
     r = dict(seq=seq, kind=kind, time_ms=timestamp, bytes=list(data))
     if kind in (1, 2):
         r["mods"] = data[0]
-        r["keys"] = sorted(set(k for k in data[1:] if k)) if kind == 1 else [
-            k for k in range(8 * (len(data) - 1)) if data[1 + k // 8] & (1 << (k % 8))]
+        r["keys"] = sorted(set(k for k in data[1:] if k)) if kind == 1 else [k for k in range(8 * (len(data) - 1)) if data[1 + k // 8] & (1 << (k % 8))]
     elif kind == 3:
         r["buttons"] = data[0]
         r.update(zip(("x", "y", "h", "v"), struct.unpack_from("<hhhh", data, 1)))
@@ -206,8 +214,7 @@ def expect_tap(records, usage, mods=0):
 
 def exercise(device, row, col, usage, mods=0, hold_ms=30, settle_ms=300):
     device.command(CLEAR)
-    device.events([dict(row=row, col=col, pressed=True),
-                   dict(row=row, col=col, pressed=False, delay_ms=hold_ms)])
+    device.events([dict(row=row, col=col, pressed=True), dict(row=row, col=col, pressed=False, delay_ms=hold_ms)])
     records = device.collect(settle_ms)
     expect_tap(records, usage, mods)
     return records

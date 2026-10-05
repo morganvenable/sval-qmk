@@ -147,8 +147,7 @@ class InstrumentationTests(unittest.TestCase):
             for name in ("host.h", "via.h", "dynamic_keymap.h"):
                 (p / name).write_text('#include "quantum.h"\n')
             (p / "test.c").write_text(f'#include "{ROOT}/keyboards/svalboard/keytest.c"\n' + HARNESS)
-            subprocess.run(["cc", "-std=gnu11", "-Wall", "-Wextra", "-Werror", "-fsanitize=undefined",
-                            "-I", str(p), str(p / "test.c"), "-o", str(p / "test")], check=True)
+            subprocess.run(["cc", "-std=gnu11", "-Wall", "-Wextra", "-Werror", "-fsanitize=undefined", "-I", str(p), str(p / "test.c"), "-o", str(p / "test")], check=True)
             subprocess.run([str(p / "test")], check=True)
 
     def test_decode_boot_and_nkro_and_assert_release(self):
@@ -166,30 +165,44 @@ class InstrumentationTests(unittest.TestCase):
     def test_binding_roundtrip_and_rollback(self):
         class FakeDevice:
             serial, handle = "test", True
+
             def __init__(self, lose_on_reboot=False):
                 self.value, self.active, self.reboots = 5, False, 0
                 self.lose_on_reboot = lose_on_reboot
-            def info(self): return dict(rows=10, cols=6, layers=16, active=self.active)
+
+            def info(self):
+                return dict(rows=10, cols=6, layers=16, active=self.active)
+
             def keymap(self, l, r, c, value=None):
-                if value is not None: self.value = value
+                if value is not None:
+                    self.value = value
                 return self.value
-            def begin(self): self.active = True
-            def command(self, op, args=b""): pass
-            def events(self, events): pass
+
+            def begin(self):
+                self.active = True
+
+            def command(self, op, args=b""):
+                pass
+
+            def events(self, events):
+                pass
+
             def collect(self, settle_ms):
-                return [keytest.decode_record(0, 1, 0, bytes([0, self.value, 0, 0, 0, 0, 0])),
-                        keytest.decode_record(1, 1, 30, bytes(7))]
+                return [keytest.decode_record(0, 1, 0, bytes([0, self.value, 0, 0, 0, 0, 0])), keytest.decode_record(1, 1, 30, bytes(7))]
+
             def reboot(self):
                 self.active = False
                 self.reboots += 1
-                if self.lose_on_reboot and self.reboots == 1: self.value = 6
+                if self.lose_on_reboot and self.reboots == 1:
+                    self.value = 6
+
         with tempfile.TemporaryDirectory() as directory:
-            args = SimpleNamespace(row=0, col=0, layer=0, keycode=4, backup=str(Path(directory)/"original.json"))
+            args = SimpleNamespace(row=0, col=0, layer=0, keycode=4, backup=str(Path(directory) / "original.json"))
             device = FakeDevice()
             self.assertTrue(keytest.verify_binding(device, args)["restored"])
             self.assertEqual((device.value, device.reboots), (5, 2))
             # A lost setting on reboot is a test failure, never just readback success.
-            args.backup = str(Path(directory)/"failure.json")
+            args.backup = str(Path(directory) / "failure.json")
             device = FakeDevice(True)
             with self.assertRaisesRegex(AssertionError, "survive reboot"):
                 keytest.verify_binding(device, args)
@@ -199,12 +212,14 @@ class InstrumentationTests(unittest.TestCase):
     def test_sval_commands_use_required_client_wrapper(self):
         device = object.__new__(keytest.Device)
         requests = []
+
         def exchange(request):
             requests.append(bytes(request))
             packet = bytes(request).ljust(32, b"\0")
             if packet[1:5] == bytes(4):
                 return packet[:25] + bytes([42, 0, 0, 0, 120, 0, 0])
             return packet
+
         device._exchange = exchange
         reply = device.exchange([0xDF, 4, 0])
         self.assertEqual(reply[:3], bytes([0xDF, 4, 0]))
@@ -217,13 +232,15 @@ class InstrumentationTests(unittest.TestCase):
         payload = bytes([2, 16] + [0] * 28 + [128])
         acknowledgements = []
         device.info = lambda: dict(first=0, next=1, lost=0)
+
         def command(op, args):
             if op == keytest.ACK:
                 acknowledgements.append(struct.unpack("<I", args)[0])
                 return b""
             seq, offset = struct.unpack("<IB", args)
             self.assertEqual(seq, 0)
-            return bytes([2, len(payload)]) + struct.pack("<IIB", 123, seq, offset) + payload[offset:offset+11].ljust(11, b"\0")
+            return bytes([2, len(payload)]) + struct.pack("<IIB", 123, seq, offset) + payload[offset:offset + 11].ljust(11, b"\0")
+
         device.command = command
         records, cursor = device.records()
         self.assertEqual((cursor, acknowledgements), (1, [1]))
@@ -234,10 +251,12 @@ class InstrumentationTests(unittest.TestCase):
     def test_older_firmware_is_only_probed_with_read(self):
         device = object.__new__(keytest.Device)
         requests = []
+
         def exchange(request):
             requests.append(bytes(request))
             # Older board handler echoes with zero protocol version.
             return bytes(request).ljust(32, b"\0")
+
         device.exchange = exchange
         with self.assertRaisesRegex(RuntimeError, "Unsupported keytest"):
             device.command(keytest.REBOOT)

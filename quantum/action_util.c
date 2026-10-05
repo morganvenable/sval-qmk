@@ -49,11 +49,11 @@ static uint8_t oneshot_mods        = 0;
 static uint8_t oneshot_locked_mods = 0;
 
 // Runtime oneshot timeout - weak function for Sval override
-#if defined(ONESHOT_TIMEOUT)
-#    define ONESHOT_TIMEOUT_DEFAULT ONESHOT_TIMEOUT
-#else
-#    define ONESHOT_TIMEOUT_DEFAULT 0
-#endif
+#    if defined(ONESHOT_TIMEOUT)
+#        define ONESHOT_TIMEOUT_DEFAULT ONESHOT_TIMEOUT
+#    else
+#        define ONESHOT_TIMEOUT_DEFAULT 0
+#    endif
 __attribute__((weak)) uint16_t get_oneshot_timeout(void) {
     return ONESHOT_TIMEOUT_DEFAULT;
 }

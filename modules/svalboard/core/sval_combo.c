@@ -6,12 +6,12 @@
 
 #ifdef COMBO_ENABLE
 
-#include "process_combo.h"
+#    include "process_combo.h"
 
 // Bit mask for enabled flag in custom_combo_term
-#define SVAL_COMBO_ENABLED_BIT 0x8000
+#    define SVAL_COMBO_ENABLED_BIT 0x8000
 // Mask for timing value (bits 0-14)
-#define SVAL_COMBO_TIMING_MASK 0x7FFF
+#    define SVAL_COMBO_TIMING_MASK 0x7FFF
 
 // Storage for combo key sequences (4 keys + COMBO_END terminator)
 static uint16_t sval_combo_keys[SVAL_COMBO_ENTRIES][5];
@@ -34,7 +34,7 @@ void sval_reload_combo(void) {
 
     // Load from EEPROM
     for (size_t i = 0; i < SVAL_COMBO_ENTRIES; ++i) {
-        uint16_t *seq = sval_combo_keys[i];
+        uint16_t *seq       = sval_combo_keys[i];
         sval_combos[i].keys = seq;
 
         sval_combo_entry_t entry;
@@ -45,14 +45,14 @@ void sval_reload_combo(void) {
             if (sval_combo_enabled[i]) {
                 memcpy(seq, entry.input, sizeof(entry.input));
                 // Ensure null termination
-                seq[4] = COMBO_END;
+                seq[4]                 = COMBO_END;
                 sval_combos[i].keycode = entry.output;
 
                 // Extract custom timing (bits 0-14), 0 means use global default
                 sval_combo_terms[i] = entry.custom_combo_term & SVAL_COMBO_TIMING_MASK;
             } else {
                 // Disabled combo: empty key sequence
-                seq[0] = COMBO_END;
+                seq[0]                 = COMBO_END;
                 sval_combos[i].keycode = KC_NO;
             }
         }
@@ -64,7 +64,7 @@ uint16_t combo_count(void) {
     return SVAL_COMBO_ENTRIES;
 }
 
-combo_t* combo_get(uint16_t combo_idx) {
+combo_t *combo_get(uint16_t combo_idx) {
     if (combo_idx >= SVAL_COMBO_ENTRIES) {
         return NULL;
     }
@@ -74,7 +74,7 @@ combo_t* combo_get(uint16_t combo_idx) {
 // User hook: override this for custom per-combo timing logic
 // Return 0 to use Sval's setting, or a positive value to override
 __attribute__((weak)) uint16_t get_combo_term_sval(uint16_t combo_idx, combo_t *combo) {
-    return 0;  // Default: use Sval's setting
+    return 0; // Default: use Sval's setting
 }
 
 // Sval owns this function - user hook is checked FIRST

@@ -13,6 +13,7 @@ import keytest_features as features
 
 class FakeDevice:
     serial = "test-board"
+
     def __init__(self, serial=None):
         self.active = False
         self.reboots = 0
@@ -21,20 +22,32 @@ class FakeDevice:
         self.tables = {1: bytes(range(10)), 3: bytes(range(12))}
         self.settings = {2: b"\x32\0", 7: b"\xde\0"}
         self.macro = b"Hi!"
-    def info(self): return {"active": self.active}
-    def begin(self): self.active = True
-    def reboot(self): self.active = False; self.reboots += 1
-    def close(self): self.closed = True
+
+    def info(self):
+        return {"active": self.active}
+
+    def begin(self):
+        self.active = True
+
+    def reboot(self):
+        self.active = False
+        self.reboots += 1
+
+    def close(self):
+        self.closed = True
+
     def keymap(self, layer, row, col, value=None):
         p = (layer, row, col)
-        if value is not None: self.keys[p] = value
+        if value is not None:
+            self.keys[p] = value
         return self.keys[p]
+
     def exchange(self, request):
         r = bytearray(27)
         r[:2] = request[:2]
         op = request[1]
         if op in (1, 3):
-            r[4:4+len(self.tables[op])] = self.tables[op]
+            r[4:4 + len(self.tables[op])] = self.tables[op]
         elif op in (2, 4):
             self.tables[op - 1] = bytes(request[4:])
         elif op == 0x11:
@@ -78,9 +91,11 @@ class FeatureRecoveryTests(unittest.TestCase):
     def test_setup_exception_still_restores_and_records_cleanup(self):
         device = FakeDevice()
         original = features.snapshot(device)
+
         def fail_setup(dev, output):
             dev.keymap(0, 0, 0, 99)
             raise RuntimeError("simulated setup failure")
+
         with tempfile.TemporaryDirectory() as directory:
             backup = Path(directory) / "backup.json"
             output = Path(directory) / "result.json"

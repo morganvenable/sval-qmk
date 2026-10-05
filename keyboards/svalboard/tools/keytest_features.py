@@ -57,11 +57,14 @@ def macro_set(device, value):
 
 
 def snapshot(device):
-    return dict(serial=device.serial,
-                keys=[[*p, device.keymap(*p)] for p in POSITIONS],
-                tables=[dict(get=g, set=s, index=i, value=list(table_get(device, g, i, n))) for g, s, i, n in TABLES],
-                settings={str(q): list(setting_get(device, q)) for q in (2, 7)},
-                macro_prefix=list(macro_get(device)))
+    return dict(
+        serial=device.serial,
+        keys=[[*p, device.keymap(*p)] for p in POSITIONS],
+        tables=[dict(get=g, set=s, index=i, value=list(table_get(device, g, i, n))) for g, s, i, n in TABLES],
+        settings={str(q): list(setting_get(device, q))
+                  for q in (2, 7)},
+        macro_prefix=list(macro_get(device))
+    )
 
 
 def restore(device, saved):
@@ -128,9 +131,7 @@ def characterize(device, output):
     device.keymap(0, 0, 0, 0x5221)
     device.keymap(0, 0, 1, 104)
     device.keymap(1, 0, 1, 105)
-    sequence("momentary_layer", "F14 from layer 1, then release",
-             [event(0, True), event(1, True, 20), event(1, False, 30), event(0, False, 20)],
-             lambda r: expect_tap(r, 105))
+    sequence("momentary_layer", "F14 from layer 1, then release", [event(0, True), event(1, True, 20), event(1, False, 30), event(0, False, 20)], lambda r: expect_tap(r, 105))
     assert device.state()["layers"] == 0, "Momentary layer remained enabled"
 
     # Existing tap/hold engine controls before testing a changed runtime term.
@@ -157,12 +158,9 @@ def characterize(device, output):
     assert table_get(device, 1, 255, 10) == td, "Tap-dance readback failed"
     device.keymap(0, 0, 0, 0x57FF)
     sequence("tap_dance_single", "F14 single tap", tap(), lambda r: expect_tap(r, 105))
-    sequence("tap_dance_double", "F16 double tap",
-             [event(0, True), event(0, False, 30), event(0, True, 40), event(0, False, 30)],
-             lambda r: expect_tap(r, 107))
+    sequence("tap_dance_double", "F16 double tap", [event(0, True), event(0, False, 30), event(0, True, 40), event(0, False, 30)], lambda r: expect_tap(r, 107))
     sequence("tap_dance_hold", "F15 long hold", tap(800), lambda r: expect_tap(r, 106))
-    sequence("tap_dance_custom_term_500", "F14 tap at 300 ms, below the saved 500 ms term",
-             tap(300), lambda r: expect_tap(r, 105))
+    sequence("tap_dance_custom_term_500", "F14 tap at 300 ms, below the saved 500 ms term", tap(300), lambda r: expect_tap(r, 105))
 
     device.keymap(0, 0, 0, 104)
     device.keymap(0, 0, 1, 105)
