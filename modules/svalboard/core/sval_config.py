@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2025 Ira Cooper <ira@wakeful.net>
 # SPDX-License-Identifier: GPL-2.0-or-later
-
 """
 Generate sval_config.h from sval.json.
 

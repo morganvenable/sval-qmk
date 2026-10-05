@@ -17,8 +17,8 @@ uint8_t sval_get_definition_chunk(uint16_t offset, uint8_t *buffer, uint8_t max_
         return 0;
     }
 
-    uint16_t remaining = SVAL_DEFINITION_SIZE - offset;
-    uint8_t chunk_size = remaining < max_size ? remaining : max_size;
+    uint16_t remaining  = SVAL_DEFINITION_SIZE - offset;
+    uint8_t  chunk_size = remaining < max_size ? remaining : max_size;
 
     // Copy from PROGMEM
     memcpy_P(buffer, &sval_definition_data[offset], chunk_size);

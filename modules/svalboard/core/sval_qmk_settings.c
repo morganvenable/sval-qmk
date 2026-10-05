@@ -7,11 +7,11 @@
 #include <string.h>
 
 #ifdef MOUSEKEY_ENABLE
-#include "mousekey.h"
+#    include "mousekey.h"
 #endif
 
 #ifdef AUTO_SHIFT_ENABLE
-#include "process_auto_shift.h"
+#    include "process_auto_shift.h"
 #endif
 
 // Settings storage structure - matches Vial's qmk_settings_t for compatibility
@@ -40,7 +40,7 @@ typedef struct __attribute__((packed)) {
     uint16_t quick_tap_term;
     uint16_t flow_tap_term;
     uint16_t leader_timeout;
-    uint8_t  leader_options;  // bit 0 = per-key timing
+    uint8_t  leader_options; // bit 0 = per-key timing
     uint8_t  unused2;
 } sval_qmk_settings_t;
 _Static_assert(sizeof(sval_qmk_settings_t) == 44, "sval_qmk_settings_t must be 44 bytes");
@@ -55,35 +55,35 @@ static void sval_qmk_settings_apply(void);
 
 // QSID definitions - must match GUI's qmk_settings.json
 enum sval_qsid {
-    QSID_GRAVE_ESC_OVERRIDE = 1,
-    QSID_COMBO_TERM = 2,
-    QSID_AUTO_SHIFT = 3,
-    QSID_AUTO_SHIFT_TIMEOUT = 4,
-    QSID_OSK_TAP_TOGGLE = 5,
-    QSID_OSK_TIMEOUT = 6,
-    QSID_TAPPING_TERM = 7,
-    QSID_TAPPING_V1 = 8,  // Legacy tapping flags
-    QSID_MOUSEKEY_DELAY = 9,
-    QSID_MOUSEKEY_INTERVAL = 10,
-    QSID_MOUSEKEY_MOVE_DELTA = 11,
-    QSID_MOUSEKEY_MAX_SPEED = 12,
-    QSID_MOUSEKEY_TIME_TO_MAX = 13,
-    QSID_MOUSEKEY_WHEEL_DELAY = 14,
-    QSID_MOUSEKEY_WHEEL_INTERVAL = 15,
-    QSID_MOUSEKEY_WHEEL_MAX_SPEED = 16,
+    QSID_GRAVE_ESC_OVERRIDE         = 1,
+    QSID_COMBO_TERM                 = 2,
+    QSID_AUTO_SHIFT                 = 3,
+    QSID_AUTO_SHIFT_TIMEOUT         = 4,
+    QSID_OSK_TAP_TOGGLE             = 5,
+    QSID_OSK_TIMEOUT                = 6,
+    QSID_TAPPING_TERM               = 7,
+    QSID_TAPPING_V1                 = 8, // Legacy tapping flags
+    QSID_MOUSEKEY_DELAY             = 9,
+    QSID_MOUSEKEY_INTERVAL          = 10,
+    QSID_MOUSEKEY_MOVE_DELTA        = 11,
+    QSID_MOUSEKEY_MAX_SPEED         = 12,
+    QSID_MOUSEKEY_TIME_TO_MAX       = 13,
+    QSID_MOUSEKEY_WHEEL_DELAY       = 14,
+    QSID_MOUSEKEY_WHEEL_INTERVAL    = 15,
+    QSID_MOUSEKEY_WHEEL_MAX_SPEED   = 16,
     QSID_MOUSEKEY_WHEEL_TIME_TO_MAX = 17,
-    QSID_TAP_CODE_DELAY = 18,
-    QSID_TAP_HOLD_CAPS_DELAY = 19,
-    QSID_TAPPING_TOGGLE = 20,
-    QSID_MAGIC = 21,
-    QSID_PERMISSIVE_HOLD = 22,
-    QSID_HOLD_ON_OTHER_KEY = 23,
-    QSID_RETRO_TAPPING = 24,
-    QSID_QUICK_TAP_TERM = 25,
-    QSID_CHORDAL_HOLD = 26,
-    QSID_FLOW_TAP_TERM = 27,
-    QSID_LEADER_TIMEOUT = 28,
-    QSID_LEADER_PER_KEY_TIMING = 29,
+    QSID_TAP_CODE_DELAY             = 18,
+    QSID_TAP_HOLD_CAPS_DELAY        = 19,
+    QSID_TAPPING_TOGGLE             = 20,
+    QSID_MAGIC                      = 21,
+    QSID_PERMISSIVE_HOLD            = 22,
+    QSID_HOLD_ON_OTHER_KEY          = 23,
+    QSID_RETRO_TAPPING              = 24,
+    QSID_QUICK_TAP_TERM             = 25,
+    QSID_CHORDAL_HOLD               = 26,
+    QSID_FLOW_TAP_TERM              = 27,
+    QSID_LEADER_TIMEOUT             = 28,
+    QSID_LEADER_PER_KEY_TIMING      = 29,
 };
 
 // tapping_v2 bit positions
@@ -98,52 +98,52 @@ enum sval_qsid {
 // Setting descriptor
 typedef struct {
     uint16_t qsid;
-    uint8_t  size;    // Size in bytes (0 = special handler)
-    uint16_t offset;  // Offset in settings struct
-    uint8_t  bit;     // For bit fields
+    uint8_t  size;   // Size in bytes (0 = special handler)
+    uint16_t offset; // Offset in settings struct
+    uint8_t  bit;    // For bit fields
 } sval_setting_desc_t;
 
 // Setting descriptors - defines all supported QSIDs
 static const sval_setting_desc_t setting_descs[] = {
-    { QSID_GRAVE_ESC_OVERRIDE, 1, offsetof(sval_qmk_settings_t, grave_esc_override), 0 },
-    { QSID_COMBO_TERM, 2, offsetof(sval_qmk_settings_t, combo_term), 0 },
-    { QSID_AUTO_SHIFT, 1, offsetof(sval_qmk_settings_t, auto_shift), 0 },
-    { QSID_AUTO_SHIFT_TIMEOUT, 2, offsetof(sval_qmk_settings_t, auto_shift_timeout), 0 },
-    { QSID_OSK_TAP_TOGGLE, 1, offsetof(sval_qmk_settings_t, osk_tap_toggle), 0 },
-    { QSID_OSK_TIMEOUT, 2, offsetof(sval_qmk_settings_t, osk_timeout), 0 },
-    { QSID_TAPPING_TERM, 2, offsetof(sval_qmk_settings_t, tapping_term), 0 },
+    {QSID_GRAVE_ESC_OVERRIDE, 1, offsetof(sval_qmk_settings_t, grave_esc_override), 0},
+    {QSID_COMBO_TERM, 2, offsetof(sval_qmk_settings_t, combo_term), 0},
+    {QSID_AUTO_SHIFT, 1, offsetof(sval_qmk_settings_t, auto_shift), 0},
+    {QSID_AUTO_SHIFT_TIMEOUT, 2, offsetof(sval_qmk_settings_t, auto_shift_timeout), 0},
+    {QSID_OSK_TAP_TOGGLE, 1, offsetof(sval_qmk_settings_t, osk_tap_toggle), 0},
+    {QSID_OSK_TIMEOUT, 2, offsetof(sval_qmk_settings_t, osk_timeout), 0},
+    {QSID_TAPPING_TERM, 2, offsetof(sval_qmk_settings_t, tapping_term), 0},
 #ifdef MOUSEKEY_ENABLE
-    { QSID_MOUSEKEY_DELAY, 2, offsetof(sval_qmk_settings_t, mousekey_delay), 0 },
-    { QSID_MOUSEKEY_INTERVAL, 2, offsetof(sval_qmk_settings_t, mousekey_interval), 0 },
-    { QSID_MOUSEKEY_MOVE_DELTA, 2, offsetof(sval_qmk_settings_t, mousekey_move_delta), 0 },
-    { QSID_MOUSEKEY_MAX_SPEED, 2, offsetof(sval_qmk_settings_t, mousekey_max_speed), 0 },
-    { QSID_MOUSEKEY_TIME_TO_MAX, 2, offsetof(sval_qmk_settings_t, mousekey_time_to_max), 0 },
-    { QSID_MOUSEKEY_WHEEL_DELAY, 2, offsetof(sval_qmk_settings_t, mousekey_wheel_delay), 0 },
-    { QSID_MOUSEKEY_WHEEL_INTERVAL, 2, offsetof(sval_qmk_settings_t, mousekey_wheel_interval), 0 },
-    { QSID_MOUSEKEY_WHEEL_MAX_SPEED, 2, offsetof(sval_qmk_settings_t, mousekey_wheel_max_speed), 0 },
-    { QSID_MOUSEKEY_WHEEL_TIME_TO_MAX, 2, offsetof(sval_qmk_settings_t, mousekey_wheel_time_to_max), 0 },
+    {QSID_MOUSEKEY_DELAY, 2, offsetof(sval_qmk_settings_t, mousekey_delay), 0},
+    {QSID_MOUSEKEY_INTERVAL, 2, offsetof(sval_qmk_settings_t, mousekey_interval), 0},
+    {QSID_MOUSEKEY_MOVE_DELTA, 2, offsetof(sval_qmk_settings_t, mousekey_move_delta), 0},
+    {QSID_MOUSEKEY_MAX_SPEED, 2, offsetof(sval_qmk_settings_t, mousekey_max_speed), 0},
+    {QSID_MOUSEKEY_TIME_TO_MAX, 2, offsetof(sval_qmk_settings_t, mousekey_time_to_max), 0},
+    {QSID_MOUSEKEY_WHEEL_DELAY, 2, offsetof(sval_qmk_settings_t, mousekey_wheel_delay), 0},
+    {QSID_MOUSEKEY_WHEEL_INTERVAL, 2, offsetof(sval_qmk_settings_t, mousekey_wheel_interval), 0},
+    {QSID_MOUSEKEY_WHEEL_MAX_SPEED, 2, offsetof(sval_qmk_settings_t, mousekey_wheel_max_speed), 0},
+    {QSID_MOUSEKEY_WHEEL_TIME_TO_MAX, 2, offsetof(sval_qmk_settings_t, mousekey_wheel_time_to_max), 0},
 #endif
-    { QSID_TAP_CODE_DELAY, 2, offsetof(sval_qmk_settings_t, tap_code_delay), 0 },
-    { QSID_TAP_HOLD_CAPS_DELAY, 2, offsetof(sval_qmk_settings_t, tap_hold_caps_delay), 0 },
-    { QSID_TAPPING_TOGGLE, 1, offsetof(sval_qmk_settings_t, tapping_toggle), 0 },
-    { QSID_MAGIC, 0, 0, 0 },  // Special handler
+    {QSID_TAP_CODE_DELAY, 2, offsetof(sval_qmk_settings_t, tap_code_delay), 0},
+    {QSID_TAP_HOLD_CAPS_DELAY, 2, offsetof(sval_qmk_settings_t, tap_hold_caps_delay), 0},
+    {QSID_TAPPING_TOGGLE, 1, offsetof(sval_qmk_settings_t, tapping_toggle), 0},
+    {QSID_MAGIC, 0, 0, 0}, // Special handler
     // Individual bit settings from tapping_v2
-    { QSID_PERMISSIVE_HOLD, 1, offsetof(sval_qmk_settings_t, tapping_v2), TAPPING_PERMISSIVE_HOLD_BIT },
-    { QSID_HOLD_ON_OTHER_KEY, 1, offsetof(sval_qmk_settings_t, tapping_v2), TAPPING_HOLD_ON_OTHER_KEY_BIT },
-    { QSID_RETRO_TAPPING, 1, offsetof(sval_qmk_settings_t, tapping_v2), TAPPING_RETRO_TAPPING_BIT },
-    { QSID_QUICK_TAP_TERM, 2, offsetof(sval_qmk_settings_t, quick_tap_term), 0 },
-    { QSID_CHORDAL_HOLD, 1, offsetof(sval_qmk_settings_t, tapping_v2), TAPPING_CHORDAL_HOLD_BIT },
-    { QSID_FLOW_TAP_TERM, 2, offsetof(sval_qmk_settings_t, flow_tap_term), 0 },
+    {QSID_PERMISSIVE_HOLD, 1, offsetof(sval_qmk_settings_t, tapping_v2), TAPPING_PERMISSIVE_HOLD_BIT},
+    {QSID_HOLD_ON_OTHER_KEY, 1, offsetof(sval_qmk_settings_t, tapping_v2), TAPPING_HOLD_ON_OTHER_KEY_BIT},
+    {QSID_RETRO_TAPPING, 1, offsetof(sval_qmk_settings_t, tapping_v2), TAPPING_RETRO_TAPPING_BIT},
+    {QSID_QUICK_TAP_TERM, 2, offsetof(sval_qmk_settings_t, quick_tap_term), 0},
+    {QSID_CHORDAL_HOLD, 1, offsetof(sval_qmk_settings_t, tapping_v2), TAPPING_CHORDAL_HOLD_BIT},
+    {QSID_FLOW_TAP_TERM, 2, offsetof(sval_qmk_settings_t, flow_tap_term), 0},
 #ifdef LEADER_ENABLE
-    { QSID_LEADER_TIMEOUT, 2, offsetof(sval_qmk_settings_t, leader_timeout), 0 },
-    { QSID_LEADER_PER_KEY_TIMING, 1, offsetof(sval_qmk_settings_t, leader_options), LEADER_PER_KEY_TIMING_BIT },
+    {QSID_LEADER_TIMEOUT, 2, offsetof(sval_qmk_settings_t, leader_timeout), 0},
+    {QSID_LEADER_PER_KEY_TIMING, 1, offsetof(sval_qmk_settings_t, leader_options), LEADER_PER_KEY_TIMING_BIT},
 #endif
 };
 
 #define NUM_SETTINGS (sizeof(setting_descs) / sizeof(setting_descs[0]))
 
 // Find setting descriptor by QSID
-static const sval_setting_desc_t* find_setting(uint16_t qsid) {
+static const sval_setting_desc_t *find_setting(uint16_t qsid) {
     for (size_t i = 0; i < NUM_SETTINGS; i++) {
         if (setting_descs[i].qsid == qsid) {
             return &setting_descs[i];
@@ -175,11 +175,11 @@ static void sval_qmk_settings_apply(void) {
 #endif
 
 #ifdef MOUSEKEY_ENABLE
-    mk_delay = settings.mousekey_delay / 10;
-    mk_interval = settings.mousekey_interval;
-    mk_max_speed = settings.mousekey_max_speed;
-    mk_time_to_max = settings.mousekey_time_to_max;
-    mk_wheel_max_speed = settings.mousekey_wheel_max_speed;
+    mk_delay             = settings.mousekey_delay / 10;
+    mk_interval          = settings.mousekey_interval;
+    mk_max_speed         = settings.mousekey_max_speed;
+    mk_time_to_max       = settings.mousekey_time_to_max;
+    mk_wheel_max_speed   = settings.mousekey_wheel_max_speed;
     mk_wheel_time_to_max = settings.mousekey_wheel_time_to_max;
 #endif
 
@@ -216,17 +216,7 @@ int sval_qmk_settings_get(uint16_t qsid, uint8_t *buffer, uint8_t length) {
     // Special case: Magic settings (keymap_config)
     if (qsid == QSID_MAGIC) {
         if (length < 4) return -1;
-        uint32_t flags =
-            (keymap_config.swap_control_capslock << 0) |
-            (keymap_config.capslock_to_control << 1) |
-            (keymap_config.swap_lalt_lgui << 2) |
-            (keymap_config.swap_ralt_rgui << 3) |
-            (keymap_config.no_gui << 4) |
-            (keymap_config.swap_grave_esc << 5) |
-            (keymap_config.swap_backslash_backspace << 6) |
-            (keymap_config.nkro << 7) |
-            (keymap_config.swap_lctl_lgui << 8) |
-            (keymap_config.swap_rctl_rgui << 9);
+        uint32_t flags = (keymap_config.swap_control_capslock << 0) | (keymap_config.capslock_to_control << 1) | (keymap_config.swap_lalt_lgui << 2) | (keymap_config.swap_ralt_rgui << 3) | (keymap_config.no_gui << 4) | (keymap_config.swap_grave_esc << 5) | (keymap_config.swap_backslash_backspace << 6) | (keymap_config.nkro << 7) | (keymap_config.swap_lctl_lgui << 8) | (keymap_config.swap_rctl_rgui << 9);
         memcpy(buffer, &flags, 4);
         return 0;
     }
@@ -235,17 +225,16 @@ int sval_qmk_settings_get(uint16_t qsid, uint8_t *buffer, uint8_t length) {
     if (!desc) return -1;
 
     // Bit field settings (QSID 22-26 and 29)
-    if ((qsid >= QSID_PERMISSIVE_HOLD && qsid <= QSID_CHORDAL_HOLD && qsid != QSID_QUICK_TAP_TERM) ||
-        qsid == QSID_LEADER_PER_KEY_TIMING) {
+    if ((qsid >= QSID_PERMISSIVE_HOLD && qsid <= QSID_CHORDAL_HOLD && qsid != QSID_QUICK_TAP_TERM) || qsid == QSID_LEADER_PER_KEY_TIMING) {
         if (length < 1) return -1;
-        uint8_t *field = ((uint8_t*)&settings) + desc->offset;
-        buffer[0] = (*field >> desc->bit) & 1;
+        uint8_t *field = ((uint8_t *)&settings) + desc->offset;
+        buffer[0]      = (*field >> desc->bit) & 1;
         return 0;
     }
 
     // Regular settings
     if (desc->size > length) return -1;
-    memcpy(buffer, ((uint8_t*)&settings) + desc->offset, desc->size);
+    memcpy(buffer, ((uint8_t *)&settings) + desc->offset, desc->size);
     return 0;
 }
 
@@ -258,18 +247,18 @@ int sval_qmk_settings_set(uint16_t qsid, const uint8_t *data, uint8_t length) {
         uint32_t flags;
         memcpy(&flags, data, 4);
 
-        clear_keyboard();  // Prevent stuck keys when changing NKRO
+        clear_keyboard(); // Prevent stuck keys when changing NKRO
 
-        keymap_config.swap_control_capslock = (flags >> 0) & 1;
-        keymap_config.capslock_to_control = (flags >> 1) & 1;
-        keymap_config.swap_lalt_lgui = (flags >> 2) & 1;
-        keymap_config.swap_ralt_rgui = (flags >> 3) & 1;
-        keymap_config.no_gui = (flags >> 4) & 1;
-        keymap_config.swap_grave_esc = (flags >> 5) & 1;
+        keymap_config.swap_control_capslock    = (flags >> 0) & 1;
+        keymap_config.capslock_to_control      = (flags >> 1) & 1;
+        keymap_config.swap_lalt_lgui           = (flags >> 2) & 1;
+        keymap_config.swap_ralt_rgui           = (flags >> 3) & 1;
+        keymap_config.no_gui                   = (flags >> 4) & 1;
+        keymap_config.swap_grave_esc           = (flags >> 5) & 1;
         keymap_config.swap_backslash_backspace = (flags >> 6) & 1;
-        keymap_config.nkro = (flags >> 7) & 1;
-        keymap_config.swap_lctl_lgui = (flags >> 8) & 1;
-        keymap_config.swap_rctl_rgui = (flags >> 9) & 1;
+        keymap_config.nkro                     = (flags >> 7) & 1;
+        keymap_config.swap_lctl_lgui           = (flags >> 8) & 1;
+        keymap_config.swap_rctl_rgui           = (flags >> 9) & 1;
 
         eeconfig_update_keymap(&keymap_config);
         return 0;
@@ -279,10 +268,9 @@ int sval_qmk_settings_set(uint16_t qsid, const uint8_t *data, uint8_t length) {
     if (!desc) return -1;
 
     // Bit field settings
-    if ((qsid >= QSID_PERMISSIVE_HOLD && qsid <= QSID_CHORDAL_HOLD && qsid != QSID_QUICK_TAP_TERM) ||
-        qsid == QSID_LEADER_PER_KEY_TIMING) {
+    if ((qsid >= QSID_PERMISSIVE_HOLD && qsid <= QSID_CHORDAL_HOLD && qsid != QSID_QUICK_TAP_TERM) || qsid == QSID_LEADER_PER_KEY_TIMING) {
         if (length < 1) return -1;
-        uint8_t *field = ((uint8_t*)&settings) + desc->offset;
+        uint8_t *field = ((uint8_t *)&settings) + desc->offset;
         if (data[0]) {
             *field |= (1 << desc->bit);
         } else {
@@ -294,7 +282,7 @@ int sval_qmk_settings_set(uint16_t qsid, const uint8_t *data, uint8_t length) {
 
     // Regular settings
     if (desc->size > length) return -1;
-    memcpy(((uint8_t*)&settings) + desc->offset, data, desc->size);
+    memcpy(((uint8_t *)&settings) + desc->offset, data, desc->size);
     sval_qmk_settings_save();
     sval_qmk_settings_apply();
     return 0;
@@ -366,27 +354,27 @@ void sval_qmk_settings_reset(void) {
 #endif
 
 #ifdef MOUSEKEY_ENABLE
-    settings.mousekey_delay = MOUSEKEY_DELAY;
-    settings.mousekey_interval = MOUSEKEY_INTERVAL;
-    settings.mousekey_move_delta = MOUSEKEY_MOVE_DELTA;
-    settings.mousekey_max_speed = MOUSEKEY_MAX_SPEED;
-    settings.mousekey_time_to_max = MOUSEKEY_TIME_TO_MAX;
-    settings.mousekey_wheel_delay = MOUSEKEY_WHEEL_DELAY;
-    settings.mousekey_wheel_interval = MOUSEKEY_WHEEL_INTERVAL;
-    settings.mousekey_wheel_max_speed = MOUSEKEY_WHEEL_MAX_SPEED;
+    settings.mousekey_delay             = MOUSEKEY_DELAY;
+    settings.mousekey_interval          = MOUSEKEY_INTERVAL;
+    settings.mousekey_move_delta        = MOUSEKEY_MOVE_DELTA;
+    settings.mousekey_max_speed         = MOUSEKEY_MAX_SPEED;
+    settings.mousekey_time_to_max       = MOUSEKEY_TIME_TO_MAX;
+    settings.mousekey_wheel_delay       = MOUSEKEY_WHEEL_DELAY;
+    settings.mousekey_wheel_interval    = MOUSEKEY_WHEEL_INTERVAL;
+    settings.mousekey_wheel_max_speed   = MOUSEKEY_WHEEL_MAX_SPEED;
     settings.mousekey_wheel_time_to_max = MOUSEKEY_WHEEL_TIME_TO_MAX;
 #endif
 
 #ifdef LEADER_ENABLE
-#   ifdef LEADER_TIMEOUT
+#    ifdef LEADER_TIMEOUT
     settings.leader_timeout = LEADER_TIMEOUT;
-#   else
-    settings.leader_timeout = 300;  // QMK default
-#   endif
+#    else
+    settings.leader_timeout = 300; // QMK default
+#    endif
     settings.leader_options = 0;
-#   if defined(LEADER_PER_KEY_TIMING) && LEADER_PER_KEY_TIMING
+#    if defined(LEADER_PER_KEY_TIMING) && LEADER_PER_KEY_TIMING
     settings.leader_options |= (1 << LEADER_PER_KEY_TIMING_BIT);
-#   endif
+#    endif
 #endif
 
     sval_qmk_settings_save();
@@ -394,14 +382,14 @@ void sval_qmk_settings_reset(void) {
 
     // Reset magic settings to defaults
     clear_keyboard();
-    keymap_config.raw = 0;
+    keymap_config.raw            = 0;
     keymap_config.oneshot_enable = 1;
 #ifdef NKRO_ENABLE
-#   if defined(SVAL_DEFAULT_NKRO)
+#    if defined(SVAL_DEFAULT_NKRO)
     keymap_config.nkro = SVAL_DEFAULT_NKRO;
-#   else
-    keymap_config.nkro = 1;  // Default NKRO on if supported
-#   endif
+#    else
+    keymap_config.nkro = 1; // Default NKRO on if supported
+#    endif
 #endif
     eeconfig_update_keymap(&keymap_config);
 }
@@ -413,23 +401,23 @@ void sval_qmk_settings_reset(void) {
 // Note: get_combo_term_sval is in sval_combo.c
 
 __attribute__((weak)) uint16_t get_tapping_term_sval(uint16_t keycode, keyrecord_t *record) {
-    return 0;  // Default: use Sval's setting
+    return 0; // Default: use Sval's setting
 }
 
 __attribute__((weak)) int8_t get_permissive_hold_sval(uint16_t keycode, keyrecord_t *record) {
-    return -1;  // Default: use Sval's setting
+    return -1; // Default: use Sval's setting
 }
 
 __attribute__((weak)) int8_t get_hold_on_other_key_press_sval(uint16_t keycode, keyrecord_t *record) {
-    return -1;  // Default: use Sval's setting
+    return -1; // Default: use Sval's setting
 }
 
 __attribute__((weak)) int8_t get_retro_tapping_sval(uint16_t keycode, keyrecord_t *record) {
-    return -1;  // Default: use Sval's setting
+    return -1; // Default: use Sval's setting
 }
 
 __attribute__((weak)) uint16_t get_quick_tap_term_sval(uint16_t keycode, keyrecord_t *record) {
-    return 0;  // Default: use Sval's setting
+    return 0; // Default: use Sval's setting
 }
 
 __attribute__((weak)) int8_t get_chordal_hold_sval(uint16_t tap_hold_keycode, keyrecord_t *tap_hold_record, uint16_t other_keycode, keyrecord_t *other_record) {
@@ -452,7 +440,7 @@ uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record) {
     if (keycode >= QK_TAP_DANCE && keycode <= QK_TAP_DANCE_MAX) {
         sval_tap_dance_entry_t td;
         if (sval_get_tap_dance(keycode & 0xFF, &td) == 0 && TD_ENABLED(td)) {
-            uint16_t term = td.custom_tapping_term & 0x7FFF;  // Mask off enabled bit
+            uint16_t term = td.custom_tapping_term & 0x7FFF; // Mask off enabled bit
             if (term > 0) {
                 return term;
             }

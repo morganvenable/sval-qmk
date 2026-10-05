@@ -34,10 +34,7 @@ def one_shot_set(d, timeout, toggle):
 
 
 def snapshot(d):
-    return dict(serial=d.serial,
-                keys=[[*p, d.keymap(*p)] for p in POSITIONS],
-                settings={str(q): list(setting_get(d, q)) for q in QSIDS},
-                one_shot=one_shot_get(d))
+    return dict(serial=d.serial, keys=[[*p, d.keymap(*p)] for p in POSITIONS], settings={str(q): list(setting_get(d, q)) for q in QSIDS}, one_shot=one_shot_get(d))
 
 
 def restore(d, saved):
@@ -164,11 +161,9 @@ def run(d, out):
     one_shot_set(d, 0, 2)
     case("oneshot_toggle_2", "Shift on b and c", double, lambda s: has(s, 2, KC_B) and has(s, 2, KC_C))
     slow = tap(MT) + tap(MT, 40) + tap(SAME, 40) + tap(MT, 300) + tap(OTHER, 40)
-    case("oneshot_toggle_unlock_after_300ms", "Shift on b, released by the next tap, c plain", slow,
-         lambda s: has(s, 2, KC_B) and has(s, 0, KC_C) and s[-1] == (0, []))
+    case("oneshot_toggle_unlock_after_300ms", "Shift on b, released by the next tap, c plain", slow, lambda s: has(s, 2, KC_B) and has(s, 0, KC_C) and s[-1] == (0, []))
     quick = tap(MT) + tap(MT, 40) + tap(SAME, 40) + tap(MT, 40) + tap(OTHER, 40)
-    case("oneshot_toggle_unlock_after_40ms", "Shift on b, released by the next tap, c plain", quick,
-         lambda s: has(s, 2, KC_B) and has(s, 0, KC_C) and s[-1] == (0, []))
+    case("oneshot_toggle_unlock_after_40ms", "Shift on b, released by the next tap, c plain", quick, lambda s: has(s, 2, KC_B) and has(s, 0, KC_C) and s[-1] == (0, []))
     return results
 
 

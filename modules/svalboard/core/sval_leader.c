@@ -28,7 +28,7 @@ bool leader_add_user(uint16_t keycode) {
     if (sval_get_leader_per_key_timing()) {
         leader_reset_timer();
     }
-    return false;  // Don't end sequence early
+    return false; // Don't end sequence early
 }
 
 // Override QMK's leader_end_user callback

@@ -19,30 +19,30 @@
 #endif
 
 // Command send/receive macros
-#define PS2_MOUSE_SEND(command, message)                                                          \
-    do {                                                                                          \
-        __attribute__((unused)) uint8_t rcv = ps2_host_send(command);                             \
+#define PS2_MOUSE_SEND(command, message)                                                              \
+    do {                                                                                              \
+        __attribute__((unused)) uint8_t rcv = ps2_host_send(command);                                 \
         PS2_MOUSE_DEBUG("%s command: %X, result: %X, error: %X\n", message, command, rcv, ps2_error); \
     } while (0)
 
-#define PS2_MOUSE_SEND_SAFE(command, message)          \
-    do {                                               \
-        ps2_mouse_disable_data_reporting();            \
-        PS2_MOUSE_SEND(command, message);              \
-        ps2_mouse_enable_data_reporting();             \
+#define PS2_MOUSE_SEND_SAFE(command, message) \
+    do {                                      \
+        ps2_mouse_disable_data_reporting();   \
+        PS2_MOUSE_SEND(command, message);     \
+        ps2_mouse_enable_data_reporting();    \
     } while (0)
 
-#define PS2_MOUSE_SET_SAFE(command, value, message)    \
-    do {                                               \
-        ps2_mouse_disable_data_reporting();            \
-        PS2_MOUSE_SEND(command, message);              \
-        PS2_MOUSE_SEND(value, "Sending value");        \
-        ps2_mouse_enable_data_reporting();             \
+#define PS2_MOUSE_SET_SAFE(command, value, message) \
+    do {                                            \
+        ps2_mouse_disable_data_reporting();         \
+        PS2_MOUSE_SEND(command, message);           \
+        PS2_MOUSE_SEND(value, "Sending value");     \
+        ps2_mouse_enable_data_reporting();          \
     } while (0)
 
-#define PS2_MOUSE_RECEIVE(message)                                          \
-    do {                                                                    \
-        __attribute__((unused)) uint8_t rcv = ps2_host_recv_response();     \
+#define PS2_MOUSE_RECEIVE(message)                                              \
+    do {                                                                        \
+        __attribute__((unused)) uint8_t rcv = ps2_host_recv_response();         \
         PS2_MOUSE_DEBUG("%s result: %X, error: %X\n", message, rcv, ps2_error); \
     } while (0)
 
@@ -149,7 +149,7 @@ void ps2_mouse_set_resolution(uint8_t resolution);
 void ps2_mouse_set_sample_rate(uint8_t sample_rate);
 
 // Core driver functions (for keyboard overrides that call the defaults)
-bool ps2_mouse_init(void);
+bool           ps2_mouse_init(void);
 report_mouse_t ps2_mouse_get_report(report_mouse_t mouse_report);
-uint16_t ps2_mouse_get_cpi(void);
-void ps2_mouse_set_cpi(uint16_t cpi);
+uint16_t       ps2_mouse_get_cpi(void);
+void           ps2_mouse_set_cpi(uint16_t cpi);

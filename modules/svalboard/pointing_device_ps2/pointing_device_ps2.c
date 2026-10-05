@@ -163,7 +163,7 @@ static report_mouse_t ps2_mouse_get_report_core(report_mouse_t mouse_report) {
         ps2_report.x      = ps2_host_recv_response();
         ps2_report.y      = ps2_host_recv_response();
 #    ifdef PS2_MOUSE_ENABLE_SCROLLING
-        ps2_report.z      = ps2_host_recv_response();
+        ps2_report.z = ps2_host_recv_response();
 #    endif
     }
 #endif

@@ -15,9 +15,9 @@
 static uint16_t id_counter = 0;
 
 // State for pending VIA wrapper response
-static bool wrapper_pending = false;
+static bool     wrapper_pending   = false;
 static uint32_t wrapper_client_id = 0;
-static uint8_t wrapper_protocol = 0;
+static uint8_t  wrapper_protocol  = 0;
 
 void client_wrapper_init(void) {
     // Seed counter from timer for some randomness on startup
@@ -38,7 +38,7 @@ bool client_wrapper_valid_id(uint32_t id) {
 
     // Extract timer component from ID
     uint32_t id_time = id & 0xFFFF0000;
-    uint32_t now = timer_read32() & 0xFFFF0000;
+    uint32_t now     = timer_read32() & 0xFFFF0000;
 
     // Calculate age (subtraction handles wrap correctly)
     uint32_t age = now - id_time;
@@ -91,7 +91,7 @@ static void send_error(uint32_t client_id, uint8_t error_code, uint8_t *data, ui
     data[2] = (client_id >> 8) & 0xFF;
     data[3] = (client_id >> 16) & 0xFF;
     data[4] = (client_id >> 24) & 0xFF;
-    data[5] = 0xFF;  // Error protocol
+    data[5] = 0xFF; // Error protocol
     data[6] = error_code;
     host_raw_hid_send(data, length);
 }
@@ -102,10 +102,7 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
     // data[1..4] = client_id (little-endian uint32)
     // data[5] = protocol (for wrapped commands) or nonce start (for bootstrap)
 
-    uint32_t client_id = data[1] |
-                         ((uint32_t)data[2] << 8) |
-                         ((uint32_t)data[3] << 16) |
-                         ((uint32_t)data[4] << 24);
+    uint32_t client_id = data[1] | ((uint32_t)data[2] << 8) | ((uint32_t)data[3] << 16) | ((uint32_t)data[4] << 24);
 
     // Bootstrap request: client_id == 0
     if (client_id == CLIENT_ID_BOOTSTRAP) {
@@ -128,8 +125,8 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
 
         // TTL at data[29..30]
         uint16_t ttl = CLIENT_WRAPPER_TTL_SECS;
-        data[29] = ttl & 0xFF;
-        data[30] = (ttl >> 8) & 0xFF;
+        data[29]     = ttl & 0xFF;
+        data[30]     = (ttl >> 8) & 0xFF;
 
         host_raw_hid_send(data, length);
         return true;
@@ -148,8 +145,8 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
         case SVAL_PREFIX: {
             // Sval (0xDF) - handle directly
             // Inner payload starts at data[5] (includes protocol byte)
-            uint8_t *inner = &data[5];
-            uint8_t inner_len = length - 5;
+            uint8_t *inner     = &data[5];
+            uint8_t  inner_len = length - 5;
 
             sval_handle_command(inner, inner_len);
             // Response: wrapper header preserved, Sval response in inner
@@ -166,9 +163,9 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
             }
 
             // Save state for raw_hid_send override
-            wrapper_pending = true;
+            wrapper_pending   = true;
             wrapper_client_id = client_id;
-            wrapper_protocol = protocol;
+            wrapper_protocol  = protocol;
 
             // Shift VIA command to start of buffer
             // data[6] onwards is the VIA command

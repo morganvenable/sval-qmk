@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2025 Ira Cooper <ira@wakeful.net>
 # SPDX-License-Identifier: GPL-2.0-or-later
-
 """
 Compress sval.json to LZMA and generate C header for embedding in firmware.
 Also validates fragment schema if present.
@@ -86,9 +85,7 @@ def validate_fragment_schema(data):
 
     version = data['fragment_schema_version']
     if not isinstance(version, int) or version > 1:
-        raise FragmentValidationError(
-            f"Unsupported fragment schema version {version} (max supported: 1)"
-        )
+        raise FragmentValidationError(f"Unsupported fragment schema version {version} (max supported: 1)")
 
     if 'fragments' not in data:
         raise FragmentValidationError("Missing 'fragments' section")
@@ -112,56 +109,38 @@ def validate_fragment_schema(data):
     fragment_ids = {}  # id -> fragment_name
     for frag_name, frag in fragments.items():
         if 'id' not in frag:
-            raise FragmentValidationError(
-                f"Fragment '{frag_name}' is missing required 'id' field"
-            )
+            raise FragmentValidationError(f"Fragment '{frag_name}' is missing required 'id' field")
 
         frag_id = frag['id']
         if not isinstance(frag_id, int) or frag_id < 0 or frag_id > 254:
-            raise FragmentValidationError(
-                f"Fragment '{frag_name}' has invalid id {frag_id} (must be 0-254)"
-            )
+            raise FragmentValidationError(f"Fragment '{frag_name}' has invalid id {frag_id} (must be 0-254)")
 
         if frag_id == 255:
-            raise FragmentValidationError(
-                f"Fragment '{frag_name}' uses reserved id 255 (0xFF)"
-            )
+            raise FragmentValidationError(f"Fragment '{frag_name}' uses reserved id 255 (0xFF)")
 
         if frag_id in fragment_ids:
-            raise FragmentValidationError(
-                f"Duplicate fragment id {frag_id} (used by '{fragment_ids[frag_id]}' and '{frag_name}')"
-            )
+            raise FragmentValidationError(f"Duplicate fragment id {frag_id} (used by '{fragment_ids[frag_id]}' and '{frag_name}')")
 
         fragment_ids[frag_id] = frag_name
 
         if 'kle' not in frag:
-            raise FragmentValidationError(
-                f"Fragment '{frag_name}' is missing required 'kle' field"
-            )
+            raise FragmentValidationError(f"Fragment '{frag_name}' is missing required 'kle' field")
 
     # Phase 3: Instance structure
     if len(instances) > 21:
-        raise FragmentValidationError(
-            f"Too many instances: {len(instances)} (max 21)"
-        )
+        raise FragmentValidationError(f"Too many instances: {len(instances)} (max 21)")
 
     instance_ids = {}  # string id -> position
     for idx, instance in enumerate(instances):
         if 'id' not in instance:
-            raise FragmentValidationError(
-                f"Instance at position {idx} is missing required 'id' field"
-            )
+            raise FragmentValidationError(f"Instance at position {idx} is missing required 'id' field")
 
         inst_id = instance['id']
         if not isinstance(inst_id, str):
-            raise FragmentValidationError(
-                f"Instance at position {idx} has non-string 'id': {inst_id}"
-            )
+            raise FragmentValidationError(f"Instance at position {idx} has non-string 'id': {inst_id}")
 
         if inst_id in instance_ids:
-            raise FragmentValidationError(
-                f"Duplicate instance id '{inst_id}' (at positions {instance_ids[inst_id]} and {idx})"
-            )
+            raise FragmentValidationError(f"Duplicate instance id '{inst_id}' (at positions {instance_ids[inst_id]} and {idx})")
 
         instance_ids[inst_id] = idx
 
@@ -169,14 +148,10 @@ def validate_fragment_schema(data):
         has_options = 'fragment_options' in instance
 
         if not has_fragment and not has_options:
-            raise FragmentValidationError(
-                f"Instance '{inst_id}' must have either 'fragment' or 'fragment_options'"
-            )
+            raise FragmentValidationError(f"Instance '{inst_id}' must have either 'fragment' or 'fragment_options'")
 
         if has_fragment and has_options:
-            raise FragmentValidationError(
-                f"Instance '{inst_id}' has both 'fragment' and 'fragment_options'; use only one"
-            )
+            raise FragmentValidationError(f"Instance '{inst_id}' has both 'fragment' and 'fragment_options'; use only one")
 
     # Phase 4: Fragment options structure
     for idx, instance in enumerate(instances):
@@ -187,34 +162,24 @@ def validate_fragment_schema(data):
 
         options = instance['fragment_options']
         if not isinstance(options, list):
-            raise FragmentValidationError(
-                f"Instance '{inst_id}' has non-array 'fragment_options'"
-            )
+            raise FragmentValidationError(f"Instance '{inst_id}' has non-array 'fragment_options'")
 
         if len(options) < 2:
-            raise FragmentValidationError(
-                f"Instance '{inst_id}' has fragment_options with only {len(options)} entry; use fixed 'fragment' instead"
-            )
+            raise FragmentValidationError(f"Instance '{inst_id}' has fragment_options with only {len(options)} entry; use fixed 'fragment' instead")
 
         default_count = 0
         for opt_idx, opt in enumerate(options):
             if not isinstance(opt, dict):
-                raise FragmentValidationError(
-                    f"Instance '{inst_id}' fragment_options[{opt_idx}] is not an object"
-                )
+                raise FragmentValidationError(f"Instance '{inst_id}' fragment_options[{opt_idx}] is not an object")
 
             for required in ['fragment', 'placement', 'matrix_map']:
                 if required not in opt:
-                    raise FragmentValidationError(
-                        f"Instance '{inst_id}' fragment_options[{opt_idx}] is missing '{required}'"
-                    )
+                    raise FragmentValidationError(f"Instance '{inst_id}' fragment_options[{opt_idx}] is missing '{required}'")
 
     # Phase 5: Fragment references
     def check_fragment_ref(frag_name, inst_id, context=""):
         if frag_name not in fragments:
-            raise FragmentValidationError(
-                f"Fragment '{frag_name}' not found (referenced by instance '{inst_id}'{context})"
-            )
+            raise FragmentValidationError(f"Fragment '{frag_name}' not found (referenced by instance '{inst_id}'{context})")
 
     for idx, instance in enumerate(instances):
         inst_id = instance['id']
@@ -238,9 +203,7 @@ def validate_fragment_schema(data):
         map_len = len(matrix_map)
 
         if map_len != key_count:
-            raise FragmentValidationError(
-                f"Instance '{inst_id}'{context} references fragment '{frag_name}' with {key_count} keys but matrix_map has {map_len} entries"
-            )
+            raise FragmentValidationError(f"Instance '{inst_id}'{context} references fragment '{frag_name}' with {key_count} keys but matrix_map has {map_len} entries")
 
     for idx, instance in enumerate(instances):
         inst_id = instance['id']
@@ -249,19 +212,13 @@ def validate_fragment_schema(data):
         if 'encoder_offset' in instance:
             offset = instance['encoder_offset']
             if not isinstance(offset, int) or offset < 0:
-                raise FragmentValidationError(
-                    f"Instance '{inst_id}' has invalid encoder_offset: {offset} (must be non-negative integer)"
-                )
+                raise FragmentValidationError(f"Instance '{inst_id}' has invalid encoder_offset: {offset} (must be non-negative integer)")
 
         if 'fragment' in instance:
             if 'matrix_map' not in instance:
-                raise FragmentValidationError(
-                    f"Instance '{inst_id}' is missing required 'matrix_map'"
-                )
+                raise FragmentValidationError(f"Instance '{inst_id}' is missing required 'matrix_map'")
             if 'placement' not in instance:
-                raise FragmentValidationError(
-                    f"Instance '{inst_id}' is missing required 'placement'"
-                )
+                raise FragmentValidationError(f"Instance '{inst_id}' is missing required 'placement'")
             validate_matrix_map(inst_id, instance['fragment'], instance['matrix_map'])
 
         if 'fragment_options' in instance:
@@ -270,14 +227,9 @@ def validate_fragment_schema(data):
                 if 'encoder_offset' in opt:
                     offset = opt['encoder_offset']
                     if not isinstance(offset, int) or offset < 0:
-                        raise FragmentValidationError(
-                            f"Instance '{inst_id}' fragment_options[{opt_idx}] has invalid encoder_offset: {offset}"
-                        )
+                        raise FragmentValidationError(f"Instance '{inst_id}' fragment_options[{opt_idx}] has invalid encoder_offset: {offset}")
 
-                validate_matrix_map(
-                    inst_id, opt['fragment'], opt['matrix_map'],
-                    f" fragment_options[{opt_idx}]"
-                )
+                validate_matrix_map(inst_id, opt['fragment'], opt['matrix_map'], f" fragment_options[{opt_idx}]")
 
 
 def compress_definition(json_path, output_path):
@@ -299,11 +251,7 @@ def compress_definition(json_path, output_path):
     json_bytes = json_str.encode('utf-8')
 
     # Compress with LZMA
-    compressed = lzma.compress(
-        json_bytes,
-        format=lzma.FORMAT_ALONE,
-        preset=9
-    )
+    compressed = lzma.compress(json_bytes, format=lzma.FORMAT_ALONE, preset=9)
 
     # Generate C header
     with open(output_path, 'w') as f:
@@ -319,7 +267,7 @@ def compress_definition(json_path, output_path):
 
         # Write bytes in rows of 16
         for i in range(0, len(compressed), 16):
-            chunk = compressed[i:i+16]
+            chunk = compressed[i:i + 16]
             hex_bytes = ', '.join(f'0x{b:02x}' for b in chunk)
             f.write(f"    {hex_bytes},\n")
 
@@ -327,6 +275,7 @@ def compress_definition(json_path, output_path):
 
     print(f"Compressed {json_path}: {len(json_bytes)} -> {len(compressed)} bytes ({100*len(compressed)//len(json_bytes)}%)")
     return True
+
 
 def main():
     if len(sys.argv) < 3:
@@ -351,6 +300,7 @@ def main():
 
     if not compress_definition(json_path, output_path):
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main()

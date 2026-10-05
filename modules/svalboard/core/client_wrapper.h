@@ -10,8 +10,8 @@
 #define WRAPPER_PREFIX 0xDD
 
 // Reserved client IDs
-#define CLIENT_ID_BOOTSTRAP  0x00000000
-#define CLIENT_ID_ERROR      0xFFFFFFFF
+#define CLIENT_ID_BOOTSTRAP 0x00000000
+#define CLIENT_ID_ERROR 0xFFFFFFFF
 
 // Error codes
 enum client_wrapper_error {
@@ -22,7 +22,7 @@ enum client_wrapper_error {
 
 // TTL in seconds - short TTL recommended
 #ifndef CLIENT_WRAPPER_TTL_SECS
-#define CLIENT_WRAPPER_TTL_SECS 120
+#    define CLIENT_WRAPPER_TTL_SECS 120
 #endif
 
 // Initialize client wrapper (call from keyboard_post_init)

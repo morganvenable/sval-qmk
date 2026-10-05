@@ -6,39 +6,35 @@
 
 #ifdef TAP_DANCE_ENABLE
 
-#include "process_tap_dance.h"
+#    include "process_tap_dance.h"
 
 // Dance state tracking
-enum {
-    SINGLE_TAP = 1,
-    SINGLE_HOLD,
-    DOUBLE_TAP,
-    DOUBLE_HOLD,
-    DOUBLE_SINGLE_TAP,
-    MORE_TAPS
-};
+enum { SINGLE_TAP = 1, SINGLE_HOLD, DOUBLE_TAP, DOUBLE_HOLD, DOUBLE_SINGLE_TAP, MORE_TAPS };
 
-static uint8_t dance_state[SVAL_TAP_DANCE_ENTRIES];
+static uint8_t                dance_state[SVAL_TAP_DANCE_ENTRIES];
 static sval_tap_dance_entry_t td_entry;
 
 static uint8_t dance_step(tap_dance_state_t *state) {
     if (state->count == 1) {
-        if (state->interrupted || !state->pressed) return SINGLE_TAP;
-        else return SINGLE_HOLD;
+        if (state->interrupted || !state->pressed)
+            return SINGLE_TAP;
+        else
+            return SINGLE_HOLD;
     } else if (state->count == 2) {
-        if (state->interrupted) return DOUBLE_SINGLE_TAP;
-        else if (state->pressed) return DOUBLE_HOLD;
-        else return DOUBLE_TAP;
+        if (state->interrupted)
+            return DOUBLE_SINGLE_TAP;
+        else if (state->pressed)
+            return DOUBLE_HOLD;
+        else
+            return DOUBLE_TAP;
     }
     return MORE_TAPS;
 }
 
 static void on_dance(tap_dance_state_t *state, void *user_data) {
     uint16_t index = (uintptr_t)user_data;
-    if (sval_get_tap_dance(index, &td_entry) != 0)
-        return;
-    if (!TD_ENABLED(td_entry))
-        return;
+    if (sval_get_tap_dance(index, &td_entry) != 0) return;
+    if (!TD_ENABLED(td_entry)) return;
     uint16_t kc = td_entry.on_tap;
     if (kc) {
         if (state->count == 3) {
@@ -53,15 +49,12 @@ static void on_dance(tap_dance_state_t *state, void *user_data) {
 
 static void on_dance_finished(tap_dance_state_t *state, void *user_data) {
     uint16_t index = (uintptr_t)user_data;
-    if (sval_get_tap_dance(index, &td_entry) != 0)
-        return;
-    if (!TD_ENABLED(td_entry))
-        return;
+    if (sval_get_tap_dance(index, &td_entry) != 0) return;
+    if (!TD_ENABLED(td_entry)) return;
     dance_state[index] = dance_step(state);
     switch (dance_state[index]) {
         case SINGLE_TAP: {
-            if (td_entry.on_tap)
-                sval_keycode_down(td_entry.on_tap);
+            if (td_entry.on_tap) sval_keycode_down(td_entry.on_tap);
             break;
         }
         case SINGLE_HOLD: {
@@ -108,18 +101,15 @@ static void on_dance_finished(tap_dance_state_t *state, void *user_data) {
 
 static void on_dance_reset(tap_dance_state_t *state, void *user_data) {
     uint16_t index = (uintptr_t)user_data;
-    if (sval_get_tap_dance(index, &td_entry) != 0)
-        return;
-    if (!TD_ENABLED(td_entry))
-        return;
+    if (sval_get_tap_dance(index, &td_entry) != 0) return;
+    if (!TD_ENABLED(td_entry)) return;
     wait_ms(TAP_CODE_DELAY);
-    uint8_t st = dance_state[index];
-    state->count = 0;
+    uint8_t st         = dance_state[index];
+    state->count       = 0;
     dance_state[index] = 0;
     switch (st) {
         case SINGLE_TAP: {
-            if (td_entry.on_tap)
-                sval_keycode_up(td_entry.on_tap);
+            if (td_entry.on_tap) sval_keycode_up(td_entry.on_tap);
             break;
         }
         case SINGLE_HOLD: {
@@ -166,11 +156,11 @@ static tap_dance_action_t sval_tap_dance_actions[SVAL_TAP_DANCE_ENTRIES];
 
 void sval_reload_tap_dance(void) {
     for (size_t i = 0; i < SVAL_TAP_DANCE_ENTRIES; ++i) {
-        sval_tap_dance_actions[i].fn.on_each_tap = on_dance;
+        sval_tap_dance_actions[i].fn.on_each_tap       = on_dance;
         sval_tap_dance_actions[i].fn.on_dance_finished = on_dance_finished;
-        sval_tap_dance_actions[i].fn.on_reset = on_dance_reset;
-        sval_tap_dance_actions[i].fn.on_each_release = NULL;
-        sval_tap_dance_actions[i].user_data = (void*)(uintptr_t)i;
+        sval_tap_dance_actions[i].fn.on_reset          = on_dance_reset;
+        sval_tap_dance_actions[i].fn.on_each_release   = NULL;
+        sval_tap_dance_actions[i].user_data            = (void *)(uintptr_t)i;
     }
 }
 
@@ -179,7 +169,7 @@ uint16_t tap_dance_count(void) {
     return SVAL_TAP_DANCE_ENTRIES;
 }
 
-tap_dance_action_t* tap_dance_get(uint16_t tap_dance_idx) {
+tap_dance_action_t *tap_dance_get(uint16_t tap_dance_idx) {
     if (tap_dance_idx >= SVAL_TAP_DANCE_ENTRIES) {
         return NULL;
     }
@@ -188,11 +178,13 @@ tap_dance_action_t* tap_dance_get(uint16_t tap_dance_idx) {
 
 // Stub - tap dance processing is handled by QMK's standard mechanism
 bool process_record_sval_tap_dance(uint16_t keycode, keyrecord_t *record) {
-    return true;  // Continue processing
+    return true; // Continue processing
 }
 
 #else
 // Stubs when TAP_DANCE_ENABLE is not defined
 void sval_reload_tap_dance(void) {}
-bool process_record_sval_tap_dance(uint16_t keycode, keyrecord_t *record) { return true; }
+bool process_record_sval_tap_dance(uint16_t keycode, keyrecord_t *record) {
+    return true;
+}
 #endif
