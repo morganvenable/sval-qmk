@@ -60,6 +60,7 @@ $(shell python3 "$(SVAL_MODULE_PATH)sval_compress.py" \
 
 # Core source files (always included)
 SRC += $(SVAL_MODULE_PATH)sval.c
+SRC += $(SVAL_MODULE_PATH)sval_context_layer.c
 SRC += $(SVAL_MODULE_PATH)sval_definition.c
 SRC += $(SVAL_MODULE_PATH)sval_qmk_settings.c
 SRC += $(SVAL_MODULE_PATH)sval_fragments.c
