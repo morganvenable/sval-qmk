@@ -10,9 +10,10 @@ If your Svalboard ran the Vial firmware (`svalboard/vial-qmk v2025-11-01`), you 
 | --- | --- |
 | 256 entries each for tap dances, combos, key overrides, alternate-repeat keys and macros | Vial allowed 50 tap dances, 50 combos, 30 key overrides and 50 macros. |
 | Leader sequences | New: assign an action to an ordered sequence of up to five keys, editable in Keybard. |
+| Chordal Hold and Flow Tap | New: settable in Keybard. Chordal Hold replaces Vial's Achordion and, like it, is on by default. |
 | Larger macro storage | Macros can use the shared space beyond the previous 64 KiB boundary. How much is left for macros depends on the other stored features. |
 
-Several timing controls currently save but have no effect. See [Current limitations](README.md#current-limitations).
+Tap/hold, tap-dance, combo and one-shot timing settings take effect as soon as you save them.
 
 ## Your setup survives updates
 

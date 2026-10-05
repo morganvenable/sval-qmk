@@ -58,7 +58,7 @@ You have **256 slots each** for tap dances, combos, macros, key overrides, alter
 | One-shot/mod-tap composer | Combine left/right modifier choices visually, with MEH and HYPER presets, and assign the resulting one-shot or mod-tap key. | Enter modifier chords without holding several keys, or combine a tap action with a modifier hold. |
 | Typing settings | Adjust leader timing, modifier swaps, and simultaneous-key reporting (NKRO). | Adapt shortcuts to your preferences. |
 
-Some timing controls are not yet effective in this release. See [Current limitations](#current-limitations) before relying on changes to tap/hold, tap-dance, or combo timing.
+Tap/hold, tap-dance, combo and one-shot timing settings take effect as soon as you save them.
 
 ### Pointing that fits the way you work
 
@@ -142,7 +142,7 @@ In Keybard's Settings, **Board name** accepts up to 32 characters within the fir
 
 ## Current limitations
 
-- **Timing controls:** changes to the general tapping term, per-dance tapping term, and per-combo timing currently save but do not change key behavior. Quick-tap and several tap/hold option controls also remain inactive. Flow Tap, Chordal Hold, and one-shot timing/locking adjustments are not available through these settings yet.
+- **Settings without effect:** tapping toggle count, tap-code delay, tap-hold Caps Lock delay and the Grave Escape override are saved but don't change behavior yet.
 - **Auto Shift:** the standard firmware does not enable Auto Shift.
 - **Editor names:** Keybard doesn't yet save layer, tap-dance and macro names to the board, although the firmware supports it. Move them between browsers with a `.svil` export for now.
 - **Alternate repeat:** modifier conditions and the default-alternate option have known matching problems. Check the output of custom mappings before relying on them.

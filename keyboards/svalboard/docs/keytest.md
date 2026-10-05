@@ -204,3 +204,14 @@ The [hardware run](keytest-feature-results.json) completed **11 behavioral cases
 | Per-combo term, 200 ms | **Failed:** a 100 ms gap emitted the two input keys rather than their combo; the first escaped at 53 ms. |
 
 The failures match [review finding R15](reviews/2026-10-04-qmk-fork-review.md#r15): runtime timing callbacks are present but their compile-time gates are absent. This characterization commit supplies the repeatable hardware tests and evidence; it does not change those gates or mask the failures as expected passes.
+
+## Timing settings
+
+`keytest_timing.py` checks that the runtime tap-hold, combo and one-shot settings change behavior, each turned on and off: permissive hold, hold on other key, Chordal Hold (same and opposite hand), Flow Tap, retro tapping, quick-tap term, one-shot timeout and one-shot tap toggle. It journals and restores the bindings and settings it touches, and verifies the restore after a reboot, like `keytest_features.py`:
+
+```sh
+python keyboards/svalboard/tools/keytest_timing.py --serial YOUR_SERIAL \
+  --backup /tmp/keytest-timing-original.json --output /tmp/keytest-timing-results.json
+```
+
+With the timing fixes, all 19 cases pass on a PMW3389-left test board. `keytest_features.py` also passes all 11 cases, including the three timing cases recorded as failing above (600 ms tapping term, 500 ms tap-dance term, 200 ms combo term).
