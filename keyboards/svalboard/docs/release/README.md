@@ -4,7 +4,7 @@
 
 Keybard is the dedicated browser-based configuration tool for Svalboard, bringing visual layout design, programmable key behaviors, pointing controls, and hardware diagnostics together. Svalboard QMK runs your configuration on the keyboard, so your mappings, macros, and pointing settings keep working after you close the editor.
 
-Explore the features below, or read [what Svalboard QMK adds to QMK](firmware-changes.md).
+Explore the features below, read [what Svalboard QMK adds to QMK](firmware-changes.md), or learn [how the protocol connects your keyboard and apps](protocol.md).
 
 ## The highlights
 
@@ -114,6 +114,12 @@ Svalboard QMK connects Keybard’s visual editor to the keyboard’s stored conf
 | Integrated pointing and power controls | Tune both pointers, precision and speed modes, and idle behavior. |
 
 [See all firmware additions and their benefits →](firmware-changes.md)
+
+## A connection for companion apps
+
+Sval’s two-way protocol lets applications read your saved layout, follow active layers, inspect held keys, and send configuration or runtime layer changes back. Client IDs let cooperating tools distinguish their replies, providing a foundation for an editor, trainer, and desktop companion to work with the same board.
+
+This is also the foundation for the **key-peek trainer overlay** and **app-aware layer switching** now in development: see the bindings you are using, and bring up an application’s shortcuts when you switch to it. [Explore the protocol, what is available now, and what is coming next →](protocol.md)
 
 ## Updating from Vial and choosing firmware
 

@@ -1,6 +1,6 @@
 # What Svalboard QMK adds to your keyboard
 
-[Explore Keybard](README.md) · [Release announcement](announcement.md)
+[Explore Keybard](README.md) · [Release announcement](announcement.md) · [Protocol and companion apps](protocol.md)
 
 Svalboard QMK builds on QMK’s keys, layers, shortcuts, and programmable behaviors. It adds the storage, editing, pointing, and hardware controls that let you configure your Svalboard through Keybard and keep using that setup after closing the editor.
 
@@ -94,5 +94,7 @@ These tools support troubleshooting and firmware development. Normal keyboard se
 | Separate editor sessions | Keeps replies associated with the requesting connection and renews the session automatically. Use one editor at a time when changing settings. |
 | Saved cluster selections | Keeps the selected finger and thumb cluster arrangement available for the editor’s layout view. |
 | Active-layer queries and changes | Lets Keybard inspect and change the keyboard’s active layer. |
+
+The connection also supports companion applications that read the layout and follow live state. See [the protocol guide](protocol.md) for bidirectional communication, client coordination, and a preview of the key-peek trainer and app-aware layer work.
 
 For technical details, source references, and known defects, see the [firmware review](../reviews/2026-10-04-qmk-fork-review.md). For everyday setup, start with the [Keybard feature guide](README.md).
