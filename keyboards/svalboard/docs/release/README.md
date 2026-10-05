@@ -1,8 +1,8 @@
 # Svalboard QMK + Keybard: first launch
 
-**Make Svalboard your own, from the browser.** Keybard brings visual layout design, programmable key behaviors, pointing controls, and hardware diagnostics together. Svalboard QMK runs your configuration on the keyboard, so your mappings, macros, and pointing settings keep working after you close the editor.
+**Make Svalboard your own, from the browser.** Keybard is the dedicated configuration tool for Svalboard, bringing visual layout design, programmable key behaviors, pointing controls, and hardware diagnostics together. Svalboard QMK runs your configuration on the keyboard, so your mappings, macros, and pointing settings keep working after you close the editor.
 
-This is a compendium of the first formal launch, rather than a changelog against an earlier public Keybard release. It covers the current Svalboard firmware and matching Sval-capable Keybard. For the implementation inventory and the benefit of each fork change, see [Firmware changes](firmware-changes.md). A shorter [launch announcement](announcement.md) is ready to adapt for a release post.
+This compendium covers Keybard and Svalboard QMK for their first formal launch. For the implementation inventory and the benefit of each fork change, see [Firmware changes](firmware-changes.md). A shorter [launch announcement](announcement.md) is ready to adapt for a release post.
 
 ## The highlights
 

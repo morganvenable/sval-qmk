@@ -1,6 +1,6 @@
 # Introducing Svalboard QMK and Keybard
 
-Your Svalboard should fit the way you think and work. Our first formal release brings together **Keybard**, the visual browser editor, and **Svalboard QMK**, the firmware that runs your setup on the keyboard.
+Your Svalboard should fit the way you think and work. Our first formal release brings together **Keybard**, the dedicated browser editor for Svalboard, and **Svalboard QMK**, the firmware that runs your setup on the keyboard.
 
 Drag keys into place, compare your layers in flat or 3D views, and create shortcuts without a firmware build. Tap dances let one position serve several roles. Combos turn comfortable chords into useful actions. Macros, key overrides, alternate repeat, and mnemonic leader sequences put frequently used operations within reach. The firmware provides 256 slots for each of those programmable feature families.
 
