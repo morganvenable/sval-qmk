@@ -4,7 +4,7 @@
 
 Keybard is the dedicated browser-based configuration tool for Svalboard, bringing visual layout design, programmable key behaviors, pointing controls, and hardware diagnostics together. Svalboard QMK runs your configuration on the keyboard, so your mappings, macros, and pointing settings keep working after you close the editor.
 
-Explore the features below, read [what Svalboard QMK adds to QMK](firmware-changes.md), or learn [how the protocol connects your keyboard and apps](protocol.md).
+Explore the features below, read [what Svalboard QMK adds beyond Vial](firmware-changes.md), or learn [how the protocol connects your keyboard and apps](protocol.md).
 
 ## The highlights
 
@@ -99,21 +99,21 @@ Native exports are the portable backup. Browser libraries and presentation prefe
 
 Idle power controls can dim lighting, put supported trackball sensors into rest modes, and reduce scanning and processor activity while the keyboard is unused. More aggressive power-saving settings can delay the first input after inactivity. Scan Lab displays estimated current consumption to help compare these settings.
 
-## What Svalboard QMK adds
+## What Svalboard QMK adds beyond Vial
 
-Svalboard QMK connects Keybard’s visual editor to the keyboard’s stored configuration. It builds on QMK’s key, layer, and programmable-action features with additions designed for Svalboard:
+Editing tap dances, combos, key overrides, alternate-repeat keys, macros and QMK settings already worked in Svalboard's Vial firmware, and all of it carries over. Svalboard QMK adds:
 
 | Addition | What it gives you |
 | --- | --- |
-| Editable behavior tables | Change tap dances, combos, macros, overrides, repeat mappings, and leaders without rebuilding firmware. |
-| Expanded storage | Keep up to 256 entries per feature, with more shared space for macros and settings. |
-| Settings preservation | Keep a compatible setup across ordinary firmware updates. |
-| Supported Vial migration | Bring an existing Svalboard configuration into the new firmware. |
-| Persistent board identity | Give each board a recognizable name and keep its serial number through updates. |
-| Efficient configuration reads | Load populated feature entries without waiting for every empty slot. |
-| Integrated pointing and power controls | Tune both pointers, precision and speed modes, and idle behavior. |
+| More room | 256 entries each for tap dances, combos, key overrides, alternate-repeat keys and macros (Vial: 30–50), and more macro storage. |
+| Leader sequences | Trigger an action with a short sequence of keys, editable in Keybard. |
+| Settings kept across updates | A compatible layout survives firmware updates instead of resetting with each new build. |
+| Vial migration | Your existing Svalboard setup imports automatically on first boot. |
+| Persistent board identity | Name each board and keep its serial number through updates. |
+| More pointing control | Sniper toggles, Boost keys, per-pointer automouse with threshold and decay, natural scrolling. |
+| Idle power saving | Lower scan rates, sensor rest modes and processor sleep while the keyboard is unused. |
 
-[See all firmware additions and their benefits →](firmware-changes.md)
+[See everything Svalboard QMK adds beyond Vial →](firmware-changes.md)
 
 ## A connection for companion apps
 

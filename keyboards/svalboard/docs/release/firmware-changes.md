@@ -1,101 +1,84 @@
-# What Svalboard QMK adds to your keyboard
+# What Svalboard QMK adds beyond Vial
 
 [Explore Keybard](README.md) · [Release announcement](announcement.md) · [Protocol and companion apps](protocol.md)
 
-Svalboard QMK builds on QMK’s keys, layers, shortcuts, and programmable behaviors. It adds the storage, editing, pointing, and hardware controls that let you configure your Svalboard through Keybard and keep using that setup after closing the editor.
+If your Svalboard ran the Vial firmware (`svalboard/vial-qmk v2025-11-01`), you could already edit your keymap, tap dances, combos, key overrides, alternate-repeat keys, macros and QMK settings without rebuilding firmware. You also had layer colors, per-side DPI and scroll toggles, axis lock, Sniper hold keys, the automouse toggle and TrackPoint recalibration. All of that carries over. This page covers what Svalboard QMK adds on top.
 
-## Change your setup without rebuilding firmware
+## More room, and leader sequences
 
-| Addition | What it lets you do |
+| Addition | Compared with Vial |
 | --- | --- |
-| Editable tap dances | Give one position separate tap, hold, double-tap, and tap-then-hold actions. |
-| Editable combos | Turn a chord of up to four keys into another action. |
-| Editable key overrides | Change a key’s output under selected modifier and layer conditions. |
-| Alternate-repeat mappings | Associate a remembered key with another output for repeated editing patterns. Modifier matching has known limitations in this release. |
-| Leader sequences | Assign an action to an ordered sequence of up to five keys, making shortcuts easier to remember. |
-| 256 slots per feature | Keep a larger collection of tap dances, combos, macros, overrides, repeat mappings, and leaders. |
-| 256 macros | Store more reusable text and action sequences than the previous 50-macro configuration allowed. |
-| Extended macro actions | Combine text, key presses and releases, delays, layer actions, and Svalboard controls. |
-| Supported typing and mouse-key settings | Change leader timing, modifier swaps, simultaneous-key reporting, and supported mouse-key behavior from Keybard. |
+| 256 entries each for tap dances, combos, key overrides, alternate-repeat keys and macros | Vial allowed 50 tap dances, 50 combos, 30 key overrides and 50 macros. |
+| Leader sequences | New: assign an action to an ordered sequence of up to five keys, editable in Keybard. |
+| Larger macro storage | Macros can use the shared space beyond the previous 64 KiB boundary. How much is left for macros depends on the other stored features. |
 
-Tap dances, combos, and mod-taps work, but several timing controls currently have no effect even after you save them. See [Current limitations](README.md#current-limitations) for the affected settings.
+Several timing controls currently save but have no effect. See [Current limitations](README.md#current-limitations).
 
-## More room for your setup, easier updates
+## Your setup survives updates
 
-| Addition | Benefit |
+| Addition | Compared with Vial |
 | --- | --- |
-| Expanded settings storage | Provides 128 KiB of shared space for the keymap, programmable behaviors, macros, and other settings. |
-| Larger macro addressing | Lets macros use the available shared space beyond the previous 64 KiB boundary. The space left for macros depends on the other stored features. |
-| Settings preservation across ordinary updates | Keeps a compatible layout when you install firmware built on another day. |
-| Supported keycode translation | Carries older steno assignments forward when updating from the supported keycode versions. |
-| Automatic migration from the supported Vial release | Imports an existing Svalboard layout, macros, programmable behaviors, pointing preferences, and other supported settings. |
-| Migration progress tracking | Lets an unfinished copy retry from the old configuration and prevents a completed migration from reappearing after a later reset. |
-| Preserved legacy configuration | Leaves the old Vial store intact during migration. Later changes in Keybard belong to the new setup and are not copied back into the old store. |
-| Checked macro uploads | Rejects uploads that exceed the macro buffer or contain invalid offsets. |
-| Wear-leveled storage | Spreads configuration writes across flash and avoids rewriting unchanged data. Ordinary typing does not continuously save the layout. |
+| Settings kept across ordinary updates | Vial reset the layout whenever you installed a firmware build from a different day. A compatible layout now stays. |
+| Automatic migration from Vial | Imports your existing layout, macros, programmable behaviors, pointing preferences and other supported settings on first boot. The old Vial store is left intact. |
+| Keycode translation | Stored keycodes, including those inside tap dances, combos, overrides, leaders and macros, are translated when QMK's keycode numbering changes, instead of being reset. |
+| Interrupted-migration recovery | An unfinished migration retries from the old configuration; a completed one doesn't repeat after a later reset. |
+| Checked macro uploads | Uploads that exceed the macro buffer or contain invalid offsets are rejected. |
 
-Automatic migration supports **`svalboard/vial-qmk v2025-11-01` with the `vial` keymap**. Keep an exported backup and check your modifier preferences, timing settings, and macros after upgrading. Changes to the storage layout can still require a reset, and interrupted updates are not guaranteed to preserve every setting.
+Automatic migration supports **`svalboard/vial-qmk v2025-11-01` with the `vial` keymap**. Keep an exported backup and check your modifier preferences, timing settings and macros after upgrading. Changes to the storage layout can still require a reset.
 
 ## A board that keeps its identity
 
 | Addition | Benefit |
 | --- | --- |
-| Persistent serial number | Keeps each board identifiable across ordinary firmware updates and settings resets. |
-| Your own board name | Makes multiple Svalboards easier to recognize in a device list. Save the name in Keybard, then restart the board to show it to the computer. |
-| Redundant identity records | Keeps a previous identity record while saving an updated one. |
-| Reliable long-name transfers | Transfers board names correctly through Keybard’s connection protocol. |
+| Persistent serial number | Each board stays identifiable across firmware updates and settings resets. |
+| Your own board name | Name each Svalboard so several are easy to tell apart in a device list. Save the name in Keybard, then restart the board. |
 
-Your board name and serial live on the keyboard. Layer names and behavior names travel with your `.svil` backup; they do not currently synchronize automatically from the board to another browser.
+The name and serial are stored on the keyboard, separately from your layout backups.
 
-## Pointing controls for each hand
+## Pointing
+
+| Addition | Compared with Vial |
+| --- | --- |
+| Sniper toggle | Sniper 2×/3×/5× can now be toggled as well as held. |
+| Boost keys | New: hold or toggle 2×, 3× or 5× faster movement for crossing a large desktop. |
+| Per-pointer automouse | Choose which pointer activates the mouse layer, instead of both. |
+| Automouse threshold and decay | Tune how much movement activates the mouse layer and how it winds down; the timeout was already adjustable. |
+| Natural scrolling | New: choose the scroll direction. |
+
+## Lower power when idle
 
 | Addition | Benefit |
 | --- | --- |
-| Independent left/right pointer settings | Give each side its own sensitivity and cursor or scrolling role. |
-| Per-pointer mouse-layer activation | Choose which pointer activates mouse-layer bindings. |
-| Activation threshold, decay, and timeout | Reduce accidental activation and control the return to typing. |
-| Sniper and Boost keys | Hold or toggle 2×, 3×, or 5× adjustments for precise placement or faster travel. |
-| Scroll hold/toggle, axis lock, and natural scrolling | Switch into scrolling, keep motion on one axis, and choose your preferred direction. |
-| Combined pointer and keyboard mouse controls | Use both pointing devices alongside keyboard mouse buttons and movement keys. |
-| TrackPoint recalibration | Correct pointer drift on supported TrackPoint hardware. |
-| Layer lighting | See a color cue for the layer you are using. |
-| Split USB wake handling | Wake a suspended computer from the keyboard when the computer permits USB wake. |
-
-Firmware variants support base boards, PMW3360 and PMW3389 trackballs, TrackPoint, and Azoteq pointing hardware. Choose the sensor and side that match the half you are updating.
-
-## Lower power use during inactivity
-
-| Addition | Benefit |
-| --- | --- |
-| Active, light-idle, and deep-idle scan rates | Scan frequently while typing and less often during quiet periods to reduce power use. |
-| Trackball rest modes | Reduce sensor power during inactivity on supported hardware. |
+| Light- and deep-idle scan rates | Scan less often during quiet periods. |
+| Trackball rest modes | Let supported sensors use their own low-power modes. |
 | Idle lighting and processor sleep | Dim the lighting and reduce processor activity between scans. |
-| Selectable deep-idle clocks and longer sleep intervals | Allow further idle power savings, with a possible delay before the first input after inactivity. |
+| Selectable deep-idle clock | Further savings, at the cost of a possible delay on the first input after inactivity. |
 
-Longer idle intervals and sensor rest modes can delay the first input after inactivity. Scan Lab displays estimated current consumption for comparing settings; actual consumption depends on the hardware and configuration.
+Scan Lab shows estimated current draw for comparing settings.
 
-## Advanced diagnostics and firmware testing
+## Hardware revision B
 
-These tools support troubleshooting and firmware development. Normal keyboard setup does not require adjusting optical timing.
+Boards with the revised analog front end ("flipfet") are detected automatically at startup and use scan timing measured for that hardware.
+
+## Diagnostics and testing
+
+These support troubleshooting and firmware development; normal setup doesn't need them.
 
 | Addition | Purpose |
 | --- | --- |
-| Scan Lab timing probes and sweeps | Measure optical sensor response to help investigate scanning problems and evaluate firmware timing changes. |
-| Scan interval and LED-duty measurements | Check scanning frequency and how long the sensor LEDs stay on. |
-| Remote bootloader entry in diagnostic builds | Install another test image without pressing a physical reset button. |
-| Optional automated key-event tests | Check actual key behavior and saved settings through injected presses, captured reports, and reboots. This is a diagnostic build option; see the [testing guide](../keytest.md). |
+| Scan Lab | Measures optical scan timing, sensor-LED duty and idle current, and reports the status of both halves. |
+| Remote bootloader entry in diagnostic builds | Install another test image without pressing reset. |
+| Optional key-event tests | Check real key behavior and saved settings with injected presses and captured reports. See the [testing guide](../keytest.md). |
 
-## A closer connection with Keybard
+## For Keybard and companion apps
 
 | Addition | Benefit |
 | --- | --- |
-| Board-provided layout and controls | Keybard reads the connected board’s layout, feature capacities, and available hardware controls. |
-| Reads that skip empty feature slots | Loads populated behaviors without retrieving every unused entry. |
-| Separate editor sessions | Keeps replies associated with the requesting connection and renews the session automatically. Use one editor at a time when changing settings. |
-| Saved cluster selections | Keeps the selected finger and thumb cluster arrangement available for the editor’s layout view. |
-| Active-layer queries and changes | Lets Keybard inspect and change the keyboard’s active layer. |
-| Automatic default-layer reporting | Lets companion apps follow base-layout changes as well as active layers. Merged for builds after the original `vRC0`; existing Keybard layer reads remain compatible. |
+| Sparse table reads | Keybard loads only the entries in use instead of every empty slot. |
+| Client sessions | Several apps can talk to the board at once and each gets its own replies. Use one editor at a time when changing settings. |
+| Saved cluster selections | Keybard draws your finger and thumb cluster arrangement. |
+| Host access to layer state | Apps can read the active and default layers and control which layer is active. |
 
-The connection also supports companion applications that read the layout and follow live state. See [the protocol guide](protocol.md) for bidirectional communication, client coordination, and a preview of the key-peek trainer and app-aware layer work.
+See [the protocol guide](protocol.md) for details.
 
-For technical details, source references, and known defects, see the [firmware review](../reviews/2026-10-04-qmk-fork-review.md). For everyday setup, start with the [Keybard feature guide](README.md).
+For technical details, source references and known defects, see the [firmware review](../reviews/2026-10-04-qmk-fork-review.md). For everyday setup, start with the [Keybard feature guide](README.md).
