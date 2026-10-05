@@ -70,9 +70,9 @@ int main(void) {
  for(int i=0;i<8;i++)assert(sent[11+i]==i+1);
  assert(sent[19] & 0x40);
 #ifdef CAPS_WORD_ENABLE
- assert(sent[19]==0x4F); // Existing flags remain independent.
+ assert(sent[19]==0x6F); // Context layers (bit 5) and existing flags remain independent.
 #else
- assert(sent[19]==0x40);
+ assert(sent[19]==0x60); // Default-layer reporting (bit 6) plus context layers (bit 5).
 #endif
  uint32_t masks[]={0,1,2,0x80000000u,0x80000005u,0xFFFFFFFFu};
  for(unsigned a=0;a<sizeof(masks)/sizeof(masks[0]);a++) {
