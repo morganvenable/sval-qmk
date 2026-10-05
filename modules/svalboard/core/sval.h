@@ -65,11 +65,11 @@ enum sval_command_id {
     sval_cmd_qmk_settings_set   = 0x12,
     sval_cmd_qmk_settings_reset = 0x13,
     // Leader commands
-    sval_cmd_leader_get        = 0x14,
-    sval_cmd_leader_set        = 0x15,
+    sval_cmd_leader_get = 0x14,
+    sval_cmd_leader_set = 0x15,
     // Layer state commands (32-bit masks; GET appends defaults with capability bit 6)
-    sval_cmd_layer_state_get   = 0x16,
-    sval_cmd_layer_state_set   = 0x17,
+    sval_cmd_layer_state_get = 0x16,
+    sval_cmd_layer_state_set = 0x17,
     // Fragment commands (hardware detection and EEPROM selection)
     sval_cmd_fragment_get_hardware   = 0x18,
     sval_cmd_fragment_get_selections = 0x19,

@@ -744,16 +744,16 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
                 data[1] = sval_cmd_error;
                 return false;
             }
-            const uint32_t state = layer_state;
+            const uint32_t state    = layer_state;
             const uint32_t defaults = default_layer_state;
-            data[2] = state & 0xFF;
-            data[3] = (state >> 8) & 0xFF;
-            data[4] = (state >> 16) & 0xFF;
-            data[5] = (state >> 24) & 0xFF;
-            data[6] = defaults & 0xFF;
-            data[7] = (defaults >> 8) & 0xFF;
-            data[8] = (defaults >> 16) & 0xFF;
-            data[9] = (defaults >> 24) & 0xFF;
+            data[2]                 = state & 0xFF;
+            data[3]                 = (state >> 8) & 0xFF;
+            data[4]                 = (state >> 16) & 0xFF;
+            data[5]                 = (state >> 24) & 0xFF;
+            data[6]                 = defaults & 0xFF;
+            data[7]                 = (defaults >> 8) & 0xFF;
+            data[8]                 = (defaults >> 16) & 0xFF;
+            data[9]                 = (defaults >> 24) & 0xFF;
             break;
         }
 
