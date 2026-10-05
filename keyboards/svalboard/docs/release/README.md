@@ -56,7 +56,7 @@ You have **256 slots each** for tap dances, combos, macros, key overrides, alter
 | Alternate repeat | Map a remembered key to an alternate output, with modifier conditions and enabled state. | Build common key pairs and editing patterns around QMK's Repeat/Alternate Repeat system. |
 | Leaders | Configure an ordered sequence of up to five keys and an output keycode, with leader timing settings. | Make a mnemonic command sequence; the output can be a macro key. |
 | One-shot/mod-tap composer | Combine left/right modifier choices visually, with MEH and HYPER presets, and assign the resulting one-shot or mod-tap key. | Enter modifier chords without holding several keys, or combine a tap action with a modifier hold. |
-| Typing and mouse-key settings | Adjust leader timing, modifier swaps, simultaneous-key reporting (NKRO), and supported mouse-key controls. | Adapt shortcuts and keyboard-controlled pointer movement to your preferences. |
+| Typing settings | Adjust leader timing, modifier swaps, and simultaneous-key reporting (NKRO). | Adapt shortcuts to your preferences. |
 
 Some timing controls are not yet effective in this release. See [Current limitations](#current-limitations) before relying on changes to tap/hold, tap-dance, or combo timing.
 
@@ -72,9 +72,7 @@ Use the **Pointing Devices** panel to tune each side of your Svalboard. Availabl
 | Sniper keys, 2×/3×/5×, held or toggled | Slow cursor and scroll movement for precise placement without changing the normal DPI. |
 | Boost keys, 2×/3×/5×, held or toggled | Move farther and faster when crossing a large desktop, then return to your normal speed. |
 | Scroll hold/toggle, axis lock, and natural-scroll controls | Change between cursor and scroll work, avoid unwanted cross-axis scrolling, and select the direction that feels familiar. |
-| Keyboard mouse buttons and movement/wheel keys | Keep clicks and pointer actions on the keyboard, including when a physical pointer is inconvenient. |
-| TrackPoint recalibration | Recover from pointer drift on hardware that provides the recalibration operation. |
-| Layer colors | Give the board's lighting a visible cue for the active layer. |
+| Layer colors | Pick each layer's lighting color in Keybard, so the board shows which layer is active. |
 
 Hold a Sniper or Boost key for a temporary adjustment, or toggle it on for a longer task. Releasing a held key keeps an already-toggled mode active.
 
@@ -111,6 +109,7 @@ Editing tap dances, combos, key overrides, alternate-repeat keys, macros and QMK
 | Vial migration | Your existing Svalboard setup imports automatically on first boot. |
 | Persistent board identity | Name each board and keep its serial number through updates. |
 | More pointing control | Sniper toggles, Boost keys, per-pointer automouse with threshold and decay, natural scrolling. |
+| Layer colors in Keybard | Choose each layer's lighting color in the editor. |
 | Idle power saving | Lower scan rates, sensor rest modes and processor sleep while the keyboard is unused. |
 
 [See everything Svalboard QMK adds beyond Vial →](firmware-changes.md)

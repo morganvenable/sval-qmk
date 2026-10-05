@@ -4,7 +4,7 @@ Your Svalboard should fit the way you think and work. **Keybard**, the dedicated
 
 Drag keys into place, compare layers in flat or 3D views, and create shortcuts without rebuilding firmware. Give one position several roles with tap dances, turn comfortable chords into actions with combos, and put frequently used text and key sequences into macros. You have 256 slots each for tap dances, combos, macros, overrides, alternate-repeat mappings, and leader sequences.
 
-Pointing is part of your layout too. Tune each side independently, choose which pointer activates the mouse layer, and assign Sniper or Boost keys for precise work or faster movement. Keep scrolling and mouse buttons within easy reach.
+Pointing is part of your layout too. Tune each side independently, choose which pointer activates the mouse layer, and assign Sniper or Boost keys for precise work or faster movement.
 
 Try edits as you go, or queue them and apply them together. Reuse layers from your library, export a `.svil` backup, and print a reference while learning a new layout. Matrix Tester helps you check that each physical key registers.
 

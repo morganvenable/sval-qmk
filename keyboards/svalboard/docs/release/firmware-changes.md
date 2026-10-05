@@ -78,6 +78,7 @@ These support troubleshooting and firmware development; normal setup doesn't nee
 | Client sessions | Several apps can talk to the board at once and each gets its own replies. Use one editor at a time when changing settings. |
 | Saved cluster selections | Keybard draws your finger and thumb cluster arrangement. |
 | Host access to layer state | Apps can read the active and default layers and control which layer is active. |
+| Layer colors in Keybard | Choose each layer's lighting color in the editor; Vial had layer colors but no way to set them from the GUI. |
 
 See [the protocol guide](protocol.md) for details.
 
