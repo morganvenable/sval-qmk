@@ -47,14 +47,14 @@ sequenceDiagram
     S-->>K: N1 + client ID A (lease about 2 min)
     T->>S: ID request + random nonce N2
     S-->>T: N2 + client ID B
-    Note over K,T: Every app sees every reply. The nonce tells each app which one is its own.
+    Note over K,S: Every app sees every reply, and the nonce marks its own
 
     Note over K,S: 2. Talk
     K->>S: [A] change a key assignment
     S-->>K: [A] done
     T->>S: [B] which layers are active?
     S-->>T: [B] layers 0 and 3
-    Note over K,T: Replies carry the ID, so each app keeps only its own.
+    Note over K,S: Replies carry the ID, so each app keeps only its own
 
     Note over K,S: 3. Renew, or lapse
     K->>S: ID request + nonce N3, before A runs out
