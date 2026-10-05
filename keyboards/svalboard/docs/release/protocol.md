@@ -34,9 +34,45 @@ The current connection uses **requests and replies**. An app asks for state and 
 
 A layout editor and a trainer need different things from the same keyboard. Keybard changes assignments; a trainer reads those assignments and follows layer changes. Sval’s **client-ID wrapper** gives cooperating applications a way to distinguish their conversations.
 
-An application first requests a client ID. Its requests carry that ID, and the keyboard echoes it in the replies. Each application accepts replies addressed to its own ID and ignores the others. IDs expire, so clients renew their connection identity as needed. The initial exchange also echoes a random nonce, letting an app recognize the reply to its own connection request.
+### How apps get and keep an identity
 
-That allows applications to share the protocol without mistaking another app’s response for their own. Actual simultaneous access also depends on the operating system and the applications’ HID implementations.
+```mermaid
+sequenceDiagram
+    participant K as Keybard
+    participant T as Trainer
+    participant S as Svalboard
+
+    Note over K,S: 1. Get an ID
+    K->>S: ID request + random nonce N1
+    S-->>K: N1 + client ID A (lease about 2 min)
+    T->>S: ID request + random nonce N2
+    S-->>T: N2 + client ID B
+    Note over K,T: Every app sees every reply. The nonce tells each app which one is its own.
+
+    Note over K,S: 2. Talk
+    K->>S: [A] change a key assignment
+    S-->>K: [A] done
+    T->>S: [B] which layers are active?
+    S-->>T: [B] layers 0 and 3
+    Note over K,T: Replies carry the ID, so each app keeps only its own.
+
+    Note over K,S: 3. Renew, or lapse
+    K->>S: ID request + nonce N3, before A runs out
+    S-->>K: N3 + client ID A2
+    T->>S: [B] request after the lease has run out
+    S-->>T: [B] expired: request a new ID
+```
+
+Every message is a 32-byte Raw HID report in the same envelope:
+
+| `0xDD` | client ID (4 bytes) | inner protocol: `0xDF` Sval or `0xFE` VIA | payload |
+| --- | --- | --- | --- |
+
+An app first asks for an ID, sending a random 20-byte nonce with ID `0`. The keyboard echoes the nonce with a fresh ID and its lease. The app then sends every request with that ID, and the keyboard returns the ID in the reply, so apps sharing the keyboard never mistake another app's reply for their own. Before the lease runs out, the app simply asks for a new ID.
+
+The keyboard keeps no list of connected apps. Each ID carries the time it was issued, plus a counter that keeps it unique, so checking a request is just checking the ID's age. Nothing has to be cleaned up when an app crashes or is closed: its ID quietly expires. Because it stores nothing per app, the keyboard can serve any number of cooperating apps.
+
+Actual simultaneous access also depends on the operating system and the applications' HID implementations.
 
 Client IDs route replies; they do not reserve settings or resolve competing edits. Two apps writing the same assignment can still overwrite each other. The useful arrangement is one editor, with other tools observing state or controlling an agreed part of runtime behavior. A trainer should reload its layout after you edit it: this release has no layout-change notification to refresh another app’s cached copy automatically.
 
