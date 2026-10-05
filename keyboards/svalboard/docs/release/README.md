@@ -41,7 +41,7 @@ Use Chrome or Edge with WebHID enabled to connect to your board. Firefox and Saf
 | Adjustable workspace | Use a sidebar or bottom panel, adjustable key sizes, and responsive cluster spacing. | Keep the keyboard and its editor usable on different screen sizes. |
 | International palettes | Choose among the supplied language and layout palettes. | Pick the key labels and assignments appropriate to your host layout. This does not switch the OS layout for you. |
 
-Your `.svil` backup includes layer names, behavior names, and other editor labels. Import that file when moving to another browser; these names do not currently synchronize automatically from the keyboard.
+The firmware can store layer, tap-dance and macro names on the board, but Keybard doesn't save or load them there yet. Until it does, your `.svil` backup carries these names; import it when moving to another browser.
 
 ### Programmable behaviors without a firmware build
 
@@ -144,7 +144,7 @@ In Keybard's Settings, **Board name** accepts up to 32 characters within the fir
 
 - **Timing controls:** changes to the general tapping term, per-dance tapping term, and per-combo timing currently save but do not change key behavior. Quick-tap and several tap/hold option controls also remain inactive. Flow Tap, Chordal Hold, and one-shot timing/locking adjustments are not available through these settings yet.
 - **Auto Shift:** the standard firmware does not enable Auto Shift.
-- **Editor names:** move layer and behavior names between browsers with a `.svil` export; they do not automatically load from the board.
+- **Editor names:** Keybard doesn't yet save layer, tap-dance and macro names to the board, although the firmware supports it. Move them between browsers with a `.svil` export for now.
 - **Alternate repeat:** modifier conditions and the default-alternate option have known matching problems. Check the output of custom mappings before relying on them.
 - **Editing held actions:** release a tap-dance key before editing its action to avoid leaving its previous output held.
 - **After a reset:** restart the board before making new edits; edits made immediately after a configuration reset can otherwise be discarded at the next startup.
