@@ -93,9 +93,7 @@ Native exports are the portable backup. Browser libraries and presentation prefe
 
 **Matrix Tester** shows which physical keys register. Press a key to see its position light up, making it easier to locate a key that needs attention.
 
-**Scan Lab** provides advanced diagnostics for troubleshooting and firmware development, including status for both halves, optical scan timing measurements, and sensor-LED duty measurements. Normal keyboard setup does not require adjusting optical timing.
-
-Idle power controls can dim lighting, put supported trackball sensors into rest modes, and reduce scanning and processor activity while the keyboard is unused. More aggressive power-saving settings can delay the first input after inactivity. Scan Lab displays estimated current consumption to help compare these settings.
+Idle power controls can dim lighting, put supported trackball sensors into rest modes, and reduce scanning and processor activity while the keyboard is unused. More aggressive power-saving settings can delay the first input after inactivity.
 
 ## What Svalboard QMK adds beyond Vial
 
@@ -136,7 +134,7 @@ Firmware downloads are available for the left and right sides of:
 | `svalboard/azoteq/{left,right}` | Azoteq pointing hardware |
 | `svalboard/trackball/pmw3360/{left,right}` | PMW3360 trackball (**deprecated**: only for the few units shipped with this sensor) |
 
-Choose the **sensor family and side** that match the half you are updating. Use the maintained **`sval`** keymap for the regular setup. Choose **`blank`** for an empty base-board layout. **`scanlab`** is intended for hardware diagnostics.
+Choose the **sensor family and side** that match the half you are updating. Use the maintained **`sval`** keymap for the regular setup. Choose **`blank`** for an empty base-board layout.
 
 Enter the RP2040 bootloader by double-tapping reset within 500 ms. The half appears as **RPI-RP2**; copy its matching UF2 to that drive. See the [board README](../../readme.md) if you want to build your own firmware.
 

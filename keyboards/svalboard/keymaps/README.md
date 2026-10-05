@@ -1,6 +1,6 @@
 # Svalboard keymaps
 
-The maintained everyday configuration is **`sval`**, using the `svalboard/core` community module and `sval.json` definition. It supports the matching Keybard client. Base-board **`blank`** builds are included in the release workflow; **`scanlab`** is a diagnostic keymap.
+The maintained everyday configuration is **`sval`**, using the `svalboard/core` community module and `sval.json` definition. It supports the matching Keybard client. Base-board **`blank`** builds are included in the release workflow;
 
 Build an appropriate side/sensor variant, for example:
 

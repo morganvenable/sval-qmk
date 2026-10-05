@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Copy a UF2 onto a Svalboard half that is sitting in the RP2040 bootloader
 # (the RPI-RP2 drive), then wait for it to reboot. Put the half into the
-# bootloader first: Scan Lab > Firmware > Reboot into bootloader (needs a build
-# with SVAL_HOST_BOOTLOADER, e.g. the scanlab keymap), or hold BOOTSEL while
+# bootloader first: request a reboot into the bootloader from the host (needs a
+# build with SVAL_HOST_BOOTLOADER), or hold BOOTSEL while
 # plugging in. Works from WSL (through PowerShell), Linux and macOS.
 #
 #   keyboards/svalboard/tools/flash.sh <image.uf2> [timeout-seconds]

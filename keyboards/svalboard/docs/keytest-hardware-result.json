@@ -337,7 +337,7 @@
     }
   ],
   "firmware_commit": "b71d344427f5a17889b28b670a00cb94ef62fedc",
-  "firmware_target": "svalboard/trackball/pmw3389/left:scanlab",
+  "firmware_target": "svalboard/trackball/pmw3389/left (instrumented diagnostic build)",
   "build_option": "SVAL_KEYTEST=yes",
   "firmware_sha256": "16fa8b85886676592573211845dd892c75850588d881ee7acb8e709e626e58fb",
   "transport": "Windows hidapi accessed from WSL",

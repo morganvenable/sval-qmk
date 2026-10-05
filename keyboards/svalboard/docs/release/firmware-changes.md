@@ -54,19 +54,12 @@ The name and serial are stored on the keyboard, separately from your layout back
 | Idle lighting and processor sleep | Dim the lighting and reduce processor activity between scans. |
 | Selectable deep-idle clock | Further savings, at the cost of a possible delay on the first input after inactivity. |
 
-Scan Lab shows estimated current draw for comparing settings.
-
-## Hardware revision B
-
-Boards with the revised analog front end ("flipfet") are detected automatically at startup and use scan timing measured for that hardware.
-
 ## Diagnostics and testing
 
 These support troubleshooting and firmware development; normal setup doesn't need them.
 
 | Addition | Purpose |
 | --- | --- |
-| Scan Lab | Measures optical scan timing, sensor-LED duty and idle current, and reports the status of both halves. |
 | Remote bootloader entry in diagnostic builds | Install another test image without pressing reset. |
 | Optional key-event tests | Check real key behavior and saved settings with injected presses and captured reports. See the [testing guide](../keytest.md). |
 

@@ -22,7 +22,6 @@ A,keyboards/svalboard/config.h,Board and keymaps,Source/configuration/definition
 A,keyboards/svalboard/docs/release/README.md,Board documentation,Claims and supported behavior
 A,keyboards/svalboard/docs/release/announcement.md,Board documentation,Claims and supported behavior
 A,keyboards/svalboard/docs/release/firmware-changes.md,Board documentation,Claims and supported behavior
-A,keyboards/svalboard/docs/scan-lab.md,Board documentation,Claims and supported behavior
 A,keyboards/svalboard/identity.c,Board and keymaps,Source/configuration/definition or empty CI marker
 A,keyboards/svalboard/identity.h,Board and keymaps,Source/configuration/definition or empty CI marker
 A,keyboards/svalboard/info.json,Board and keymaps,Source/configuration/definition or empty CI marker
@@ -39,12 +38,6 @@ A,keyboards/svalboard/keymaps/default/keymap.json,Board and keymaps,Source/confi
 A,keyboards/svalboard/keymaps/default/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
 A,keyboards/svalboard/keymaps/keymap_support.c,Board and keymaps,Source/configuration/definition or empty CI marker
 A,keyboards/svalboard/keymaps/keymap_support.h,Board and keymaps,Source/configuration/definition or empty CI marker
-A,keyboards/svalboard/keymaps/scanlab/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
-A,keyboards/svalboard/keymaps/scanlab/keymap.c,Board and keymaps,Source/configuration/definition or empty CI marker
-A,keyboards/svalboard/keymaps/scanlab/keymap.json,Board and keymaps,Source/configuration/definition or empty CI marker
-A,keyboards/svalboard/keymaps/scanlab/readme.md,Board documentation,Claims and supported behavior
-A,keyboards/svalboard/keymaps/scanlab/rules.mk,Board and keymaps,Source/configuration/definition or empty CI marker
-A,keyboards/svalboard/keymaps/scanlab/sval.json,Board and keymaps,Source/configuration/definition or empty CI marker
 A,keyboards/svalboard/keymaps/sval/config.h,Board and keymaps,Source/configuration/definition or empty CI marker
 A,keyboards/svalboard/keymaps/sval/keymap.c,Board and keymaps,Source/configuration/definition or empty CI marker
 A,keyboards/svalboard/keymaps/sval/keymap.json,Board and keymaps,Source/configuration/definition or empty CI marker

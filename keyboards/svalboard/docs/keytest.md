@@ -42,7 +42,7 @@ keytest_python_win=$("$keytest_ps" -NoProfile -Command '(Get-Command python.exe)
 
 Use that interpreter/script pair for the other commands too. Convert Linux output, backup, and scenario paths with `wslpath -w` before passing them to Windows Python. If WSL interop reports `UtilBindVsockAnyPort: socket failed`, the Linux execution sandbox may be blocking interop; retry through the environment's approved Windows-interoperability execution path instead of treating it as a missing device.
 
-For the first instrumented installation, an existing Scan Lab image can enter its bootloader using its established channel `0x53` ARM/GO exchange. The existing `tools/flash.sh` already supports copying via Windows PowerShell. Select the target by exact serial, verify the bootloader volume is unambiguous, and use the matching keyboard/side image. Subsequent instrumented builds can use `keytest.py bootloader` directly.
+For the first instrumented installation, a diagnostic image built with `SVAL_HOST_BOOTLOADER` can be rebooted into its bootloader from the host. The existing `tools/flash.sh` already supports copying via Windows PowerShell. Select the target by exact serial, verify the bootloader volume is unambiguous, and use the matching keyboard/side image. Subsequent instrumented builds can use `keytest.py bootloader` directly.
 
 ## Verify application and persistence in one loop
 
