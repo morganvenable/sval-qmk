@@ -173,3 +173,34 @@ The harness was installed and exercised on a USB-connected PMW3389-left test boa
 - The board was left running the instrumented image with capture inactive and its original binding restored.
 
 This validates the real injection/capture and reboot-persistence loop. It does not extend the result to every configurable feature or to interrupted flash writes.
+
+### Extended feature characterization
+
+The reusable `tools/keytest_features.py` runner snapshots every resource it changes: four bindings, one tap-dance entry, one combo entry, two timing settings, and three macro bytes. It writes a recovery journal before testing and restores all of them, then reboots and checks the restored values. Use it only on an instrumented test board; it deliberately exercises stored configuration changes.
+
+```sh
+python keyboards/svalboard/tools/keytest_features.py --serial YOUR_SERIAL \
+  --backup /tmp/keytest-feature-original.json --output /tmp/keytest-feature-results.json
+```
+
+If interrupted, restore from the same journal:
+
+```sh
+python keyboards/svalboard/tools/keytest_features.py --serial YOUR_SERIAL \
+  --backup /tmp/keytest-feature-original.json --restore
+```
+
+The [hardware run](keytest-feature-results.json) completed **11 behavioral cases: eight passed, three failed**, with restoration verified after reboot. Exit status 1 correctly represents the three firmware behavior failures; the instrument did not turn accepted writes into false passes.
+
+| Case | Hardware result |
+| --- | --- |
+| Momentary layer lookup | Passed: held layer key selects F14, then returns to the base layer. |
+| Mod-tap short/long controls | Both passed: a 30 ms press taps A; a 350 ms press holds Left Control. |
+| Macro playback | Passed: macro 0 emits a then b and releases both. |
+| Tap-dance single/double/hold | All three passed: F14, F16, and F15 respectively. |
+| Close-timed combo | Passed: F13 + F14 at 5 ms spacing produces F15. |
+| Runtime tapping term, 600 ms | **Failed:** 600 read back after reboot, but a 300 ms press became Left Control at 201 ms instead of tapping A. |
+| Per-dance tapping term, 500 ms | **Failed:** a 300 ms press became the hold action at 204 ms instead of the tap action. |
+| Per-combo term, 200 ms | **Failed:** a 100 ms gap emitted the two input keys rather than their combo; the first escaped at 53 ms. |
+
+The failures match [review finding R15](reviews/2026-10-04-qmk-fork-review.md#r15): runtime timing callbacks are present but their compile-time gates are absent. This characterization commit supplies the repeatable hardware tests and evidence; it does not change those gates or mask the failures as expected passes.
