@@ -1,0 +1,46 @@
+name: Format Svalboard sources
+
+# Manual tool: push any commit to the tools/format-svalboard branch to format
+# every Svalboard file with the same formatters the PR lint uses, committed
+# back to that branch. Nothing else triggers it.
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+    - 'tools/format-svalboard'
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+
+    container: ghcr.io/qmk/qmk_cli
+
+    steps:
+    - name: Disable safe.directory check
+      run : git config --global --add safe.directory '*'
+
+    - uses: actions/checkout@v7
+
+    - name: Install dependencies
+      run: pip3 install -r requirements-dev.txt
+
+    - name: Format Svalboard files
+      shell: 'bash {0}'
+      run: |
+        git ls-files 'keyboards/svalboard/**' 'modules/svalboard/**' 'tests/sval_*/**' > ~/files.txt
+        qmk format-c --core-only $(< ~/files.txt) || true
+        qmk format-python $(< ~/files.txt) || true
+        qmk format-text $(< ~/files.txt) || true
+        git diff --stat
+
+    - name: Commit formatting
+      shell: 'bash {0}'
+      run: |
+        git diff --quiet && exit 0
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git commit -am "Apply repository formatting to Svalboard sources"
+        git push origin HEAD:${GITHUB_REF_NAME}
