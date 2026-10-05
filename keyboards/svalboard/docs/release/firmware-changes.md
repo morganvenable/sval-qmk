@@ -94,6 +94,7 @@ These tools support troubleshooting and firmware development. Normal keyboard se
 | Separate editor sessions | Keeps replies associated with the requesting connection and renews the session automatically. Use one editor at a time when changing settings. |
 | Saved cluster selections | Keeps the selected finger and thumb cluster arrangement available for the editor’s layout view. |
 | Active-layer queries and changes | Lets Keybard inspect and change the keyboard’s active layer. |
+| Automatic default-layer reporting | Lets companion apps follow base-layout changes as well as active layers. Merged for builds after the original `vRC0`; existing Keybard layer reads remain compatible. |
 
 The connection also supports companion applications that read the layout and follow live state. See [the protocol guide](protocol.md) for bidirectional communication, client coordination, and a preview of the key-peek trainer and app-aware layer work.
 

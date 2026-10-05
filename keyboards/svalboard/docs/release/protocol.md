@@ -15,7 +15,7 @@ Normal key presses and pointer movement reach your computer through the usual US
 | Board definition, matrix geometry, and selected cluster configuration | Draw the connected Svalboard with the appropriate physical positions. |
 | Key assignments across all layers | Display or back up your actual layout directly from the board. |
 | Programmable behaviors, including tap-dance actions | Show what a configured key can do and edit its actions. |
-| Active-layer state | Update a layout display as you hold or switch layers. |
+| Active- and default-layer state | Update a layout display as you hold or switch layers, including when you change your base layout. |
 | Physical switch-matrix state | Highlight held keys for troubleshooting or a learning aid. |
 | Feature capacities, settings, and hardware information | Load the board’s configuration and present its controls. |
 
@@ -46,7 +46,7 @@ The trainer work uses this connection to put a reference to **your own layout** 
 
 The developing trainer already reads the board’s layout and cluster selections, follows active-layer changes, and offers optional held-key highlighting through matrix snapshots. That is the foundation of the key-peek experience: glance at the keyboard overlay when you need a reminder, then keep working. Reading those definitions and states does not require capturing the text you type into other applications.
 
-An overlay can describe configured tap and hold actions, but displaying a binding is different from observing which action the firmware ultimately executes. Richer feedback for resolved tap dances, combos, and other timed behaviors is a further step. Automatic default-layer reporting is also being developed as a capability extension; `vRC0` reports the active-layer mask, with the base/default choice supplied by the host tool.
+An overlay can describe configured tap and hold actions, but displaying a binding is different from observing which action the firmware ultimately executes. Richer feedback for resolved tap dances, combos, and other timed behaviors is a further step. Automatic default-layer reporting lets the trainer follow base-layout changes as well as momentary layers. This extension is now merged for the next firmware build. The original `vRC0` download predates it; on that firmware, the host tool still supplies the base/default choice.
 
 These are previews of the trainer experience being built on the protocol, not a trainer bundled with the firmware download.
 
@@ -77,9 +77,9 @@ The release uses **Sval protocol version 3**, carried in 32-byte Raw HID reports
 | 16-bit behavior indices | Address all 256 entries in each supported behavior table. |
 | Version 3 sparse table reads | Retrieve populated behaviors without downloading every empty slot. |
 | Version 3 macro transfers with 32-bit offsets | Access macro storage beyond the older 64 KiB addressing boundary. |
-| 32-bit active-layer mask | Describe several active layers together, rather than only a single layer number. |
+| 32-bit active- and default-layer masks | Describe all active layers and base layers together, so a companion can follow changes to either. Default-layer reporting is included in builds after the original `vRC0`. |
 | Client IDs echoed in replies | Keep cooperating applications’ request/reply conversations distinguishable. |
 
 App authors should serialize requests within each connection, check reply identity and command, renew client IDs, and recover cleanly from disconnects. Feature capabilities distinguish extensions that share a protocol version. A read-only companion can restrict itself to reads; an editor or layer controller can add only the writes its purpose requires.
 
-For packet formats and implementation details, see the [client-ID protocol reference](../../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [Sval command definitions](../../../../modules/svalboard/core/sval.h), and [command handlers](../../../../modules/svalboard/core/sval.c).
+For packet formats and implementation details, see the [client-ID protocol reference](../../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [Sval command definitions](../../../../modules/svalboard/core/sval.h), [active/default-layer reporting](../../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), and [command handlers](../../../../modules/svalboard/core/sval.c).
