@@ -23,6 +23,8 @@ ASSERT_COMMUNITY_MODULES_MIN_API_VERSION(1, 0, 0);
 // Global for keycode override during tap dance execution
 uint16_t g_sval_magic_keycode_override;
 
+static void sval_reload_one_shot(void);
+
 // Label System v2: Fixed SVAL_LABEL_SIZE-byte UTF-8 storage arrays
 char sval_td_labels[SVAL_TAP_DANCE_ENTRIES][SVAL_LABEL_SIZE];
 char sval_macro_labels[DYNAMIC_KEYMAP_MACRO_COUNT][SVAL_LABEL_SIZE];
@@ -197,6 +199,7 @@ void sval_init(void) {
     sval_reload_alt_repeat_key();
     sval_reload_leader();
     sval_reload_labels();
+    sval_reload_one_shot();
     sval_qmk_settings_init();
 }
 
@@ -209,13 +212,22 @@ void keyboard_post_init_core(void) {
     sval_init();
 }
 
-// Override QMK's get_oneshot_timeout for runtime configuration
-// TEMPORARILY DISABLED - may be called before EEPROM ready
-// uint16_t get_oneshot_timeout(void) {
-//     sval_one_shot_t settings;
-//     sval_get_one_shot(&settings);
-//     return settings.timeout;
-// }
+// One-shot settings (commands 0x09/0x0A) cached in RAM. The cache stays zero
+// (no timeout, no tap toggle) until the EEPROM has been read, so QMK can call
+// these before init without touching storage.
+static sval_one_shot_t one_shot_cache;
+
+static void sval_reload_one_shot(void) {
+    sval_get_one_shot(&one_shot_cache);
+}
+
+uint16_t get_oneshot_timeout(void) {
+    return one_shot_cache.timeout;
+}
+
+uint8_t sval_oneshot_tap_toggle(void) {
+    return one_shot_cache.tap_toggle;
+}
 
 // Get feature flags based on what's enabled
 uint8_t sval_get_feature_flags(void) {
@@ -295,6 +307,7 @@ void sval_get_one_shot(sval_one_shot_t *settings) {
 
 void sval_set_one_shot(const sval_one_shot_t *settings) {
     sval_write_eeprom(SVAL_ONE_SHOT_OFFSET, settings, sizeof(sval_one_shot_t));
+    one_shot_cache = *settings;
 }
 
 // Storage functions - Leader

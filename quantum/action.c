@@ -32,6 +32,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "debug.h"
 #include "quantum.h"
 
+#if !defined(NO_ACTION_ONESHOT) && ((defined(ONESHOT_TAP_TOGGLE) && ONESHOT_TAP_TOGGLE > 1) || defined(SVAL_ENABLE))
+#    define ONESHOT_TAP_TOGGLE_SUPPORT
+#    ifdef SVAL_ENABLE
+// Svalboard: the tap count is a runtime setting; values of 0 or 1 disable toggling.
+uint8_t sval_oneshot_tap_toggle(void);
+static inline uint8_t oneshot_tap_toggle(void) {
+    return sval_oneshot_tap_toggle();
+}
+#    else
+static inline uint8_t oneshot_tap_toggle(void) {
+    return ONESHOT_TAP_TOGGLE;
+}
+#    endif
+#endif
+
 #ifdef BACKLIGHT_ENABLE
 #    include "backlight.h"
 #endif
@@ -108,7 +123,7 @@ void action_exec(keyevent_t event) {
 
 #ifndef NO_ACTION_ONESHOT
     if (keymap_config.oneshot_enable) {
-#    if (defined(ONESHOT_TIMEOUT) && (ONESHOT_TIMEOUT > 0))
+#    if (defined(ONESHOT_TIMEOUT) && (ONESHOT_TIMEOUT > 0)) || defined(SVAL_ENABLE)
         if (has_oneshot_layer_timed_out()) {
             clear_oneshot_layer_state(ONESHOT_OTHER_KEY_PRESSED);
         }
@@ -477,8 +492,8 @@ void process_action(keyrecord_t *record, action_t action) {
                             } else if (tap_count == 1) {
                                 ac_dprintf("MODS_TAP: Oneshot: start\n");
                                 add_oneshot_mods(mods);
-#        if defined(ONESHOT_TAP_TOGGLE) && ONESHOT_TAP_TOGGLE > 1
-                            } else if (tap_count == ONESHOT_TAP_TOGGLE) {
+#        ifdef ONESHOT_TAP_TOGGLE_SUPPORT
+                            } else if (oneshot_tap_toggle() > 1 && tap_count == oneshot_tap_toggle()) {
                                 ac_dprintf("MODS_TAP: Toggling oneshot");
                                 register_mods(mods);
                                 del_oneshot_mods(mods);
@@ -491,8 +506,8 @@ void process_action(keyrecord_t *record, action_t action) {
                                 unregister_mods(mods);
                                 del_oneshot_mods(mods);
                                 del_oneshot_locked_mods(mods);
-#        if defined(ONESHOT_TAP_TOGGLE) && ONESHOT_TAP_TOGGLE > 1
-                            } else if (tap_count == 1 && (mods & get_mods())) {
+#        ifdef ONESHOT_TAP_TOGGLE_SUPPORT
+                            } else if (oneshot_tap_toggle() > 1 && tap_count == 1 && (mods & get_mods())) {
                                 unregister_mods(mods);
                                 del_oneshot_mods(mods);
                                 del_oneshot_locked_mods(mods);
@@ -670,25 +685,28 @@ void process_action(keyrecord_t *record, action_t action) {
                             layer_off(action.layer_tap.val);
                         }
                     } else {
-#        if defined(ONESHOT_TAP_TOGGLE) && ONESHOT_TAP_TOGGLE > 1
-                        do_release_oneshot = false;
-                        if (event.pressed) {
-                            if (get_oneshot_layer_state() == ONESHOT_TOGGLED) {
-                                reset_oneshot_layer();
-                                layer_off(action.layer_tap.val);
-                                break;
-                            } else if (tap_count < ONESHOT_TAP_TOGGLE) {
-                                set_oneshot_layer(action.layer_tap.val, ONESHOT_START);
-                            }
-                        } else {
-                            if (tap_count >= ONESHOT_TAP_TOGGLE) {
-                                reset_oneshot_layer();
-                                set_oneshot_layer(action.layer_tap.val, ONESHOT_TOGGLED);
+#        ifdef ONESHOT_TAP_TOGGLE_SUPPORT
+                        if (oneshot_tap_toggle() > 1) {
+                            do_release_oneshot = false;
+                            if (event.pressed) {
+                                if (get_oneshot_layer_state() == ONESHOT_TOGGLED) {
+                                    reset_oneshot_layer();
+                                    layer_off(action.layer_tap.val);
+                                    break;
+                                } else if (tap_count < oneshot_tap_toggle()) {
+                                    set_oneshot_layer(action.layer_tap.val, ONESHOT_START);
+                                }
                             } else {
-                                clear_oneshot_layer_state(ONESHOT_PRESSED);
+                                if (tap_count >= oneshot_tap_toggle()) {
+                                    reset_oneshot_layer();
+                                    set_oneshot_layer(action.layer_tap.val, ONESHOT_TOGGLED);
+                                } else {
+                                    clear_oneshot_layer_state(ONESHOT_PRESSED);
+                                }
                             }
+                            break;
                         }
-#        else
+#        endif
                         if (event.pressed) {
                             set_oneshot_layer(action.layer_tap.val, ONESHOT_START);
                         } else {
@@ -697,7 +715,6 @@ void process_action(keyrecord_t *record, action_t action) {
                                 clear_oneshot_layer_state(ONESHOT_OTHER_KEY_PRESSED);
                             }
                         }
-#        endif
                     }
 #    else  // NO_ACTION_ONESHOT && NO_ACTION_TAPPING
                     if (event.pressed) {

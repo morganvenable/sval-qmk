@@ -41,18 +41,37 @@
 // permissive hold, hold-on-other-key-press, quick tap term) take effect at
 // runtime. These must be C defines, not rules.mk variables: without them QMK
 // compiles the callbacks out and uses the compile-time constants instead.
-#define TAPPING_TERM_PER_KEY
-#define PERMISSIVE_HOLD_PER_KEY
-#define HOLD_ON_OTHER_KEY_PRESS_PER_KEY
-#define QUICK_TAP_TERM_PER_KEY
+#ifndef TAPPING_TERM_PER_KEY
+#    define TAPPING_TERM_PER_KEY
+#endif
+#ifndef PERMISSIVE_HOLD_PER_KEY
+#    define PERMISSIVE_HOLD_PER_KEY
+#endif
+#ifndef HOLD_ON_OTHER_KEY_PRESS_PER_KEY
+#    define HOLD_ON_OTHER_KEY_PRESS_PER_KEY
+#endif
+#ifndef QUICK_TAP_TERM_PER_KEY
+#    define QUICK_TAP_TERM_PER_KEY
+#endif
 
 // Compile in the remaining Tap-Hold features whose toggles QMK Settings
 // exposes (Chordal Hold, Flow Tap, Retro Tapping). Each decision is routed
 // through a callback in sval_qmk_settings.c that honours the stored setting;
 // with the setting off, behaviour is the same as the feature not being built.
-#define CHORDAL_HOLD
-#define FLOW_TAP_TERM 0 // placeholder: the runtime value comes from get_flow_tap_term()
-#define RETRO_TAPPING_PER_KEY
+#ifndef CHORDAL_HOLD
+#    define CHORDAL_HOLD
+#endif
+#ifndef FLOW_TAP_TERM
+#    define FLOW_TAP_TERM 0 // placeholder: the runtime value comes from get_flow_tap_term()
+#endif
+#ifndef RETRO_TAPPING_PER_KEY
+#    define RETRO_TAPPING_PER_KEY
+#endif
+
+// Per-combo and global combo terms come from get_combo_term() in sval_combo.c.
+#ifndef COMBO_TERM_PER_COMBO
+#    define COMBO_TERM_PER_COMBO
+#endif
 
 // QMK settings storage size (sval_qmk_settings_t)
 #define SVAL_QMK_SETTINGS_SIZE 44
