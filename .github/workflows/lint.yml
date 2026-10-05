@@ -1,12 +1,17 @@
 name: PR Lint keyboards
 
+# Svalboard-only. Validates the Svalboard keyboard definitions and targets;
+# other keyboards inherited from QMK are not checked here. `qmk lint` is not
+# used: it enforces QMK submission policy (license headers, no keyboard-level
+# VIA/combo/tap-dance) that this fork intentionally does not follow.
+
 permissions:
   contents: read
 
 on:
   pull_request:
     paths:
-    - 'keyboards/**'
+    - 'keyboards/svalboard/**'
 
 jobs:
   lint:
@@ -30,52 +35,36 @@ jobs:
       uses: tj-actions/changed-files@v47
       with:
         use_rest_api: true
+        files: |
+          keyboards/svalboard/**
 
-    - name: Print git info
-      run: |
-        git rev-parse --short HEAD
-        echo ${{ github.event.pull_request.base.sha }}
-        echo '${{ steps.file_changes.outputs.all_changed_files}}'
-
-    - name: Run qmk lint
+    - name: Validate Svalboard keyboard definitions
       if: always()
       shell: 'bash {0}'
       run: |
-        QMK_CHANGES=$(echo -e '${{ steps.file_changes.outputs.all_changed_files}}' | sed 's/ /\n/g')
-        QMK_KEYBOARDS=$(qmk list-keyboards)
-
         exit_code=0
+        for KB in $(qmk list-keyboards | grep '^svalboard/'); do
+          echo "validating ${KB}"
+          qmk info -l --keyboard ${KB} > /dev/null || exit_code=$(($exit_code + 1))
+        done
+        exit $exit_code
 
-        for KB in $QMK_KEYBOARDS; do
-          KEYBOARD_CHANGES=$(echo "$QMK_CHANGES" | grep -E '^(keyboards/'${KB}'/)')
-          if [[ -z "$KEYBOARD_CHANGES" ]]; then
-            # skip as no changes for this keyboard
-            continue
-          fi
-
-          KEYMAP_ONLY=$(echo "$KEYBOARD_CHANGES" | grep -cv /keymaps/)
-          if [[ $KEYMAP_ONLY -gt 0 ]]; then
-            echo "linting ${KB}"
-
-            qmk lint --strict --keyboard ${KB} && qmk info -l --keyboard ${KB}
-            exit_code=$(($exit_code + $?))
+    - name: Check text formatting
+      if: always()
+      shell: 'bash {0}'
+      run: |
+        FILES='${{ steps.file_changes.outputs.all_changed_files }}'
+        # With no arguments the formatter would rewrite the whole tree.
+        [[ -z "${FILES// }" ]] && exit 0
+        qmk format-text $FILES || true
+        exit_code=0
+        for file in $FILES; do
+          if [[ -f $file ]] && ! git diff --quiet $file; then
+            echo "File '${file}' Requires Formatting"
+            echo "::error file=${file}::Requires Formatting"
+            exit_code=$(($exit_code + 1))
           fi
         done
-
-        qmk format-text ${{ steps.file_changes.outputs.all_changed_files}} || true
-        for file in ${{ steps.file_changes.outputs.all_changed_files}}; do
-          if [[ -f $file ]]; then
-            if ! git diff --quiet $file; then
-              echo "File '${file}' Requires Formatting"
-              echo "::error file=${file}::Requires Formatting"
-              exit_code=$(($exit_code + 1))
-            fi
-          fi
-        done
-
-        if [[ $exit_code -gt 255 ]]; then
-            exit 255
-        fi
         exit $exit_code
 
     - name: Reset git repo
@@ -85,14 +74,9 @@ jobs:
         git reset --hard
         git clean -xfd
 
-    - name: Verify keyboard targets
+    - name: Verify Svalboard targets and aliases
       if: always()
       shell: 'bash {0}'
       run: |
-        qmk ci-validate-keyboard-targets
-
-    - name: Verify keyboard aliases
-      if: always()
-      shell: 'bash {0}'
-      run: |
-        qmk ci-validate-aliases
+        { qmk ci-validate-keyboard-targets; qmk ci-validate-aliases; } 2>&1 | tee ~/validate.txt
+        ! grep -i 'svalboard' ~/validate.txt

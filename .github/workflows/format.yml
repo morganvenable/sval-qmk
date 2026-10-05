@@ -1,20 +1,17 @@
 name: PR Lint Format
 
+# Svalboard-only: formats the Svalboard module, keyboard and tests. Code
+# inherited from QMK is not checked, so QMK merges don't fail on upstream files.
+
 permissions:
   contents: read
 
 on:
   pull_request:
     paths:
-    - 'drivers/**'
-    - 'lib/arm_atsam/**'
-    - 'lib/lib8tion/**'
-    - 'lib/python/**'
-    - 'modules/**'
-    - 'platforms/**'
-    - 'quantum/**'
-    - 'tests/**'
-    - 'tmk_core/**'
+    - 'keyboards/svalboard/**'
+    - 'modules/svalboard/**'
+    - 'tests/sval_*/**'
 
 jobs:
   lint:
@@ -39,11 +36,17 @@ jobs:
       uses: tj-actions/changed-files@v47
       with:
         use_rest_api: true
+        files: |
+          keyboards/svalboard/**
+          modules/svalboard/**
+          tests/sval_*/**
 
     - name: Run qmk formatters
       shell: 'bash {0}'
       run: |
         echo '${{ steps.file_changes.outputs.added_files}}' '${{ steps.file_changes.outputs.modified_files}}' > ~/files_changed.txt
+        # With no arguments the formatters would rewrite the whole tree.
+        [[ -z "$(tr -d '[:space:]' < ~/files_changed.txt)" ]] && exit 0
         qmk format-c --core-only $(< ~/files_changed.txt) || true
         qmk format-python $(< ~/files_changed.txt) || true
         qmk format-text $(< ~/files_changed.txt) || true
