@@ -46,26 +46,13 @@ The trainer work uses this connection to put a reference to **your own layout** 
 
 The developing trainer already reads the board’s layout and cluster selections, follows active-layer changes, and offers optional held-key highlighting through matrix snapshots. That is the foundation of the key-peek experience: glance at the keyboard overlay when you need a reminder, then keep working. Reading those definitions and states does not require capturing the text you type into other applications.
 
-An overlay can describe configured tap and hold actions, but displaying a binding is different from observing which action the firmware ultimately executes. Richer feedback for resolved tap dances, combos, and other timed behaviors is a further step. Automatic default-layer reporting lets the trainer follow base-layout changes as well as momentary layers. This extension is now merged for the next firmware build. The original `vRC0` download predates it; on that firmware, the host tool still supplies the base/default choice.
+An overlay can describe configured tap and hold actions, but displaying a binding is different from observing which action the firmware ultimately executes. Richer feedback for resolved tap dances, combos, and other timed behaviors is a further step. Automatic default-layer reporting lets the trainer follow base-layout changes as well as momentary layers. This is included from `vRC1`; on `vRC0`, the host tool still supplies the base/default choice.
 
 These are previews of the trainer experience being built on the protocol, not a trainer bundled with the firmware download.
 
-## Coming next: layers that follow your application
+## Layer state from the host
 
-App-aware layer switching brings information in the other direction. Your computer knows which application has focus; a companion can use that information to select an appropriate keyboard layer.
-
-For example, you could configure a CAD layer in Keybard and have it appear when you enter your CAD application, then return to your normal layout when you switch away. The shortcuts remain stored on the board. The companion chooses when to use them, so switching applications requires neither a reflash nor a new layout upload.
-
-The existing layer-state command supplies basic host-controlled switching. The app-aware work in progress adds a **separate, temporary host layer** with behavior designed for everyday use:
-
-- Manual non-base layers take priority, so holding your own navigation or symbol layer still works.
-- Transparent keys in the app layer fall through to the normal base/default layers.
-- Pausing the companion removes its layer contribution while preserving your manual layer state.
-- A short, renewable lease removes the host contribution if the companion stops responding. The current draft uses a five-second lease.
-
-A Windows companion draft matches foreground applications, with optional browser assistance for supported website contexts. The host supplies that context; the keyboard itself does not inspect running applications. The app-aware extension and companion are separate development work and are not included in `vRC0`.
-
-Together, these directions make a useful loop possible: **the host chooses an application layer, the keyboard applies it, and a trainer shows the relevant bindings.** Completing that loop requires the trainer to understand the host-layer extension as well as ordinary manual layers. The extension keeps those states separate, so an older active-layer display alone will not show the full app-aware result.
+Host apps can read the keyboard’s active and default layer state and control which layer is active.
 
 ## Under the hood
 
@@ -77,7 +64,7 @@ The release uses **Sval protocol version 3**, carried in 32-byte Raw HID reports
 | 16-bit behavior indices | Address all 256 entries in each supported behavior table. |
 | Version 3 sparse table reads | Retrieve populated behaviors without downloading every empty slot. |
 | Version 3 macro transfers with 32-bit offsets | Access macro storage beyond the older 64 KiB addressing boundary. |
-| 32-bit active- and default-layer masks | Describe all active layers and base layers together, so a companion can follow changes to either. Default-layer reporting is included in builds after the original `vRC0`. |
+| 32-bit active- and default-layer masks | Describe all active layers and base layers together, so a companion can follow changes to either. Default-layer reporting is included from `vRC1`. |
 | Client IDs echoed in replies | Keep cooperating applications’ request/reply conversations distinguishable. |
 
 App authors should serialize requests within each connection, check reply identity and command, renew client IDs, and recover cleanly from disconnects. Feature capabilities distinguish extensions that share a protocol version. A read-only companion can restrict itself to reads; an editor or layer controller can add only the writes its purpose requires.
