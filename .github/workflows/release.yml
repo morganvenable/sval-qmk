@@ -1,13 +1,11 @@
 name: Release QMK Firmware
 
+# Builds and publishes firmware only when a v* tag is pushed. Branch pushes and
+# PRs do not build, so each release uses the runners once.
 on:
   push:
     tags:
       - 'v*'
-    branches:
-      - '**'
-  pull_request_target:
-    types: [opened, synchronize, reopened]
 
 
 permissions: write-all
