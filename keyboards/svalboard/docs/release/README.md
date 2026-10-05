@@ -132,10 +132,10 @@ Firmware downloads are available for the left and right sides of:
 | Target family | Hardware |
 | --- | --- |
 | `svalboard/{left,right}` | Base board |
-| `svalboard/trackball/pmw3360/{left,right}` | PMW3360 trackball |
 | `svalboard/trackball/pmw3389/{left,right}` | PMW3389 trackball |
 | `svalboard/trackpoint/{left,right}` | TrackPoint |
 | `svalboard/azoteq/{left,right}` | Azoteq pointing hardware |
+| `svalboard/trackball/pmw3360/{left,right}` | PMW3360 trackball (**deprecated**: only for the few units shipped with this sensor) |
 
 Choose the **sensor family and side** that match the half you are updating. Use the maintained **`sval`** keymap for the regular setup. Choose **`blank`** for an empty base-board layout. **`scanlab`** is intended for hardware diagnostics.
 
