@@ -80,7 +80,7 @@ Hold a Sniper or Boost key for a temporary adjustment, or toggle it on for a lon
 
 - **Layouts library:** browse bundled layers and your locally saved layers, preview them, search them, and drag a whole layer or an individual key into your working layout.
 - **Reusable personal layers:** save a layer from its contextual menu, or import a layout file to use its layers as building blocks. Your personal library stays in this browser. Export a file to share it or move it to another computer.
-- **Native `.svil` files:** export and import layouts, macros, supported dynamic behaviors, QMK settings, custom hardware values, cosmetic metadata, and fragment selections. Legacy `.viable` files remain readable; `.vil` is available for legacy exchange but cannot represent every Sval-specific field.
+- **Native `.svil` files:** export and import layouts, macros, supported dynamic behaviors, QMK settings, custom hardware values, cosmetic metadata, and fragment selections. `.vil` is available for legacy exchange but cannot represent every Sval-specific field.
 - **Import for your board:** bring a saved layout onto your connected Svalboard while retaining its hardware-specific limits.
 - **Fragment composition:** select supported finger/thumb cluster fragments in Settings to make the drawing match the board's physical arrangement. Choose the clusters installed on your board.
 - **Printed layers:** print non-empty layers through the browser, including saving a PDF where the browser offers it. A desk reference makes a new layout easier to learn.
