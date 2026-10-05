@@ -1,6 +1,6 @@
 # Make Svalboard your own with Keybard
 
-**Make Svalboard your own, from the browser.** Keybard is the dedicated configuration tool for Svalboard, bringing visual layout design, programmable key behaviors, pointing controls, and hardware diagnostics together. Svalboard QMK runs your configuration on the keyboard, so your mappings, macros, and pointing settings keep working after you close the editor.
+Keybard is the dedicated browser-based configuration tool for Svalboard, bringing visual layout design, programmable key behaviors, pointing controls, and hardware diagnostics together. Svalboard QMK runs your configuration on the keyboard, so your mappings, macros, and pointing settings keep working after you close the editor.
 
 Explore the features below, or read [what Svalboard QMK adds to QMK](firmware-changes.md).
 
