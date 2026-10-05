@@ -42,7 +42,7 @@
 #    define SERIAL_NUMBER "sval:12345-00"
 #endif
 
-// Sval command IDs (0xDF protocol v2)
+// Sval command IDs (0xDF protocol; additive capabilities advertised by GET_INFO)
 enum sval_command_id {
     sval_cmd_get_info           = 0x00,
     sval_cmd_tap_dance_get      = 0x01,
@@ -65,11 +65,11 @@ enum sval_command_id {
     sval_cmd_qmk_settings_set   = 0x12,
     sval_cmd_qmk_settings_reset = 0x13,
     // Leader commands
-    sval_cmd_leader_get = 0x14,
-    sval_cmd_leader_set = 0x15,
-    // Layer state commands (32-bit layer mask)
-    sval_cmd_layer_state_get = 0x16,
-    sval_cmd_layer_state_set = 0x17,
+    sval_cmd_leader_get        = 0x14,
+    sval_cmd_leader_set        = 0x15,
+    // Layer state commands (32-bit masks; GET appends defaults with capability bit 6)
+    sval_cmd_layer_state_get   = 0x16,
+    sval_cmd_layer_state_set   = 0x17,
     // Fragment commands (hardware detection and EEPROM selection)
     sval_cmd_fragment_get_hardware   = 0x18,
     sval_cmd_fragment_get_selections = 0x19,
@@ -92,12 +92,13 @@ enum sval_command_id {
 
 // Feature capability flags (returned in protocol info)
 enum sval_feature_flags {
-    sval_flag_caps_word     = (1 << 0),
-    sval_flag_layer_lock    = (1 << 1),
-    sval_flag_oneshot       = (1 << 2),
-    sval_flag_leader        = (1 << 3),
-    sval_flag_context_layer = (1 << 5),
-    // bits 4, 6-7 reserved
+    sval_flag_caps_word           = (1 << 0),
+    sval_flag_layer_lock          = (1 << 1),
+    sval_flag_oneshot             = (1 << 2),
+    sval_flag_leader              = (1 << 3),
+    sval_flag_context_layer       = (1 << 5), // context-layer commands available
+    sval_flag_default_layer_state = (1 << 6), // 0x16 includes default_layer_state
+    // Bit 4 is allocated by the context feature branches; bit 7 reserved.
 };
 
 // Keyboard definition chunk size (fits in 32-byte HID packet with header)
