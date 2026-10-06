@@ -288,11 +288,8 @@ extern char sval_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][SVAL_LABEL_SIZE];
 
 // Public API
 void sval_init(void);
-// Stamp the stored Sval data block as current (layout stamp). For migrations that
-// write the block directly; normal code never needs it.
-void sval_eeprom_set_valid(void);
-// Translate stored keycodes from keycode version `from` (keycode_upgrade.h).
-void sval_upgrade_keycodes(uint8_t from);
+// Mark the stored Sval data block invalid; sval_init() then resets it.
+void sval_eeprom_invalidate(void);
 
 // Protocol handler for 0xDF commands
 // Returns true if command was handled

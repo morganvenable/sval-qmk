@@ -20,12 +20,10 @@ Tap/hold, tap-dance, combo and one-shot timing settings take effect as soon as y
 | Addition | Compared with Vial |
 | --- | --- |
 | Settings kept across ordinary updates | Vial reset the layout whenever you installed a firmware build from a different day. A compatible layout now stays. |
-| Automatic migration from Vial | Imports your existing layout, macros, programmable behaviors, pointing preferences and other supported settings on first boot. The old Vial store is left intact. |
-| Keycode translation | Stored keycodes, including those inside tap dances, combos, overrides, leaders and macros, are translated when QMK's keycode numbering changes, instead of being reset. |
-| Interrupted-migration recovery | An unfinished migration retries from the old configuration; a completed one doesn't repeat after a later reset. |
+| Keycode-safe resets | The board records which QMK keycode numbering its stored keycodes use. If a firmware update changes that numbering, the stored configuration is reset instead of being reinterpreted; restore it from a layout file, which stores keycodes by name. |
 | Checked macro uploads | Uploads that exceed the macro buffer or contain invalid offsets are rejected. |
 
-Automatic migration supports **`svalboard/vial-qmk v2025-11-01` with the `vial` keymap**. Keep an exported backup and check your modifier preferences, timing settings and macros after upgrading. Changes to the storage layout can still require a reset.
+Svalboard QMK does not read the configuration Vial stored on the board. To bring a Vial setup across, export a `.vil` backup with Vial before flashing and import it in Keybard afterwards. Changes to the storage layout can still require a reset.
 
 ## A board that keeps its identity
 
