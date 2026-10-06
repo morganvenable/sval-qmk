@@ -515,3 +515,25 @@ uint16_t sval_get_leader_timeout(void) {
 bool sval_get_leader_per_key_timing(void) {
     return settings.leader_options & (1 << LEADER_PER_KEY_TIMING_BIT);
 }
+
+// Runtime values for the QMK constants of the same names. quantum/ reads these
+// through inline helpers in action.h, action_tapping.h and process_grave_esc.c
+// when SVAL_ENABLE is defined.
+uint16_t sval_tap_code_delay(void) {
+    return settings.tap_code_delay;
+}
+
+uint16_t sval_tap_hold_caps_delay(void) {
+    return settings.tap_hold_caps_delay;
+}
+
+// A toggle count of 0 would leave a held TT() layer on after release, so 0 is
+// read as 1, QMK's smallest working value (TT() then behaves like MO()).
+uint8_t sval_tapping_toggle(void) {
+    return settings.tapping_toggle ? settings.tapping_toggle : 1;
+}
+
+// Bits as Keybard writes them: 0 Alt, 1 Control, 2 GUI, 3 Shift.
+uint8_t sval_grave_esc_override(void) {
+    return settings.grave_esc_override;
+}

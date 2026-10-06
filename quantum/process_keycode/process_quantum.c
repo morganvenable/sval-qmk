@@ -16,16 +16,16 @@ static void send_make_command(void) {
 #    endif
     clear_mods();
 
-    SEND_STRING_DELAY("qmk", TAP_CODE_DELAY);
+    SEND_STRING_DELAY("qmk", get_tap_code_delay());
     if (temp_mod & MOD_MASK_SHIFT) { // if shift is held, flash rather than compile
-        SEND_STRING_DELAY(" flash ", TAP_CODE_DELAY);
+        SEND_STRING_DELAY(" flash ", get_tap_code_delay());
     } else {
-        SEND_STRING_DELAY(" compile ", TAP_CODE_DELAY);
+        SEND_STRING_DELAY(" compile ", get_tap_code_delay());
     }
 #    if defined(CONVERTER_ENABLED)
-    SEND_STRING_DELAY("-kb " QMK_KEYBOARD " -km " QMK_KEYMAP " -e CONVERT_TO=" CONVERTER_TARGET SS_TAP(X_ENTER), TAP_CODE_DELAY);
+    SEND_STRING_DELAY("-kb " QMK_KEYBOARD " -km " QMK_KEYMAP " -e CONVERT_TO=" CONVERTER_TARGET SS_TAP(X_ENTER), get_tap_code_delay());
 #    else
-    SEND_STRING_DELAY("-kb " QMK_KEYBOARD " -km " QMK_KEYMAP SS_TAP(X_ENTER), TAP_CODE_DELAY);
+    SEND_STRING_DELAY("-kb " QMK_KEYBOARD " -km " QMK_KEYMAP SS_TAP(X_ENTER), get_tap_code_delay());
 #    endif
     if (temp_mod & MOD_MASK_SHIFT && temp_mod & MOD_MASK_CTRL) {
         reset_keyboard();

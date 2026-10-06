@@ -493,7 +493,7 @@ void sval_keycode_up(uint16_t keycode) {
 
 void sval_keycode_tap(uint16_t keycode) {
     sval_keycode_down(keycode);
-    wait_ms(TAP_CODE_DELAY);
+    wait_ms(get_tap_code_delay());
     sval_keycode_up(keycode);
 }
 
@@ -1186,7 +1186,7 @@ void dynamic_keymap_macro_send(uint8_t id) {
                 wait_ms(ms);
             }
         } else {
-            send_string_with_delay(data, TAP_CODE_DELAY);
+            send_string_with_delay(data, get_tap_code_delay());
         }
     }
 }

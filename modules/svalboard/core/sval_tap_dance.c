@@ -103,7 +103,7 @@ static void on_dance_reset(tap_dance_state_t *state, void *user_data) {
     uint16_t index = (uintptr_t)user_data;
     if (sval_get_tap_dance(index, &td_entry) != 0) return;
     if (!TD_ENABLED(td_entry)) return;
-    wait_ms(TAP_CODE_DELAY);
+    wait_ms(get_tap_code_delay());
     uint8_t st         = dance_state[index];
     state->count       = 0;
     dance_state[index] = 0;

@@ -147,7 +147,7 @@ __attribute__((weak)) const uint8_t ascii_to_keycode_lut[128] PROGMEM = {
 #define PGM_LOADBIT(mem, pos) ((pgm_read_byte(&((mem)[(pos) / 8])) >> ((pos) % 8)) & 0x01)
 
 void send_string(const char *string) {
-    send_string_with_delay(string, TAP_CODE_DELAY);
+    send_string_with_delay(string, get_tap_code_delay());
 }
 
 void send_string_with_delay_impl(char (*getter)(void *), void *arg, uint8_t interval) {
@@ -210,7 +210,7 @@ void send_string_with_delay(const char *string, uint8_t interval) {
 }
 
 void send_char(char ascii_code) {
-    send_char_with_delay(ascii_code, TAP_CODE_DELAY);
+    send_char_with_delay(ascii_code, get_tap_code_delay());
 }
 
 void send_char_with_delay(char ascii_code, uint8_t interval) {
@@ -315,7 +315,7 @@ void tap_random_base64(void) {
 
 #if defined(__AVR__)
 void send_string_P(const char *string) {
-    send_string_with_delay_P(string, TAP_CODE_DELAY);
+    send_string_with_delay_P(string, get_tap_code_delay());
 }
 
 char send_string_get_next_progmem(void *arg) {

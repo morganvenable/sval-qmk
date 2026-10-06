@@ -26,3 +26,10 @@ uint16_t sval_get_tapping_term(void);
 uint16_t sval_get_combo_term(void);
 uint16_t sval_get_leader_timeout(void);
 bool     sval_get_leader_per_key_timing(void);
+
+// Runtime values for QMK's TAP_CODE_DELAY, TAP_HOLD_CAPS_DELAY, TAPPING_TOGGLE
+// and GRAVE_ESC_*_OVERRIDE (declared again where quantum/ uses them)
+uint16_t sval_tap_code_delay(void);
+uint16_t sval_tap_hold_caps_delay(void);
+uint8_t  sval_tapping_toggle(void);
+uint8_t  sval_grave_esc_override(void);

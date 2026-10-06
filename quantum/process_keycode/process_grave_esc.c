@@ -23,40 +23,63 @@
  */
 static bool grave_esc_was_shifted = false;
 
+#define GRAVE_ESC_ALT_OVERRIDE_BIT (1 << 0)
+#define GRAVE_ESC_CTRL_OVERRIDE_BIT (1 << 1)
+#define GRAVE_ESC_GUI_OVERRIDE_BIT (1 << 2)
+#define GRAVE_ESC_SHIFT_OVERRIDE_BIT (1 << 3)
+
+#ifdef SVAL_ENABLE
+// Svalboard: the overrides are a runtime QMK Setting, in the bit order above.
+uint8_t sval_grave_esc_override(void);
+static inline uint8_t grave_esc_overrides(void) {
+    return sval_grave_esc_override();
+}
+#else
+static inline uint8_t grave_esc_overrides(void) {
+    return 0
+#    ifdef GRAVE_ESC_ALT_OVERRIDE
+           | GRAVE_ESC_ALT_OVERRIDE_BIT
+#    endif
+#    ifdef GRAVE_ESC_CTRL_OVERRIDE
+           | GRAVE_ESC_CTRL_OVERRIDE_BIT
+#    endif
+#    ifdef GRAVE_ESC_GUI_OVERRIDE
+           | GRAVE_ESC_GUI_OVERRIDE_BIT
+#    endif
+#    ifdef GRAVE_ESC_SHIFT_OVERRIDE
+           | GRAVE_ESC_SHIFT_OVERRIDE_BIT
+#    endif
+        ;
+}
+#endif
+
 bool process_grave_esc(uint16_t keycode, keyrecord_t *record) {
     if (keycode == QK_GRAVE_ESCAPE) {
-        const uint8_t mods    = get_mods();
-        uint8_t       shifted = mods & MOD_MASK_SG;
+        const uint8_t mods      = get_mods();
+        const uint8_t overrides = grave_esc_overrides();
+        uint8_t       shifted   = mods & MOD_MASK_SG;
 
-#ifdef GRAVE_ESC_ALT_OVERRIDE
         // if ALT is pressed, ESC is always sent
         // this is handy for the cmd+opt+esc shortcut on macOS, among other things.
-        if (mods & MOD_MASK_ALT) {
+        if ((overrides & GRAVE_ESC_ALT_OVERRIDE_BIT) && (mods & MOD_MASK_ALT)) {
             shifted = 0;
         }
-#endif
 
-#ifdef GRAVE_ESC_CTRL_OVERRIDE
         // if CTRL is pressed, ESC is always sent
         // this is handy for the ctrl+shift+esc shortcut on windows, among other things.
-        if (mods & MOD_MASK_CTRL) {
+        if ((overrides & GRAVE_ESC_CTRL_OVERRIDE_BIT) && (mods & MOD_MASK_CTRL)) {
             shifted = 0;
         }
-#endif
 
-#ifdef GRAVE_ESC_GUI_OVERRIDE
         // if GUI is pressed, ESC is always sent
-        if (mods & MOD_MASK_GUI) {
+        if ((overrides & GRAVE_ESC_GUI_OVERRIDE_BIT) && (mods & MOD_MASK_GUI)) {
             shifted = 0;
         }
-#endif
 
-#ifdef GRAVE_ESC_SHIFT_OVERRIDE
         // if SHIFT is pressed, ESC is always sent
-        if (mods & MOD_MASK_SHIFT) {
+        if ((overrides & GRAVE_ESC_SHIFT_OVERRIDE_BIT) && (mods & MOD_MASK_SHIFT)) {
             shifted = 0;
         }
-#endif
 
         if (record->event.pressed) {
             grave_esc_was_shifted = shifted;

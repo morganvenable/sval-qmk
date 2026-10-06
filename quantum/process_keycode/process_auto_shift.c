@@ -280,8 +280,10 @@ static void autoshift_end(uint16_t keycode, uint16_t now, bool matrix_trigger, k
         }
 #endif
         // clang-format on
-#if TAP_CODE_DELAY > 0
-        wait_ms(TAP_CODE_DELAY);
+#if defined(SVAL_ENABLE) || TAP_CODE_DELAY > 0
+        if (get_tap_code_delay() > 0) {
+            wait_ms(get_tap_code_delay());
+        }
 #endif
 
         autoshift_release_user(autoshift_lastkey, autoshift_flags.lastshifted, record);

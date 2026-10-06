@@ -212,7 +212,7 @@ void clear_combos(void) {
 static inline void dump_key_buffer(void) {
     /* First call start from 0 index; recursive calls need to start from i+1 index */
     static uint8_t key_buffer_next = 0;
-#if TAP_CODE_DELAY > 0
+#if defined(SVAL_ENABLE) || TAP_CODE_DELAY > 0
     bool delay_done = false;
 #endif
 
@@ -251,11 +251,11 @@ static inline void dump_key_buffer(void) {
         clear_weak_mods();
 #endif // defined(CAPS_WORD_ENABLE) && defined(AUTO_SHIFT_ENABLE)
 
-#if TAP_CODE_DELAY > 0
+#if defined(SVAL_ENABLE) || TAP_CODE_DELAY > 0
         // only delay once and for a non-tapping key
-        if (!delay_done && !is_tap_record(record)) {
+        if (get_tap_code_delay() > 0 && !delay_done && !is_tap_record(record)) {
             delay_done = true;
-            wait_ms(TAP_CODE_DELAY);
+            wait_ms(get_tap_code_delay());
         }
 #endif
     }
