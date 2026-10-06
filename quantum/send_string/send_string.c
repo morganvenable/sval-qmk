@@ -150,7 +150,7 @@ void send_string(const char *string) {
     send_string_with_delay(string, get_tap_code_delay());
 }
 
-void send_string_with_delay_impl(char (*getter)(void *), void *arg, uint8_t interval) {
+void send_string_with_delay_impl(char (*getter)(void *), void *arg, send_string_interval_t interval) {
     while (1) {
         char ascii_code = getter(arg);
         if (!ascii_code) break;
@@ -204,7 +204,7 @@ char send_string_get_next_ram(void *arg) {
     return ret;
 }
 
-void send_string_with_delay(const char *string, uint8_t interval) {
+void send_string_with_delay(const char *string, send_string_interval_t interval) {
     send_string_memory_state_t state = {string};
     send_string_with_delay_impl(send_string_get_next_ram, &state, interval);
 }
@@ -213,7 +213,7 @@ void send_char(char ascii_code) {
     send_char_with_delay(ascii_code, get_tap_code_delay());
 }
 
-void send_char_with_delay(char ascii_code, uint8_t interval) {
+void send_char_with_delay(char ascii_code, send_string_interval_t interval) {
 #if defined(AUDIO_ENABLE) && defined(SENDSTRING_BELL)
     if (ascii_code == '\a') { // BEL
         PLAY_SONG(bell_song);
@@ -325,7 +325,7 @@ char send_string_get_next_progmem(void *arg) {
     return ret;
 }
 
-void send_string_with_delay_P(const char *string, uint8_t interval) {
+void send_string_with_delay_P(const char *string, send_string_interval_t interval) {
     send_string_memory_state_t state = {string};
     send_string_with_delay_impl(send_string_get_next_progmem, &state, interval);
 }

@@ -25,6 +25,14 @@
 
 #include <stdint.h>
 
+// Svalboard stores millisecond delays as uint16_t. Preserve their range through
+// the string/macro path; other keyboards retain the upstream uint8_t API.
+#ifdef SVAL_ENABLE
+typedef uint16_t send_string_interval_t;
+#else
+typedef uint8_t send_string_interval_t;
+#endif
+
 #include "progmem.h"
 #include "send_string_keycodes.h"
 
@@ -63,7 +71,7 @@ void send_string(const char *string);
  * \param string The string to type out.
  * \param interval The amount of time, in milliseconds, to wait before typing the next character. Note this can be set to 0 to ensure no delay, regardless of what TAP_CODE_DELAY is set to.
  */
-void send_string_with_delay(const char *string, uint8_t interval);
+void send_string_with_delay(const char *string, send_string_interval_t interval);
 
 /**
  * \brief Type out an ASCII character.
@@ -80,7 +88,7 @@ void send_char(char ascii_code);
  * \param ascii_code The character to type.
  * \param interval The amount of time, in milliseconds, to wait in between key presses. Note this can be set to 0 to ensure no delay, regardless of what TAP_CODE_DELAY is set to.
  */
-void send_char_with_delay(char ascii_code, uint8_t interval);
+void send_char_with_delay(char ascii_code, send_string_interval_t interval);
 
 /**
  * \brief Type out an eight digit (unsigned 32-bit) hexadecimal value.
@@ -141,7 +149,7 @@ void send_string_P(const char *string);
  * \param string The string to type out.
  * \param interval The amount of time, in milliseconds, to wait before typing the next character.
  */
-void send_string_with_delay_P(const char *string, uint8_t interval);
+void send_string_with_delay_P(const char *string, send_string_interval_t interval);
 #else
 #    define send_string_P(string) send_string_with_delay(string, 0)
 #    define send_string_with_delay_P(string, interval) send_string_with_delay(string, interval)
@@ -167,6 +175,6 @@ void send_string_with_delay_P(const char *string, uint8_t interval);
  * The getter assumes that the next byte is available to be read, and returns it. `arg` is passed in and can be whatever
  * makes most sense for the getter -- each invocation of `getter` must advance its position in the source.
  */
-void send_string_with_delay_impl(char (*getter)(void *), void *arg, uint8_t interval);
+void send_string_with_delay_impl(char (*getter)(void *), void *arg, send_string_interval_t interval);
 
 /** \} */

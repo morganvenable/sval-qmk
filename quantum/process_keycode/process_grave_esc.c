@@ -30,7 +30,7 @@ static bool grave_esc_was_shifted = false;
 
 #ifdef SVAL_ENABLE
 // Svalboard: the overrides are a runtime QMK Setting, in the bit order above.
-uint8_t sval_grave_esc_override(void);
+uint8_t               sval_grave_esc_override(void);
 static inline uint8_t grave_esc_overrides(void) {
     return sval_grave_esc_override();
 }

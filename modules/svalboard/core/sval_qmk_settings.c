@@ -528,7 +528,7 @@ uint16_t sval_tap_hold_caps_delay(void) {
 }
 
 // A toggle count of 0 would leave a held TT() layer on after release, so 0 is
-// read as 1, QMK's smallest working value (TT() then behaves like MO()).
+// read as 1: one tap toggles, while a held key still releases its layer.
 uint8_t sval_tapping_toggle(void) {
     return settings.tapping_toggle ? settings.tapping_toggle : 1;
 }

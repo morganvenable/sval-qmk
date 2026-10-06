@@ -36,7 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #    define ONESHOT_TAP_TOGGLE_SUPPORT
 #    ifdef SVAL_ENABLE
 // Svalboard: the tap count is a runtime setting; values of 0 or 1 disable toggling.
-uint8_t sval_oneshot_tap_toggle(void);
+uint8_t               sval_oneshot_tap_toggle(void);
 static inline uint8_t oneshot_tap_toggle(void) {
     return sval_oneshot_tap_toggle();
 }

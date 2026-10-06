@@ -38,8 +38,8 @@ extern "C" {
 #ifdef SVAL_ENABLE
 // Svalboard: both delays are runtime QMK Settings; the defines above are only
 // the reset defaults.
-uint16_t              sval_tap_code_delay(void);
-uint16_t              sval_tap_hold_caps_delay(void);
+uint16_t               sval_tap_code_delay(void);
+uint16_t               sval_tap_hold_caps_delay(void);
 static inline uint16_t get_tap_code_delay(void) {
     return sval_tap_code_delay();
 }
