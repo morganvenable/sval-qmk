@@ -118,7 +118,7 @@ Legacy `.vil` files remain useful for exchange with the older ecosystem, but the
 
 Svalboard-QMK replaces build-date invalidation with configuration-layout and keycode version checks. Compatible firmware updates preserve saved settings. Stored keycodes are never translated between numberings: when QMK's keycode numbering or the storage layout changes, the stored configuration is reset and is restored from a layout file.
 
-Svalboard-QMK does not read the configuration Vial-QMK stored on the board. It keeps its settings in a separate region, so a board flashed from Vial starts with the default layout and the Vial store is left untouched. A Vial `.vil` backup, imported through Keybard, brings the setup across.
+Svalboard-QMK does not read the configuration Vial-QMK stored on the board. It keeps its settings in a separate region, so a board flashed from Vial starts with the default layout and the Vial store is left untouched. A Vial `.vil` backup, imported through Keybard, brings the layout, macros, tap dances, combos, key overrides and QMK settings across. Pointing and hardware settings (DPI, scrolling, automouse, layer colors) are not stored in `.vil` files and must be set again.
 
 Each board has a persistent identity and can be given a name in Keybard. Save the name and restart the board for the USB device list to display it. Names and serial identity are stored separately from layout backups. This helps distinguish multiple Svalboards and lets compatible updates preserve their identity.
 

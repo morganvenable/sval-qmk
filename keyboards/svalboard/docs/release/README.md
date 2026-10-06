@@ -119,7 +119,7 @@ The **Trainer overlay** is available as a separate Windows companion preview, co
 
 ## Updating from Vial and choosing firmware
 
-Svalboard QMK does not read the configuration Vial stored on the board: after flashing, the board starts with the default layout. Before flashing, **export a `.vil` backup with Vial**; after flashing, import it in Keybard. Layout files store keycodes by name, so Keybard can map them onto the new firmware. Check your modifier preferences, timing settings, and macros after importing.
+Svalboard QMK does not read the configuration Vial stored on the board: after flashing, the board starts with the default layout. Before flashing, **export a `.vil` backup with Vial**; after flashing, import it in Keybard. Layout files store keycodes by name, so Keybard can map them onto the new firmware; it brings across the layout, macros, tap dances, combos, key overrides and QMK settings. Pointing and hardware settings (DPI, scrolling, automouse, layer colors) are not in `.vil` files, so set them again in Keybard. Check your modifier preferences, timing settings, and macros after importing.
 
 Updates that change the storage layout or QMK's keycode numbering also reset the stored configuration, so keep an exported backup even when moving between Svalboard QMK versions.
 

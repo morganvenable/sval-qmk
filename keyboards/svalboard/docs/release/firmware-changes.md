@@ -23,7 +23,7 @@ Tap/hold, tap-dance, combo and one-shot timing settings take effect as soon as y
 | Keycode-safe resets | The board records which QMK keycode numbering its stored keycodes use. If a firmware update changes that numbering, the stored configuration is reset instead of being reinterpreted; restore it from a layout file, which stores keycodes by name. |
 | Checked macro uploads | Uploads that exceed the macro buffer or contain invalid offsets are rejected. |
 
-Svalboard QMK does not read the configuration Vial stored on the board. To bring a Vial setup across, export a `.vil` backup with Vial before flashing and import it in Keybard afterwards. Changes to the storage layout can still require a reset.
+Svalboard QMK does not read the configuration Vial stored on the board. To bring a Vial setup across, export a `.vil` backup with Vial before flashing and import it in Keybard afterwards. Pointing and hardware settings are not in `.vil` files; set them again. Changes to the storage layout can still require a reset.
 
 ## A board that keeps its identity
 
