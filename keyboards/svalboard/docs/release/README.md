@@ -4,7 +4,7 @@
 
 Keybard is the dedicated browser-based configuration tool for Svalboard, bringing visual layout design, programmable key behaviors, pointing controls, and hardware diagnostics together. Svalboard QMK runs your configuration on the keyboard, so your mappings, macros, and pointing settings keep working after you close the editor.
 
-Explore the features below, read [what Svalboard QMK adds beyond Vial](firmware-changes.md), or learn [how the protocol connects your keyboard and apps](protocol.md).
+Read the [first-release launch notes](launch.md), explore the features below, read [what Svalboard QMK adds beyond Vial](firmware-changes.md), or learn [how the protocol connects your keyboard and apps](protocol.md).
 
 ## The highlights
 
@@ -41,7 +41,7 @@ Use Chrome or Edge with WebHID enabled to connect to your board. Firefox and Saf
 | Adjustable workspace | Use a sidebar or bottom panel, adjustable key sizes, and responsive cluster spacing. | Keep the keyboard and its editor usable on different screen sizes. |
 | International palettes | Choose among the supplied language and layout palettes. | Pick the key labels and assignments appropriate to your host layout. This does not switch the OS layout for you. |
 
-The firmware can store layer, tap-dance and macro names on the board, but Keybard doesn't save or load them there yet. Until it does, your `.svil` backup carries these names; import it when moving to another browser.
+Keybard saves layer, tap-dance and macro names on the board and reloads them on connection. Names support up to 16 UTF-8 bytes each and are also included in `.svil` backups.
 
 ### Programmable behaviors without a firmware build
 
@@ -116,7 +116,7 @@ Editing tap dances, combos, key overrides, alternate-repeat keys, macros and QMK
 
 Sval’s two-way protocol lets applications read your saved layout, follow active layers, inspect held keys, and send configuration or runtime layer changes back. Client IDs let cooperating tools distinguish their replies, providing a foundation for an editor, trainer, and desktop companion to work with the same board.
 
-This is also the foundation for the **key-peek trainer overlay** and **app-aware layer switching** now in development: see the bindings you are using, and bring up an application’s shortcuts when you switch to it. [Explore the protocol, what is available now, and what is coming next →](protocol.md)
+The **Trainer overlay** is available as a separate Windows companion preview, configured from Trainer in Keybard. **App-aware layer switching** remains experimental and is not supplied by that read-only companion. [Explore the protocol, what is available now, and what is coming next →](protocol.md)
 
 ## Updating from Vial and choosing firmware
 
@@ -140,12 +140,11 @@ Enter the RP2040 bootloader by double-tapping reset within 500 ms. The half appe
 
 In Keybard's Settings, **Board name** accepts up to 32 characters within the firmware's 64-byte UTF-8 limit. Save it, then restart the keyboard for the computer to show the new USB product name. The serial stays the same. The name is stored on the board, separately from your layout backups.
 
-**On vRC2 and earlier:** tapping toggle count, tap-code delay, tap-hold Caps Lock delay and Grave Escape overrides are stored but do not affect behavior. The vRC3 runtime-settings fix connects all four controls; see [vRC3 notes](vRC3.md).
+Tapping toggle count, tap-code delay, tap-hold Caps Lock delay and Grave Escape overrides take effect when saved; see the [launch timing controls](launch.md#tune-how-the-keyboard-interprets-your-typing).
 
 ## Current limitations
 
 - **Auto Shift:** the standard firmware does not enable Auto Shift.
-- **Editor names:** Keybard doesn't yet save layer, tap-dance and macro names to the board, although the firmware supports it. Move them between browsers with a `.svil` export for now.
 - **Alternate repeat:** modifier conditions and the default-alternate option have known matching problems. Check the output of custom mappings before relying on them.
 - **Editing held actions:** release a tap-dance key before editing its action to avoid leaving its previous output held.
 - **After a reset:** restart the board before making new edits; edits made immediately after a configuration reset can otherwise be discarded at the next startup.

@@ -10,8 +10,8 @@ Try edits as you go, or queue them and apply them together. Reuse layers from yo
 
 Compatible firmware updates preserve your setup, and supported Svalboard Vial configurations can migrate into the new firmware. Give each board its own name to make it easy to recognize when you connect.
 
-The two-way Sval protocol also opens the door to companion apps that follow your layout and layers. It is the foundation for the key-peek trainer overlay and app-aware layer switching now in development. [Read about the protocol and what comes next.](protocol.md)
+The two-way Sval protocol also opens the door to companion apps that follow your layout and layers. The Trainer panel configures a desktop layout overlay through the separate Keybard Host Windows preview. App-aware layer switching remains experimental. [Read about the protocol and what comes next.](protocol.md)
 
-[Explore the features and get started →](README.md)
+[Read the complete launch notes →](launch.md) · [Explore the features and get started →](README.md)
 
 Before updating, export a backup and check the [upgrade instructions](README.md#updating-from-vial-and-choosing-firmware) and [current limitations](README.md#current-limitations).

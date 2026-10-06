@@ -32,7 +32,7 @@ Ubuntu/WSL2, Arm GNU Toolchain 13.2.Rel1, native GCC/G++ 13.3, clang-format 19.1
 | `python3 -m unittest discover -s tests/sval_layers -v` | 1 passed |
 | `python3 -m unittest discover -s tests/sval_storage -v` | 3 passed |
 | `python3 -m unittest discover -s tests/sval_runtime_tap -v` | 3 passed |
-| `make -j4 svalboard/trackball/pmw3389/left:sval SVAL_KEYTEST=yes` | Built the instrumented Mule image |
+| `make -j4 svalboard/trackball/pmw3389/left:sval SVAL_KEYTEST=yes` | Built the instrumented test-board image |
 | `qmk format-c --core-only <touched C/H/CPP files>` | Applied repository clang-format configuration |
 | `qmk format-c --core-only --dry-run <same files>` | Clean |
 | `git diff --check` | Clean |
@@ -45,7 +45,7 @@ Before the interval fix, `make -j4 test:sval_runtime_tap` exited **2**, reproduc
 
 ## Hardware
 
-Tested **FlipFET Left Mule**, serial `sval:E46498769F365934`, using the PMW3389-left image and the on-board event harness over Windows USB. The other connected board was not modified. The firmware captures internal report timestamps; host USB polling latency is not the measured delay.
+Tested a **PMW3389-left test board**, serial `sval:E46498769F365934`, using the PMW3389-left image and the on-board event harness over Windows USB. The other connected board was not modified. The firmware captures internal report timestamps; host USB polling latency is not the measured delay.
 
 **84/84 cases passed**, including immediate operation and operation after reboot:
 
@@ -56,11 +56,11 @@ Tested **FlipFET Left Mule**, serial `sval:E46498769F365934`, using the PMW3389-
 
 Original settings, bindings and macro bytes were restored and verified after reboot. A separate final full snapshot matched the pre-flash snapshot for every readable QMK setting, all 960 keycodes, all used feature-table entries, one-shot settings and the entire 106,664-byte macro buffer. The original 222 ms tapping term was preserved. The harness was inactive and idle after restoration. Backups containing user configuration remain local and are not committed.
 
-The Mule remains on the tested instrumented firmware, with capture inactive. Its image SHA-256 is `2dd0eb909f0cc71844572b5e9473160fa77f56f458a9fccb58a9818630be510d`. The source included the interval fix before it was committed; the result artifact records that provenance explicitly.
+The test board remains on the tested instrumented firmware, with capture inactive. Its image SHA-256 is `2dd0eb909f0cc71844572b5e9473160fa77f56f458a9fccb58a9818630be510d`. The source included the interval fix before it was committed; the result artifact records that provenance explicitly.
 
 [Captured synthetic events and results](../runtime-tap-settings-hardware-results.json).
 
-This validates firmware behavior and persistence on the Mule. It does not claim physical switch testing, split-transport testing, or hardware validation of every pointing-device variant. Auto Shift has dedicated unit coverage but remains disabled in standard Svalboard firmware. Encoder-map and DIP-switch-map delays intentionally remain compile-time constants.
+This validates firmware behavior and persistence on the test board. It does not claim physical switch testing, split-transport testing, or hardware validation of every pointing-device variant. Auto Shift has dedicated unit coverage but remains disabled in standard Svalboard firmware. Encoder-map and DIP-switch-map delays intentionally remain compile-time constants.
 
 ## Repeating the hardware checks
 
@@ -77,4 +77,4 @@ The runner temporarily changes settings, four bindings and the first 16 macro by
 
 ## Release notes
 
-[Fresh vRC3 notes](../release/vRC3.md) describe the four now-working controls, defaults, zero-toggle behavior, full-width macro fix and validation limits. Previously saved inactive values begin affecting behavior on upgrade. The guide removes these four controls from current limitations and retains a version-qualified note for vRC2 and earlier. Published vRC2 notes are unchanged. Pushing this branch does not merge it into `svalboard`, create a tag or publish a firmware release.
+[Comprehensive launch notes](../release/launch.md) describe the four now-working controls, defaults, zero-toggle behavior, full-width macro fix and validation limits. Previously saved inactive values begin affecting behavior on upgrade. The guide removes these four controls from current limitations and retains a version-qualified note for vRC2 and earlier. Published vRC2 notes are unchanged. Pushing this branch does not merge it into `svalboard`, create a tag or publish a firmware release.

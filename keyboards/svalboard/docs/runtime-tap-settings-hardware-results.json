@@ -10164,7 +10164,7 @@
   "restored": true,
   "validation": {
     "date": "2026-10-05",
-    "board": "FlipFET Left Mule",
+    "board": "test board",
     "serial": "sval:E46498769F365934",
     "target": "svalboard/trackball/pmw3389/left:sval",
     "build_flags": "SVAL_KEYTEST=yes",
