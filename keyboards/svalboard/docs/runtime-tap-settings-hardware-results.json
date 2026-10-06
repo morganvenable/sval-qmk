@@ -1,0 +1,10201 @@
+{
+  "cases": [
+    {
+      "name": "toggle_5_immediate_tap_1",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 105328,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 105359,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_immediate_tap_2",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 105382,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 105414,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_immediate_tap_3",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 105437,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 105483,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_immediate_tap_4",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 105506,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 105537,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_immediate_tap_5",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 105561,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 105592,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 2,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_immediate_held_release",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 105916,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 106217,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_reboot_tap_1",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3163,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3193,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_reboot_tap_2",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3217,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3248,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_reboot_tap_3",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3278,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3310,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_reboot_tap_4",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3339,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3370,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_reboot_tap_5",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3393,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3424,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 2,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_5_reboot_held_release",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3759,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4060,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_3_immediate_tap_1",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4167,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4199,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_3_immediate_tap_2",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4224,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4256,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_3_immediate_tap_3",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4278,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4309,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 2,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_3_immediate_held_release",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4634,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4935,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_3_reboot_tap_1",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3212,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3243,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_3_reboot_tap_2",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3274,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3305,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_3_reboot_tap_3",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3327,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3358,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 2,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_3_reboot_held_release",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3692,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3993,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_1_immediate_tap_1",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4092,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4123,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 2,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_1_immediate_held_release",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4455,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4768,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_1_reboot_tap_1",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3192,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3222,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 2,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_1_reboot_held_release",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3549,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3849,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_0_immediate_tap_1",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3938,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3969,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 2,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_0_immediate_held_release",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4295,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4596,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_0_reboot_tap_1",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3192,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3223,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 2,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "toggle_0_reboot_held_release",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3548,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3849,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "layers": 0,
+        "default_layers": 1,
+        "mods": 0,
+        "weak_mods": 0
+      }
+    },
+    {
+      "name": "tap_code_0_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4251,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 4253,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4253,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 4283,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 0
+      }
+    },
+    {
+      "name": "text_macro_0_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4675,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 4677,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4677,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 4707,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 0
+      }
+    },
+    {
+      "name": "tap_code_0_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3497,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3498,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3498,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 3529,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 0
+      }
+    },
+    {
+      "name": "text_macro_0_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3905,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3907,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3907,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 3937,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 0
+      }
+    },
+    {
+      "name": "tap_code_37_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4346,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 4348,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4385,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 4452,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 37
+      }
+    },
+    {
+      "name": "text_macro_37_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4838,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 4840,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4877,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 4944,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 37
+      }
+    },
+    {
+      "name": "tap_code_37_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3498,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3499,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3536,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 3603,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 37
+      }
+    },
+    {
+      "name": "text_macro_37_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4011,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 4012,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4050,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 4117,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 38
+      }
+    },
+    {
+      "name": "tap_code_256_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4540,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 4542,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4798,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 5084,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 256
+      }
+    },
+    {
+      "name": "text_macro_256_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5476,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 5477,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 5733,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 6019,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 256
+      }
+    },
+    {
+      "name": "tap_code_256_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3498,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3500,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3756,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 4042,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 256
+      }
+    },
+    {
+      "name": "text_macro_256_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4432,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 4434,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4690,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 4976,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 256
+      }
+    },
+    {
+      "name": "tap_code_300_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5392,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 5393,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 5693,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 6023,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 300
+      }
+    },
+    {
+      "name": "text_macro_300_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 6420,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 6422,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 6722,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 7052,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 300
+      }
+    },
+    {
+      "name": "tap_code_300_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3479,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3481,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3781,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 4111,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 300
+      }
+    },
+    {
+      "name": "text_macro_300_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4500,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 4502,
+          "bytes": [
+            0,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            4
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4802,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 5132,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 300
+      }
+    },
+    {
+      "name": "caps_macro_0_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5565,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 5567,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 5567,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 5597,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 0
+      }
+    },
+    {
+      "name": "caps_mod_tap_0_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5978,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 6009,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 6011,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 6012,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 1
+      }
+    },
+    {
+      "name": "caps_layer_tap_0_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 6407,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 6438,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 6440,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 6441,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 1
+      }
+    },
+    {
+      "name": "caps_macro_0_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3514,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3516,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3516,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 3546,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 0
+      }
+    },
+    {
+      "name": "caps_mod_tap_0_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3929,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 3960,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3961,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3962,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 1
+      }
+    },
+    {
+      "name": "caps_layer_tap_0_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4360,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4391,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4392,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 4393,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 1
+      }
+    },
+    {
+      "name": "caps_macro_80_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4800,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 4802,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4882,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 4912,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 80
+      }
+    },
+    {
+      "name": "caps_mod_tap_80_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5292,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 5323,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 5324,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 5405,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 81
+      }
+    },
+    {
+      "name": "caps_layer_tap_80_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5806,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 5836,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 5838,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 5919,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 81
+      }
+    },
+    {
+      "name": "caps_macro_80_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3521,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3522,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3602,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 3633,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 80
+      }
+    },
+    {
+      "name": "caps_mod_tap_80_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4030,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4061,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4063,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 4143,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 80
+      }
+    },
+    {
+      "name": "caps_layer_tap_80_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4558,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4589,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4590,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 4671,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 81
+      }
+    },
+    {
+      "name": "caps_macro_130_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5106,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 5107,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 5238,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 5268,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 131
+      }
+    },
+    {
+      "name": "caps_mod_tap_130_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5669,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 5700,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 5702,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 5833,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 131
+      }
+    },
+    {
+      "name": "caps_layer_tap_130_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 6234,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 6264,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 6265,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 6396,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 131
+      }
+    },
+    {
+      "name": "caps_macro_130_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3500,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3502,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3632,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 3662,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 130
+      }
+    },
+    {
+      "name": "caps_mod_tap_130_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4044,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4075,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4077,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 4207,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 130
+      }
+    },
+    {
+      "name": "caps_layer_tap_130_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4611,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4642,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4644,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 4774,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 130
+      }
+    },
+    {
+      "name": "caps_macro_300_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5218,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 5220,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 5520,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 5550,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 300
+      }
+    },
+    {
+      "name": "caps_mod_tap_300_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5944,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 5976,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 5977,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 6278,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 301
+      }
+    },
+    {
+      "name": "caps_layer_tap_300_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 6681,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 6712,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 6714,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 7014,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 300
+      }
+    },
+    {
+      "name": "caps_macro_300_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3492,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3494,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 3794,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        },
+        {
+          "seq": 3,
+          "kind": 5,
+          "time_ms": 3824,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 300
+      }
+    },
+    {
+      "name": "caps_mod_tap_300_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4202,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4233,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4235,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 4535,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 300
+      }
+    },
+    {
+      "name": "caps_layer_tap_300_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 4959,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 5,
+          "time_ms": 4990,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 2,
+          "kind": 2,
+          "time_ms": 4992,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": [
+            57
+          ]
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 5293,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "duration_ms": 301
+      }
+    },
+    {
+      "name": "grave_bit_0_False_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 5454,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 5456,
+          "bytes": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 4,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 5476,
+          "bytes": [
+            3,
+            0,
+            1
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 5478,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": []
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 5498,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 5500,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": [
+            53
+          ]
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 5530,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 5531,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": []
+        },
+        {
+          "seq": 8,
+          "kind": 5,
+          "time_ms": 5552,
+          "bytes": [
+            3,
+            0,
+            0
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 9,
+          "kind": 2,
+          "time_ms": 5553,
+          "bytes": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 4,
+          "keys": []
+        },
+        {
+          "seq": 10,
+          "kind": 5,
+          "time_ms": 5573,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 11,
+          "kind": 2,
+          "time_ms": 5575,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 53
+      }
+    },
+    {
+      "name": "grave_bit_0_False_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3234,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3236,
+          "bytes": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 4,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3256,
+          "bytes": [
+            3,
+            0,
+            1
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3257,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": []
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3277,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3278,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": [
+            53
+          ]
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3308,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3309,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": []
+        },
+        {
+          "seq": 8,
+          "kind": 5,
+          "time_ms": 3329,
+          "bytes": [
+            3,
+            0,
+            0
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 9,
+          "kind": 2,
+          "time_ms": 3330,
+          "bytes": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 4,
+          "keys": []
+        },
+        {
+          "seq": 10,
+          "kind": 5,
+          "time_ms": 3350,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 11,
+          "kind": 2,
+          "time_ms": 3351,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 53
+      }
+    },
+    {
+      "name": "grave_bit_0_True_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3486,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3488,
+          "bytes": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 4,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3508,
+          "bytes": [
+            3,
+            0,
+            1
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3510,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": []
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3530,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3531,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": [
+            41
+          ]
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3561,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3562,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": []
+        },
+        {
+          "seq": 8,
+          "kind": 5,
+          "time_ms": 3582,
+          "bytes": [
+            3,
+            0,
+            0
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 9,
+          "kind": 2,
+          "time_ms": 3583,
+          "bytes": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 4,
+          "keys": []
+        },
+        {
+          "seq": 10,
+          "kind": 5,
+          "time_ms": 3603,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 11,
+          "kind": 2,
+          "time_ms": 3604,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 41
+      }
+    },
+    {
+      "name": "grave_bit_0_True_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3217,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3219,
+          "bytes": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 4,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3239,
+          "bytes": [
+            3,
+            0,
+            1
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3240,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": []
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3260,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3261,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": [
+            41
+          ]
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3291,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3292,
+          "bytes": [
+            6,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 6,
+          "keys": []
+        },
+        {
+          "seq": 8,
+          "kind": 5,
+          "time_ms": 3312,
+          "bytes": [
+            3,
+            0,
+            0
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 9,
+          "kind": 2,
+          "time_ms": 3313,
+          "bytes": [
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 4,
+          "keys": []
+        },
+        {
+          "seq": 10,
+          "kind": 5,
+          "time_ms": 3333,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 11,
+          "kind": 2,
+          "time_ms": 3334,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 41
+      }
+    },
+    {
+      "name": "grave_bit_1_False_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3457,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3458,
+          "bytes": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 1,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3478,
+          "bytes": [
+            3,
+            0,
+            1
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3479,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": []
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3499,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3501,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": [
+            53
+          ]
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3531,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3532,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": []
+        },
+        {
+          "seq": 8,
+          "kind": 5,
+          "time_ms": 3552,
+          "bytes": [
+            3,
+            0,
+            0
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 9,
+          "kind": 2,
+          "time_ms": 3553,
+          "bytes": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 1,
+          "keys": []
+        },
+        {
+          "seq": 10,
+          "kind": 5,
+          "time_ms": 3573,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 11,
+          "kind": 2,
+          "time_ms": 3574,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 53
+      }
+    },
+    {
+      "name": "grave_bit_1_False_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3214,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3216,
+          "bytes": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 1,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3236,
+          "bytes": [
+            3,
+            0,
+            1
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3238,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": []
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3259,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3260,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": [
+            53
+          ]
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3290,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3291,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": []
+        },
+        {
+          "seq": 8,
+          "kind": 5,
+          "time_ms": 3311,
+          "bytes": [
+            3,
+            0,
+            0
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 9,
+          "kind": 2,
+          "time_ms": 3312,
+          "bytes": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 1,
+          "keys": []
+        },
+        {
+          "seq": 10,
+          "kind": 5,
+          "time_ms": 3332,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 11,
+          "kind": 2,
+          "time_ms": 3334,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 53
+      }
+    },
+    {
+      "name": "grave_bit_1_True_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3453,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3455,
+          "bytes": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 1,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3475,
+          "bytes": [
+            3,
+            0,
+            1
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3477,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": []
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3497,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3499,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": [
+            41
+          ]
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3529,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3530,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": []
+        },
+        {
+          "seq": 8,
+          "kind": 5,
+          "time_ms": 3550,
+          "bytes": [
+            3,
+            0,
+            0
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 9,
+          "kind": 2,
+          "time_ms": 3551,
+          "bytes": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 1,
+          "keys": []
+        },
+        {
+          "seq": 10,
+          "kind": 5,
+          "time_ms": 3571,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 11,
+          "kind": 2,
+          "time_ms": 3572,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 41
+      }
+    },
+    {
+      "name": "grave_bit_1_True_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3214,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3216,
+          "bytes": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 1,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3236,
+          "bytes": [
+            3,
+            0,
+            1
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3238,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": []
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3258,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3259,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": [
+            41
+          ]
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3289,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3290,
+          "bytes": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 3,
+          "keys": []
+        },
+        {
+          "seq": 8,
+          "kind": 5,
+          "time_ms": 3310,
+          "bytes": [
+            3,
+            0,
+            0
+          ],
+          "row": 3,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 9,
+          "kind": 2,
+          "time_ms": 3312,
+          "bytes": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 1,
+          "keys": []
+        },
+        {
+          "seq": 10,
+          "kind": 5,
+          "time_ms": 3332,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 11,
+          "kind": 2,
+          "time_ms": 3333,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 41
+      }
+    },
+    {
+      "name": "grave_bit_2_False_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3447,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3449,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3469,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3471,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": [
+            53
+          ]
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3501,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3502,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": []
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3522,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3523,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 53
+      }
+    },
+    {
+      "name": "grave_bit_2_False_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3208,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3210,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3230,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3232,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": [
+            53
+          ]
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3262,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3263,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": []
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3283,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3284,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 53
+      }
+    },
+    {
+      "name": "grave_bit_2_True_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3413,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3415,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3435,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3436,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": [
+            41
+          ]
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3466,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3467,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": []
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3487,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3488,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 41
+      }
+    },
+    {
+      "name": "grave_bit_2_True_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3218,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3220,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3240,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3241,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": [
+            41
+          ]
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3271,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3272,
+          "bytes": [
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 8,
+          "keys": []
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3292,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3293,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 41
+      }
+    },
+    {
+      "name": "grave_bit_3_False_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3428,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3429,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3449,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3450,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": [
+            53
+          ]
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3480,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3481,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": []
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3501,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3502,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 53
+      }
+    },
+    {
+      "name": "grave_bit_3_False_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3249,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3251,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3271,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3273,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": [
+            53
+          ]
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3303,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3304,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": []
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3324,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3325,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 53
+      }
+    },
+    {
+      "name": "grave_bit_3_True_immediate",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3455,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3456,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3476,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3478,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": [
+            41
+          ]
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3508,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3509,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": []
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3529,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3530,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 41
+      }
+    },
+    {
+      "name": "grave_bit_3_True_reboot",
+      "records": [
+        {
+          "seq": 0,
+          "kind": 5,
+          "time_ms": 3219,
+          "bytes": [
+            2,
+            0,
+            1
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 1,
+          "kind": 2,
+          "time_ms": 3221,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": []
+        },
+        {
+          "seq": 2,
+          "kind": 5,
+          "time_ms": 3241,
+          "bytes": [
+            1,
+            0,
+            1
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": true
+        },
+        {
+          "seq": 3,
+          "kind": 2,
+          "time_ms": 3243,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": [
+            41
+          ]
+        },
+        {
+          "seq": 4,
+          "kind": 5,
+          "time_ms": 3273,
+          "bytes": [
+            1,
+            0,
+            0
+          ],
+          "row": 1,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 5,
+          "kind": 2,
+          "time_ms": 3274,
+          "bytes": [
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 2,
+          "keys": []
+        },
+        {
+          "seq": 6,
+          "kind": 5,
+          "time_ms": 3294,
+          "bytes": [
+            2,
+            0,
+            0
+          ],
+          "row": 2,
+          "col": 0,
+          "pressed": false
+        },
+        {
+          "seq": 7,
+          "kind": 2,
+          "time_ms": 3295,
+          "bytes": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "mods": 0,
+          "keys": []
+        }
+      ],
+      "passed": true,
+      "measured": {
+        "usage": 41
+      }
+    }
+  ],
+  "restored": true,
+  "validation": {
+    "date": "2026-10-05",
+    "board": "FlipFET Left Mule",
+    "serial": "sval:E46498769F365934",
+    "target": "svalboard/trackball/pmw3389/left:sval",
+    "build_flags": "SVAL_KEYTEST=yes",
+    "source_base": "4fa8b6677d16ba9a0d0b8a3275615d75f367586e",
+    "source_changes": "The accompanying send_string_interval_t fix; built before committing it. Subsequent firmware edits were formatting only.",
+    "uf2_sha256": "2dd0eb909f0cc71844572b5e9473160fa77f56f458a9fccb58a9818630be510d",
+    "command": "python keyboards/svalboard/tools/keytest_runtime_tap.py --serial sval:E46498769F365934 --backup <local-recovery.json> --output <results.json>",
+    "exit_code": 0,
+    "total_cases": 84,
+    "passed_cases": 84,
+    "final_harness_info": {
+      "version": 1,
+      "active": false,
+      "running": false,
+      "aborted": false,
+      "rows": 10,
+      "cols": 6,
+      "capacity": 32,
+      "queued": 0,
+      "layers": 16,
+      "first": 0,
+      "next": 0,
+      "lost": 0
+    },
+    "full_configuration_matches_pre_flash": {
+      "settings": true,
+      "keys": true,
+      "tables": true,
+      "one_shot": true,
+      "macros_hex": true
+    },
+    "validated_fix_commit": "94fa94de8e234c1bb9a0a03aab048541b48ff372"
+  }
+}

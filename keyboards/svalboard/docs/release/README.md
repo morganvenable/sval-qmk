@@ -140,9 +140,10 @@ Enter the RP2040 bootloader by double-tapping reset within 500 ms. The half appe
 
 In Keybard's Settings, **Board name** accepts up to 32 characters within the firmware's 64-byte UTF-8 limit. Save it, then restart the keyboard for the computer to show the new USB product name. The serial stays the same. The name is stored on the board, separately from your layout backups.
 
+**On vRC2 and earlier:** tapping toggle count, tap-code delay, tap-hold Caps Lock delay and Grave Escape overrides are stored but do not affect behavior. The vRC3 runtime-settings fix connects all four controls; see [vRC3 notes](vRC3.md).
+
 ## Current limitations
 
-- **Settings without effect:** tapping toggle count, tap-code delay, tap-hold Caps Lock delay and the Grave Escape override are saved but don't change behavior yet.
 - **Auto Shift:** the standard firmware does not enable Auto Shift.
 - **Editor names:** Keybard doesn't yet save layer, tap-dance and macro names to the board, although the firmware supports it. Move them between browsers with a `.svil` export for now.
 - **Alternate repeat:** modifier conditions and the default-alternate option have known matching problems. Check the output of custom mappings before relying on them.
