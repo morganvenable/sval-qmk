@@ -511,7 +511,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
     }
     switch (command_id) {
         case sval_cmd_get_info: {
-            // Response: [0xDF] [0x00] [ver0-3] [uid0-7] [flags]
+            // Response: [0xDF] [0x00] [ver0-3] [uid0-7] [flags] [kc major] [kc minor] [kc patch]
             // Entry counts are now in sval.json (parsed from keyboard definition)
             uint8_t uid[] = SVAL_KEYBOARD_UID;
             data[2]       = SVAL_PROTOCOL_VERSION & 0xFF;
@@ -520,6 +520,11 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             data[5]       = (SVAL_PROTOCOL_VERSION >> 24) & 0xFF;
             memcpy(&data[6], uid, 8);
             data[14] = sval_get_feature_flags();
+            // The QMK keycode numbering this firmware uses, so a host can number
+            // keycodes the way the board does. Older firmware leaves these zero.
+            data[15] = QMK_KEYCODES_VERSION_MAJOR;
+            data[16] = QMK_KEYCODES_VERSION_MINOR;
+            data[17] = QMK_KEYCODES_VERSION_PATCH;
             break;
         }
 

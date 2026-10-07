@@ -69,6 +69,8 @@ Firmware advertises the `sval:` USB serial prefix and dedicated HID usage. The m
 
 The read-only layer query also advertises active/default-mask reporting through feature bit 6; see [layer-state wire compatibility](docs/LAYER_STATE_PROTOCOL.md). Older hosts retain the same active-mask offset.
 
+`GET_INFO` also reports the QMK keycode numbering the firmware uses (`QMK_KEYCODES_VERSION`) as three bytes after the feature flags (major, minor, patch). Hosts number keycodes to match it; all zero means older firmware that does not report it, which was always 0.0.9.
+
 Current Sval protocol version **3** includes 16-bit table indices, sparse table/label reads, and 32-bit macro-buffer offsets. The full macro capacity requires a compatible Sval client. Legacy VIA macro commands retain their 16-bit addressing limit.
 
 The maintained module name is `svalboard/core`, the regular keymap is `sval`, and definitions use `sval.json`. Earlier names in historical files or internal client identifiers are not an alternative supported mixed firmware/client pair. A generic Vial GUI is not the recommended client for this protocol.
