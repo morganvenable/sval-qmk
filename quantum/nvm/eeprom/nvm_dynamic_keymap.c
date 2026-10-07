@@ -74,7 +74,7 @@ STATIC_ASSERT((int64_t)(DYNAMIC_KEYMAP_EEPROM_MAX_ADDR) - (int64_t)(DYNAMIC_KEYM
 #ifndef DYNAMIC_KEYMAP_LAYOUT_SCHEMA
 // Bump only when the stored bytes change meaning without any address or count
 // changing. Keycode renumbering is NOT a schema change: the keycode version is
-// stored separately and translated (keycode_upgrade.h).
+// stored separately, and via_init() resets the keymap when it differs.
 #    define DYNAMIC_KEYMAP_LAYOUT_SCHEMA 0
 #endif
 

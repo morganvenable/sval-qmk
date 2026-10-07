@@ -16,7 +16,6 @@
  */
 
 #include "dynamic_keymap.h"
-#include "keycode_upgrade.h"
 #include "keymap_introspection.h"
 #include "action.h"
 #include "send_string.h"
@@ -70,29 +69,6 @@ void dynamic_keymap_reset(void) {
         for (int encoder = 0; encoder < NUM_ENCODERS; encoder++) {
             dynamic_keymap_set_encoder(layer, encoder, true, keycode_at_encodermap_location_raw(layer, encoder, true));
             dynamic_keymap_set_encoder(layer, encoder, false, keycode_at_encodermap_location_raw(layer, encoder, false));
-        }
-#endif // ENCODER_MAP_ENABLE
-    }
-}
-
-// Translate every stored keycode written under keycode version `from` to the
-// current numbering (keycode_upgrade.h). Unchanged keycodes are not rewritten.
-void dynamic_keymap_upgrade_keycodes(uint8_t from) {
-    for (int layer = 0; layer < DYNAMIC_KEYMAP_LAYER_COUNT; layer++) {
-        for (int row = 0; row < MATRIX_ROWS; row++) {
-            for (int column = 0; column < MATRIX_COLS; column++) {
-                uint16_t kc = dynamic_keymap_get_keycode(layer, row, column);
-                uint16_t up = keycode_upgrade(kc, from);
-                if (up != kc) dynamic_keymap_set_keycode(layer, row, column, up);
-            }
-        }
-#ifdef ENCODER_MAP_ENABLE
-        for (int encoder = 0; encoder < NUM_ENCODERS; encoder++) {
-            for (int cw = 0; cw < 2; cw++) {
-                uint16_t kc = dynamic_keymap_get_encoder(layer, encoder, cw);
-                uint16_t up = keycode_upgrade(kc, from);
-                if (up != kc) dynamic_keymap_set_encoder(layer, encoder, cw, up);
-            }
         }
 #endif // ENCODER_MAP_ENABLE
     }

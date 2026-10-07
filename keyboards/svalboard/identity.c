@@ -50,7 +50,7 @@ typedef struct __attribute__((packed)) {
     uint8_t  serial[IDENTITY_SERIAL_BYTES];
     uint8_t  serial_source; // identity_serial_source_t
     uint8_t  name_len;      // bytes of UTF-8 in name, no terminator
-    uint8_t  flags;         // IDENTITY_FLAG_*
+    uint8_t  flags;         // reserved; see identity.h
     uint8_t  reserved;
     char     name[IDENTITY_NAME_MAX_BYTES];
     uint32_t crc;
@@ -231,42 +231,6 @@ identity_status_t identity_set_name(const char *name, uint8_t len) {
     name_z[len] = 0;
     return IDENTITY_OK;
 }
-
-bool identity_legacy_store_checked(void) {
-    identity_init();
-    return current.flags & IDENTITY_FLAG_LEGACY_STORE_CHECKED;
-}
-
-bool identity_legacy_store_pending(void) {
-    identity_init();
-    return current.flags & IDENTITY_FLAG_LEGACY_STORE_PENDING;
-}
-
-bool identity_mark_legacy_store_pending(void) {
-    identity_init();
-    if (current.flags & IDENTITY_FLAG_LEGACY_STORE_PENDING) return true;
-    uint8_t flags = current.flags;
-    current.flags |= IDENTITY_FLAG_LEGACY_STORE_PENDING;
-    if (save()) return true;
-    current.flags = flags;
-    return false;
-}
-
-void identity_mark_legacy_store_checked(void) {
-    identity_init();
-    if (current.flags & IDENTITY_FLAG_LEGACY_STORE_CHECKED) return;
-    uint8_t flags = current.flags;
-    current.flags = (flags | IDENTITY_FLAG_LEGACY_STORE_CHECKED) & ~IDENTITY_FLAG_LEGACY_STORE_PENDING;
-    if (!save()) current.flags = flags;
-}
-
-#ifdef SVAL_TEST_HOOKS
-void identity_test_clear_legacy_store_checked(void) {
-    identity_init();
-    current.flags &= ~(IDENTITY_FLAG_LEGACY_STORE_CHECKED | IDENTITY_FLAG_LEGACY_STORE_PENDING);
-    save();
-}
-#endif
 
 // ---- hooks into QMK -----------------------------------------------------------------
 

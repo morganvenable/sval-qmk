@@ -34,7 +34,6 @@ uint16_t dynamic_keymap_get_encoder(uint8_t layer, uint8_t encoder_id, bool cloc
 void     dynamic_keymap_set_encoder(uint8_t layer, uint8_t encoder_id, bool clockwise, uint16_t keycode);
 #endif // ENCODER_MAP_ENABLE
 void dynamic_keymap_reset(void);
-void dynamic_keymap_upgrade_keycodes(uint8_t from);
 // These get/set the keycodes as stored in the EEPROM buffer
 // Data is big-endian 16-bit values (the keycodes)
 // Order is by layer/row/column

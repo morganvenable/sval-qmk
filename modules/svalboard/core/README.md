@@ -59,9 +59,9 @@ Define `SVAL_KEYBOARD_UID` for file/device identification; a legacy `VIAL_KEYBOA
 
 The implementation is in [`sval.h`](sval.h) and [`post_config.h`](post_config.h). Keymap/macro storage and board custom configuration occupy separate regions of the shared logical EEPROM.
 
-Sval validity uses a **layout stamp**, not a build timestamp. Compatible updates preserve settings; changes to geometry or schema can invalidate the relevant data. VIA also stores a keycode version so supported renumberings can be translated. This does not guarantee preservation across arbitrary firmware versions.
+Sval validity uses a **layout stamp**, not a build timestamp. Compatible updates preserve settings; changes to geometry or schema can invalidate the relevant data. VIA also stores the keycode version that wrote the keymap; when QMK renumbers keycodes, the stored keymap and the Sval tables are reset rather than translated.
 
-On Svalboard, [`migrate_vial.c`](../../../keyboards/svalboard/migrate_vial.c) implements the supported one-time shipped-Vial migration. The module alone does not provide a general Vial importer.
+The firmware never reads configuration stored by other firmware, Vial included. Setups move between firmwares as layout files, which store keycodes by name.
 
 ## Host protocol and compatibility
 

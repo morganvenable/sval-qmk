@@ -12,7 +12,7 @@ Read the [first-release launch notes](launch.md), explore the features below, re
 - **Make every position do more:** tap dances, combos, macros, overrides, repeat mappings, and leader sequences are configurable without compiling firmware.
 - **Build around your pointing devices:** independent pointer controls, automatic mouse-layer activation, precision Sniper keys, and faster Boost keys.
 - **Try changes as you go:** apply edits live or queue them for review, reuse saved layers, and print a layout reference.
-- **Keep your setup:** compatible firmware updates preserve settings; supported shipped Vial configurations migrate automatically; native layout files provide a portable backup.
+- **Keep your setup:** compatible firmware updates preserve settings, and native layout files provide a portable backup that also brings a Vial setup across.
 - **Recognize your board:** a saved name and stable serial distinguish your keyboard and preserve its identity across updates.
 
 ## Start here
@@ -104,7 +104,6 @@ Editing tap dances, combos, key overrides, alternate-repeat keys, macros and QMK
 | More room | 256 entries each for tap dances, combos, key overrides, alternate-repeat keys and macros (Vial: 30–50), and more macro storage. |
 | Leader sequences | Trigger an action with a short sequence of keys, editable in Keybard. |
 | Settings kept across updates | A compatible layout survives firmware updates instead of resetting with each new build. |
-| Vial migration | Your existing Svalboard setup imports automatically on first boot. |
 | Persistent board identity | Name each board and keep its serial number through updates. |
 | More pointing control | Sniper toggles, Boost keys, per-pointer automouse with threshold and decay, natural scrolling. |
 | Layer colors in Keybard | Choose each layer's lighting color in the editor. |
@@ -120,9 +119,9 @@ The **Trainer overlay** is available as a separate Windows companion preview, co
 
 ## Updating from Vial and choosing firmware
 
-Automatic migration supports Svalboards running **`svalboard/vial-qmk v2025-11-01` with the `vial` keymap**. It imports the layout, macros, programmable behaviors, and supported settings. Export a backup first, and check your modifier preferences, timing settings, and macros after upgrading.
+Svalboard QMK does not read the configuration Vial stored on the board: after flashing, the board starts with the default layout. Before flashing, **export a `.vil` backup with Vial**; after flashing, import it in Keybard. Layout files store keycodes by name, so Keybard can map them onto the new firmware; it brings across the layout, macros, tap dances, combos, key overrides and QMK settings. Pointing and hardware settings (DPI, scrolling, automouse, layer colors) are not in `.vil` files, so set them again in Keybard. Check your modifier preferences, timing settings, and macros after importing.
 
-Other older firmware versions may start with default settings. Updates that change the storage layout can also require a reset, so keep an exported backup even when moving between Svalboard QMK versions.
+Updates that change the storage layout or QMK's keycode numbering also reset the stored configuration, so keep an exported backup even when moving between Svalboard QMK versions.
 
 Firmware downloads are available for the left and right sides of:
 
