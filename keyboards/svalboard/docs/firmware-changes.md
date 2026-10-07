@@ -1,6 +1,6 @@
 # What Svalboard QMK adds beyond Vial
 
-[Explore Keybard](README.md) · [Release announcement](announcement.md) · [Protocol and companion apps](protocol.md)
+[Explore Keybard](https://github.com/svalboard/keybard/blob/main/docs/launch/README.md) · [Release announcement](https://github.com/svalboard/keybard/blob/main/docs/launch/announcement.md) · [Protocol and companion apps](protocol.md)
 
 If your Svalboard ran the Vial firmware (`svalboard/vial-qmk v2025-11-01`), you could already edit your keymap, tap dances, combos, key overrides, alternate-repeat keys, macros and QMK settings without rebuilding firmware. You also had layer colors, per-side DPI and scroll toggles, axis lock, Sniper hold keys, the automouse toggle and TrackPoint recalibration. All of that carries over. This page covers what Svalboard QMK adds on top.
 
@@ -20,6 +20,8 @@ Tap/hold, tap-dance, combo and one-shot timing settings take effect as soon as y
 | Addition | Compared with Vial |
 | --- | --- |
 | Settings kept across ordinary updates | Vial reset the layout whenever you installed a firmware build from a different day. A compatible layout now stays. |
+| Two verified copies of your settings | Vial kept one copy in flash, and a failed read or checksum could reset the board to defaults. Svalboard QMK keeps the whole configuration in two independently checked flash banks and commits each change only after reading it back. A bad read falls back to the other copy, and the board never erases its settings on its own: if both copies are unreadable it keeps running with changes held in memory until you reset it deliberately. See [durable settings](durable-settings.md). |
+| Keycode numbering reported to Keybard | The board tells Keybard which QMK keycode numbering it uses, so Keybard writes every keycode the way this firmware reads it. |
 | Keycode-safe resets | The board records which QMK keycode numbering its stored keycodes use. If a firmware update changes that numbering, the stored configuration is reset instead of being reinterpreted; restore it from a layout file, which stores keycodes by name. |
 | Checked macro uploads | Uploads that exceed the macro buffer or contain invalid offsets are rejected. |
 
@@ -60,7 +62,7 @@ These support troubleshooting and firmware development; normal setup doesn't nee
 | Addition | Purpose |
 | --- | --- |
 | Remote bootloader entry in diagnostic builds | Install another test image without pressing reset. |
-| Optional key-event tests | Check real key behavior and saved settings with injected presses and captured reports. See the [testing guide](../keytest.md). |
+| Optional key-event tests | Check real key behavior and saved settings with injected presses and captured reports. See the [testing guide](keytest.md). |
 
 ## For Keybard and companion apps
 
@@ -74,4 +76,4 @@ These support troubleshooting and firmware development; normal setup doesn't nee
 
 See [the protocol guide](protocol.md) for details.
 
-For technical details, source references and known defects, see the [firmware review](../reviews/2026-10-04-qmk-fork-review.md). For everyday setup, start with the [Keybard feature guide](README.md).
+For technical details, source references and known defects, see the [firmware review](reviews/2026-10-04-qmk-fork-review.md). For everyday setup, start with the [Keybard feature guide](https://github.com/svalboard/keybard/blob/main/docs/launch/README.md).
