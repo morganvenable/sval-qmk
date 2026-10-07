@@ -12,8 +12,9 @@
 #    define VIA_EEPROM_MAGIC_ADDR (EECONFIG_SIZE)
 #endif
 
-// The QMK keycode version (patch number) that wrote the stored keymap, so a
-// renumbering upstream can be translated rather than reset (keycode_upgrade.h).
+// The QMK keycode version (patch number) that wrote the stored keymap. Stored
+// keycodes are only meaningful in that numbering, so via_init() resets them
+// when it differs from the firmware's.
 #define VIA_EEPROM_KEYCODES_VERSION_ADDR (VIA_EEPROM_MAGIC_ADDR + 3)
 
 #define VIA_EEPROM_LAYOUT_OPTIONS_ADDR (VIA_EEPROM_MAGIC_ADDR + 4)

@@ -12,13 +12,9 @@ CUSTOM_MATRIX = lite
 
 SRC += axis_scale.c matrix.c scanlab.c power.c identity.c
 
-# One-time migration of a user's setup from the shipped Vial firmware
-# (svalboard/vial-qmk v2025-11-01). Set to no to build without it.
-SVAL_MIGRATE_VIAL ?= yes
-ifeq ($(strip $(SVAL_MIGRATE_VIAL)), yes)
-  SRC += migrate_vial.c
-  OPT_DEFS += -DSVAL_MIGRATE_VIAL
-endif
+# Full-settings redundant store in the additional 16 MiB flash space.
+EEPROM_DRIVER = custom
+SRC += storage/store.c storage/legacy.c storage/flash.c storage/eeprom.c
 
 SERIAL_DRIVER = vendor
 
@@ -53,3 +49,6 @@ ifeq ($(strip $(SVAL_KEYTEST)), yes)
   SRC += keytest.c
   OPT_DEFS += -DSVAL_KEYTEST
 endif
+
+# Keep firmware clear of the existing settings during upgrades.
+LDFLAGS += -Wl,-T,keyboards/svalboard/storage/reservation.ld

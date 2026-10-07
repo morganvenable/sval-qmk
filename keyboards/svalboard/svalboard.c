@@ -1,3 +1,4 @@
+#include "storage/store.h"
 #include "svalboard.h"
 #if VIA_ENABLE
 #include "via.h"
@@ -151,24 +152,16 @@ void svalboard_saved_values_defaults(void) {
     global_saved_values.layer_colors[15] = HSV(0xD5FFFF); // Magenta
 }
 
-#ifdef SVAL_MIGRATE_VIAL
-void sval_migrate_vial(void);                         // migrate_vial.c
-void sval_migrate_vial_diag(uint8_t *out, uint8_t len); // migrate_vial.c
-#endif
-
-// The stored keycode version is older than this firmware's: translate what the
-// Sval module stores outside the VIA keymap.
-void via_keycodes_upgrade_kb(uint8_t from) {
-    sval_upgrade_keycodes(from);
+// The stored keycodes were written under a different keycode numbering than
+// this firmware's: reset what the Sval module stores outside the VIA keymap too.
+void via_keycodes_reset_kb(void) {
+    sval_eeprom_invalidate();
 }
 
 // Runs after the EEPROM driver is up and before anything validates or resets
-// stored settings, which is the only point a foreign layout can still be read.
+// stored settings.
 void keyboard_pre_init_kb(void) {
     identity_init();
-#ifdef SVAL_MIGRATE_VIAL
-    sval_migrate_vial();
-#endif
     keyboard_pre_init_user();
 }
 
@@ -209,6 +202,13 @@ extern bool boost_toggle_2, boost_toggle_3, boost_toggle_5;
 extern axis_scale_t boost_x;
 
 void output_keyboard_info(void) {
+    switch (sval_store_status()) {
+        case SVAL_STORE_OK: send_string("Storage: verified\n"); break;
+        case SVAL_STORE_IMPORTED: send_string("Storage: imported previous Sval settings\n"); break;
+        case SVAL_STORE_RECOVERED: send_string("Storage: recovered a verified copy\n"); break;
+        case SVAL_STORE_READ_ONLY: send_string("Storage: READ ONLY - settings are temporary; export a backup before EE_CLR\n"); break;
+    }
+
     char output_buffer[256];
 
     sprintf(output_buffer, "%s:%s @ %s\n", QMK_KEYBOARD, QMK_KEYMAP, QMK_VERSION);
@@ -503,6 +503,7 @@ static void sval_usb_wake_handler(void) {
 }
 
 void housekeeping_task_kb(void) {
+    sval_storage_task();
     sval_usb_wake_handler();
     scanlab_housekeeping();
 #ifdef SVAL_KEYTEST
@@ -642,12 +643,6 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 nvm_via_update_keycodes_version(value_data[0]);
                 break;
             }
-            if (*value_id == 0xF4) { // test: forget the legacy-store check and blank the settings store
-                void identity_test_clear_legacy_store_checked(void);
-                identity_test_clear_legacy_store_checked();
-                eeconfig_disable(); // full format; the board resets itself on the next boot
-                break;
-            }
 #endif
             switch (*value_id) {
                 case id_left_dpi:
@@ -753,19 +748,6 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
 #ifdef SVAL_TEST_HOOKS
             if (*value_id == 0xF2) { // test: stored keycode version
                 value_data[0] = nvm_via_read_keycodes_version();
-                break;
-            }
-#    ifdef SVAL_MIGRATE_VIAL
-            if (*value_id == 0xF3) { // test: legacy store replay, 24 bytes from the offset in value_data[0..1]
-                void sval_test_legacy_read(uint16_t offset, uint8_t *out);
-                sval_test_legacy_read(value_data[0] | (value_data[1] << 8), value_data);
-                break;
-            }
-#    endif
-#endif
-#ifdef SVAL_MIGRATE_VIAL
-            if (*value_id == 0xF0) { // Vial migration diagnostics
-                sval_migrate_vial_diag(value_data, length > 3 ? length - 3 : 0);
                 break;
             }
 #endif

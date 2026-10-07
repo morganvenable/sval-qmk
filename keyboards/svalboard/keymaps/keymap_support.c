@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdbool.h>
 #include <stdint.h>
 #include "svalboard.h"
+#include "storage/store.h"
 #include "keymap_support.h"
 #include "axis_scale.h"
 #include "caps_word.h"
@@ -400,6 +401,9 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
 
     // Abort additional processing if userspace code did
     if (!process_record_user(keycode, record)) { return false;}
+
+    // An explicit reset may replace an unreadable store; automatic init may not.
+    if (keycode == QK_CLEAR_EEPROM && record->event.pressed && !sval_store_prepare_reset()) return false;
 
     // We are in a mod tap, with a KC_TRANSPARENT, lets make it transparent...
     if (IS_QK_MOD_TAP(keycode) && ((keycode & 0xFF) == KC_TRANSPARENT) &&

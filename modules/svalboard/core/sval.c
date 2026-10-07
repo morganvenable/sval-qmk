@@ -11,7 +11,6 @@
 #include <string.h>
 #include "print.h"
 #include "layout_stamp.h"
-#include "keycode_upgrade.h"
 #include "send_string.h"
 #include "wait.h"
 
@@ -85,100 +84,20 @@ static bool sval_eeprom_is_valid(void) {
     return memcmp(stored, expected, SVAL_MAGIC_SIZE) == 0;
 }
 
-void sval_eeprom_set_valid(void) {
+static void sval_eeprom_set_valid(void) {
     uint8_t magic[SVAL_MAGIC_SIZE];
     sval_get_magic(magic);
     sval_write_eeprom(SVAL_MAGIC_OFFSET, magic, SVAL_MAGIC_SIZE);
 }
 
-// Translate every keycode the Sval data block and the macros store from keycode
-// version `from` to the current numbering (keycode_upgrade.h). Called from the
-// keyboard's via_keycodes_upgrade_kb() during via_init(), before sval_init()
-// loads the tables. Idempotent, like every keycode upgrade.
-#define UPGRADE(field)                                       \
-    do {                                                     \
-        uint16_t upgraded_ = keycode_upgrade((field), from); \
-        if (upgraded_ != (field)) {                          \
-            (field) = upgraded_;                             \
-            changed = true;                                  \
-        }                                                    \
-    } while (0)
-void sval_upgrade_keycodes(uint8_t from) {
-    if (sval_eeprom_is_valid()) {
-        for (uint16_t i = 0; i < SVAL_TAP_DANCE_ENTRIES; i++) {
-            sval_tap_dance_entry_t e;
-            bool                   changed = false;
-            sval_get_tap_dance(i, &e);
-            UPGRADE(e.on_tap);
-            UPGRADE(e.on_hold);
-            UPGRADE(e.on_double_tap);
-            UPGRADE(e.on_tap_hold);
-            if (changed) sval_set_tap_dance(i, &e);
-        }
-        for (uint16_t i = 0; i < SVAL_COMBO_ENTRIES; i++) {
-            sval_combo_entry_t e;
-            bool               changed = false;
-            sval_get_combo(i, &e);
-            for (uint8_t k = 0; k < 4; k++)
-                UPGRADE(e.input[k]);
-            UPGRADE(e.output);
-            if (changed) sval_set_combo(i, &e);
-        }
-        for (uint16_t i = 0; i < SVAL_KEY_OVERRIDE_ENTRIES; i++) {
-            sval_key_override_entry_t e;
-            bool                      changed = false;
-            sval_get_key_override(i, &e);
-            UPGRADE(e.trigger);
-            UPGRADE(e.replacement);
-            if (changed) sval_set_key_override(i, &e);
-        }
-        for (uint16_t i = 0; i < SVAL_ALT_REPEAT_KEY_ENTRIES; i++) {
-            sval_alt_repeat_key_entry_t e;
-            bool                        changed = false;
-            sval_get_alt_repeat_key(i, &e);
-            UPGRADE(e.keycode);
-            UPGRADE(e.alt_keycode);
-            if (changed) sval_set_alt_repeat_key(i, &e);
-        }
-        for (uint16_t i = 0; i < SVAL_LEADER_ENTRIES; i++) {
-            sval_leader_entry_t e;
-            bool                changed = false;
-            sval_get_leader(i, &e);
-            for (uint8_t k = 0; k < 5; k++)
-                UPGRADE(e.sequence[k]);
-            UPGRADE(e.output);
-            if (changed) sval_set_leader(i, &e);
-        }
-    }
-
-    // Macros: only the 16-bit extension actions carry QMK keycodes. Walk the
-    // buffer byte by byte; the extension holds two non-zero bytes, so the
-    // rewrite never changes its length.
-    uint32_t size = dynamic_keymap_macro_get_buffer_size();
-    uint8_t  b[4];
-    for (uint32_t i = 0; i + 1 < size; i++) {
-        dynamic_keymap_macro_get_buffer(i, 2, b);
-        if (b[0] != SS_QMK_PREFIX) continue;
-        if (b[1] == SS_TAP_CODE || b[1] == SS_DOWN_CODE || b[1] == SS_UP_CODE) {
-            i += 2;
-        } else if (b[1] == SS_DELAY_CODE) {
-            i += 3;
-        } else if (b[1] >= VIAL_MACRO_EXT_TAP && b[1] <= VIAL_MACRO_EXT_UP && i + 3 < size) {
-            dynamic_keymap_macro_get_buffer(i + 2, 2, &b[2]);
-            uint16_t raw = b[2] | (b[3] << 8);
-            uint16_t kc  = decode_keycode(raw);
-            uint16_t up  = keycode_upgrade(kc, from);
-            if (up != kc) {
-                if ((up & 0xFF) == 0) up = 0xFF00 | (up >> 8);
-                b[2] = up & 0xFF;
-                b[3] = up >> 8;
-                dynamic_keymap_macro_set_buffer(i + 2, 2, &b[2]);
-            }
-            i += 3;
-        }
-    }
+// Mark the stored Sval data block invalid, so sval_init() resets it to defaults.
+// Called from the keyboard's via_keycodes_reset_kb() during via_init(), before
+// sval_init() loads the tables, when the stored keycodes were written under a
+// different keycode numbering.
+void sval_eeprom_invalidate(void) {
+    uint8_t zero[SVAL_MAGIC_SIZE] = {0};
+    sval_write_eeprom(SVAL_MAGIC_OFFSET, zero, SVAL_MAGIC_SIZE);
 }
-#undef UPGRADE
 
 void sval_init(void) {
     // Initialize client wrapper for multi-client support
@@ -511,7 +430,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
     }
     switch (command_id) {
         case sval_cmd_get_info: {
-            // Response: [0xDF] [0x00] [ver0-3] [uid0-7] [flags]
+            // Response: [0xDF] [0x00] [ver0-3] [uid0-7] [flags] [kc major] [kc minor] [kc patch]
             // Entry counts are now in sval.json (parsed from keyboard definition)
             uint8_t uid[] = SVAL_KEYBOARD_UID;
             data[2]       = SVAL_PROTOCOL_VERSION & 0xFF;
@@ -520,6 +439,11 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             data[5]       = (SVAL_PROTOCOL_VERSION >> 24) & 0xFF;
             memcpy(&data[6], uid, 8);
             data[14] = sval_get_feature_flags();
+            // The QMK keycode numbering this firmware uses, so a host can number
+            // keycodes the way the board does. Older firmware leaves these zero.
+            data[15] = QMK_KEYCODES_VERSION_MAJOR;
+            data[16] = QMK_KEYCODES_VERSION_MINOR;
+            data[17] = QMK_KEYCODES_VERSION_PATCH;
             break;
         }
 

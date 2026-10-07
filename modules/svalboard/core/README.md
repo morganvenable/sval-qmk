@@ -59,15 +59,17 @@ Define `SVAL_KEYBOARD_UID` for file/device identification; a legacy `VIAL_KEYBOA
 
 The implementation is in [`sval.h`](sval.h) and [`post_config.h`](post_config.h). Keymap/macro storage and board custom configuration occupy separate regions of the shared logical EEPROM.
 
-Sval validity uses a **layout stamp**, not a build timestamp. Compatible updates preserve settings; changes to geometry or schema can invalidate the relevant data. VIA also stores a keycode version so supported renumberings can be translated. This does not guarantee preservation across arbitrary firmware versions.
+Sval validity uses a **layout stamp**, not a build timestamp. Compatible updates preserve settings; changes to geometry or schema can invalidate the relevant data. VIA also stores the keycode version that wrote the keymap; when QMK renumbers keycodes, the stored keymap and the Sval tables are reset rather than translated.
 
-On Svalboard, [`migrate_vial.c`](../../../keyboards/svalboard/migrate_vial.c) implements the supported one-time shipped-Vial migration. The module alone does not provide a general Vial importer.
+The firmware never reads configuration stored by other firmware, Vial included. Setups move between firmwares as layout files, which store keycodes by name.
 
 ## Host protocol and compatibility
 
 Firmware advertises the `sval:` USB serial prefix and dedicated HID usage. The matching host bootstraps a client ID through wrapper prefix `0xDD`, then sends Sval commands under `0xDF` or wrapped VIA commands under `0xFE`. Unwrapped Sval commands are ignored. See [Client ID protocol](docs/CLIENT_ID_PROTOCOL.md).
 
 The read-only layer query also advertises active/default-mask reporting through feature bit 6; see [layer-state wire compatibility](docs/LAYER_STATE_PROTOCOL.md). Older hosts retain the same active-mask offset.
+
+`GET_INFO` also reports the QMK keycode numbering the firmware uses (`QMK_KEYCODES_VERSION`) as three bytes after the feature flags (major, minor, patch). Hosts number keycodes to match it; all zero means older firmware that does not report it, which was always 0.0.9.
 
 Current Sval protocol version **3** includes 16-bit table indices, sparse table/label reads, and 32-bit macro-buffer offsets. The full macro capacity requires a compatible Sval client. Legacy VIA macro commands retain their 16-bit addressing limit.
 

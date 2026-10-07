@@ -37,7 +37,11 @@
 #include "nvm_via.h"
 #include "nvm_dynamic_keymap.h"
 #include "layout_stamp.h"
-#include "keycode_upgrade.h"
+#include "keycodes.h"
+
+// The stored keycode version is QMK's keycode patch number.
+_Static_assert(QMK_KEYCODES_VERSION_MAJOR == 0 && QMK_KEYCODES_VERSION_MINOR == 0, "the stored keycode version is the patch number only");
+#define VIA_KEYCODES_VERSION ((uint8_t)QMK_KEYCODES_VERSION_PATCH)
 
 #if defined(SECURE_ENABLE)
 #    include "secure.h"
@@ -123,11 +127,10 @@ void via_eeprom_set_valid(bool valid) {
 // the caller also needs to check the valid state.
 __attribute__((weak)) void via_init_kb(void) {}
 
-// Override at the keyboard level to translate keycodes the keyboard stores
-// outside the VIA keymap (tap dances, combos, macros with 16-bit keycodes...)
-// when the stored keycode version is older than the firmware's. Must be
-// idempotent; see keycode_upgrade.h.
-__attribute__((weak)) void via_keycodes_upgrade_kb(uint8_t from) {}
+// Override at the keyboard level to reset keycodes the keyboard stores outside
+// the VIA keymap (tap dances, combos...) when the stored keycode version is not
+// the firmware's.
+__attribute__((weak)) void via_keycodes_reset_kb(void) {}
 
 // Called by QMK core to initialize dynamic keymaps etc.
 void via_init(void) {
@@ -143,17 +146,13 @@ void via_init(void) {
         return;
     }
 
-    // Stored keycodes from an older keycode numbering are translated, not
-    // reset. The version is written last, so an interrupted upgrade re-runs.
-    uint8_t version = nvm_via_read_keycodes_version();
-    if (version != KEYCODE_UPGRADE_CURRENT) {
-        if (keycode_upgrade_supported(version)) {
-            dynamic_keymap_upgrade_keycodes(version);
-            via_keycodes_upgrade_kb(version);
-            nvm_via_update_keycodes_version(KEYCODE_UPGRADE_CURRENT);
-        } else {
-            eeconfig_init_via();
-        }
+    // Stored keycodes written under a different keycode numbering are reset,
+    // never translated: a value means nothing outside its own numbering, and a
+    // wrong translation would silently change what keys do. Users restore from
+    // a layout file, which stores keycodes by name.
+    if (nvm_via_read_keycodes_version() != VIA_KEYCODES_VERSION) {
+        via_keycodes_reset_kb();
+        eeconfig_init_via();
     }
 }
 
@@ -168,7 +167,7 @@ void eeconfig_init_via(void) {
     dynamic_keymap_reset();
     // This resets the macros in EEPROM to nothing.
     dynamic_keymap_macro_reset();
-    nvm_via_update_keycodes_version(KEYCODE_UPGRADE_CURRENT);
+    nvm_via_update_keycodes_version(VIA_KEYCODES_VERSION);
     // Save the magic number last, in case saving was interrupted
     via_eeprom_set_valid(true);
 }
