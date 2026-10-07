@@ -81,10 +81,10 @@ factory reset. A smaller flash die cannot be reset into supporting this driver.
 - Permanent damage to a whole bank may roll back changes since the last fallback
   snapshot. Both banks share one physical flash die; this is not protection against
   total chip failure. Keep exported backups.
-- Quiet-time snapshots resume scanning between each 64 KiB erase and 256-byte
+- Quiet-time snapshots resume scanning between each 4 KiB sector erase and 256-byte
   program. Each individual operation still disables interrupts. Initial import
-  writes two banks synchronously, and a full journal or explicit reset also needs
-  a synchronous checkpoint. Measure boot, save, and rollover latency on hardware
+  writes two banks synchronously using 64 KiB erases. A full journal or explicit
+  reset also needs a synchronous checkpoint. Measure boot, save, and rollover latency on hardware
   before release; the host test does not model flash timing or USB behavior.
 - CRCs detect accidental damage; they are not authentication or error correction.
 
@@ -101,3 +101,32 @@ Before release, bench-test both halves: import an exported known layout, compare
 keymap/macros/settings after flashing, interrupt writes and reboot repeatedly,
 measure initialization and checkpoint pauses, and verify USB and split transport
 recovery. Simulator tests do not substitute for this hardware validation.
+
+## FlipFET left mule bench results (2026-10-06)
+
+Tested `svalboard/left:sval SVAL_KEYTEST=yes` on a 16 MiB RP2040 mule.
+The following checks passed:
+
+- Verified full-flash backup before programming; firmware load readback verified.
+- All 131,072 imported logical EEPROM bytes matched the decoded old store.
+  The previous 512 KiB store and board identity bytes remained unchanged.
+- A key binding and a two-character macro produced the expected captured HID
+  reports before and after software reboot. Original settings were restored.
+- Deliberately flipping a snapshot bit in the newest bank recovered the previous
+  bank. New edits then persisted across further reboots; the complete original
+  1,920-byte keymap was restored.
+- Changing background erases from 64 KiB to 4 KiB reduced the maximum measured
+  host HID round trip from 277.36 ms to 45.70 ms in separate 22-second samples.
+  The latter sample had 631 requests and a 1.89 ms median. This is a host timing
+  observation, not an upper bound on interrupt latency.
+
+A further test damaged both snapshots, then stalled in Windows HID discovery
+during recovery. This case is unresolved on hardware and is not counted as a
+pass. The simulator's no-automatic-erasure test passes. Release validation still
+needs this case resolved, physical power interruption during writes, initialization
+and full-journal timing, and testing with a split partner. Software reboots and
+synthetic reports do not demonstrate physical power-cut or sensor behavior.
+
+The hardware-tested UF2 SHA-256 is
+`f1d7000e332ecfaa69964907ae2b717615b627d8025bea33400819b62adde070`.
+Private backups and machine-readable evidence are retained separately from git.

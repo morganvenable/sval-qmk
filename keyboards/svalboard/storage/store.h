@@ -41,7 +41,7 @@ sval_store_status_t sval_store_status(void);
 // Hardware boundary. All offsets are absolute flash offsets, never XIP pointers.
 bool sval_store_flash_init(void);
 bool sval_store_flash_read(uint32_t offset, void *data, size_t length);
-bool sval_store_flash_erase(uint32_t offset); // one SVAL_STORE_ERASE block
+bool sval_store_flash_erase(uint32_t offset, uint32_t length); // 4 KiB sector or 64 KiB block
 bool sval_store_flash_program(uint32_t offset, const void *page);
 // Read-only import of the immediately preceding svalboard/qmk format, not Vial.
 bool sval_store_import(uint8_t *image);

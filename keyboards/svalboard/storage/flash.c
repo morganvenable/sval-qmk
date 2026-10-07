@@ -13,7 +13,7 @@ static uint32_t      boot2[64];
 static uint8_t       page_buffer[SVAL_STORE_PAGE] __attribute__((aligned(4)));
 static bool          available;
 
-static void __no_inline_not_in_flash_func(storage_flash_op)(uint32_t at, const uint8_t *page) {
+static void __no_inline_not_in_flash_func(storage_flash_op)(uint32_t at, const uint8_t *page, uint32_t erase_length) {
     rom_connect_internal_flash_fn connect  = (rom_connect_internal_flash_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
     rom_flash_exit_xip_fn         exit_xip = (rom_flash_exit_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
     rom_flash_range_erase_fn      erase    = (rom_flash_range_erase_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_ERASE);
@@ -25,7 +25,7 @@ static void __no_inline_not_in_flash_func(storage_flash_op)(uint32_t at, const u
     if (page)
         program(at, page, SVAL_STORE_PAGE);
     else
-        erase(at, SVAL_STORE_ERASE, SVAL_STORE_ERASE, 0xD8);
+        erase(at, erase_length, SVAL_STORE_ERASE, 0xD8);
     flush();
     ((void (*)(void))((intptr_t)boot2 + 1))();
 }
@@ -50,10 +50,10 @@ bool sval_store_flash_read(uint32_t at, void *data, size_t length) {
 static bool write_range(uint32_t at, uint32_t length) {
     return available && at >= SVAL_STORE_BASE && at <= SVAL_STORE_WITNESS + SVAL_STORE_ERASE - length;
 }
-bool sval_store_flash_erase(uint32_t at) {
-    if (!write_range(at, SVAL_STORE_ERASE) || at % SVAL_STORE_ERASE) return false;
+bool sval_store_flash_erase(uint32_t at, uint32_t length) {
+    if ((length != SVAL_STORE_SECTOR && length != SVAL_STORE_ERASE) || !write_range(at, length) || at % length) return false;
     uint32_t irq = save_and_disable_interrupts();
-    storage_flash_op(at, NULL);
+    storage_flash_op(at, NULL, length);
     restore_interrupts(irq);
     return true; // engine verifies the resulting erased bytes
 }
@@ -61,7 +61,7 @@ bool sval_store_flash_program(uint32_t at, const void *page) {
     if (!write_range(at, SVAL_STORE_PAGE) || at % SVAL_STORE_PAGE) return false;
     memcpy(page_buffer, page, sizeof(page_buffer));
     uint32_t irq = save_and_disable_interrupts();
-    storage_flash_op(at, page_buffer);
+    storage_flash_op(at, page_buffer, 0);
     restore_interrupts(irq);
     return true; // engine verifies every programmed page
 }

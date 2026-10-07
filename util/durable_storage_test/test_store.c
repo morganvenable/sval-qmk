@@ -37,9 +37,9 @@ bool sval_store_flash_read(uint32_t offset, void *data, size_t length) {
     }
     return true;
 }
-bool sval_store_flash_erase(uint32_t offset) {
-    assert(offset % SVAL_STORE_ERASE == 0);
-    mutate(offset, NULL, SVAL_STORE_ERASE, true);
+bool sval_store_flash_erase(uint32_t offset, uint32_t length) {
+    assert((length == SVAL_STORE_SECTOR || length == SVAL_STORE_ERASE) && offset % length == 0);
+    mutate(offset, NULL, length, true);
     return true;
 }
 bool sval_store_flash_program(uint32_t offset, const void *page) {
@@ -250,7 +250,7 @@ static void background_snapshot_edit(void) {
     write_byte(100, 51);
     // Erase the destination and write some snapshot pages, then edit a byte
     // already copied. The partly-built snapshot must never be committed.
-    for (unsigned i = 0; i < 20; ++i)
+    for (unsigned i = 0; i < SVAL_STORE_BANK_SIZE / SVAL_STORE_SECTOR + 4; ++i)
         assert(sval_store_flush_step());
     assert(sval_store_flush_pending());
     write_byte(100, 52);

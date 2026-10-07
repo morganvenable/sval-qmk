@@ -85,7 +85,7 @@ static bool witness(void) {
     }
     // Only called with a committed bank available, so interrupted witness
     // repair cannot lose configuration or make a stale import necessary.
-    if (!sval_store_flash_erase(SVAL_STORE_WITNESS) || !sval_store_flash_program(SVAL_STORE_WITNESS, &h)) return false;
+    if (!sval_store_flash_erase(SVAL_STORE_WITNESS, SVAL_STORE_ERASE) || !sval_store_flash_program(SVAL_STORE_WITNESS, &h)) return false;
     return sval_store_flash_read(SVAL_STORE_WITNESS, &stored, sizeof(stored)) && !memcmp(&h, &stored, sizeof(h));
 }
 
@@ -142,11 +142,12 @@ static void checkpoint_start(void) {
     checkpoint_at      = 0;
     checkpoint_pending = true;
 }
-static bool checkpoint_step(void) {
+static bool checkpoint_step(bool background) {
     if (checkpoint_at < SVAL_STORE_BANK_SIZE) {
-        uint32_t at = base(checkpoint_target) + checkpoint_at;
-        if (!sval_store_flash_erase(at) || !range_blank(at, at + SVAL_STORE_ERASE)) return false;
-        checkpoint_at += SVAL_STORE_ERASE;
+        uint32_t at     = base(checkpoint_target) + checkpoint_at;
+        uint32_t length = background ? SVAL_STORE_SECTOR : SVAL_STORE_ERASE;
+        if (!sval_store_flash_erase(at, length) || !range_blank(at, at + length)) return false;
+        checkpoint_at += length;
         return true;
     }
     uint32_t image_at = checkpoint_at - SVAL_STORE_BANK_SIZE;
@@ -174,7 +175,7 @@ static bool checkpoint_step(void) {
 static bool checkpoint(void) {
     checkpoint_start();
     while (checkpoint_pending)
-        if (!checkpoint_step()) {
+        if (!checkpoint_step(false)) {
             checkpoint_pending = false;
             return false;
         }
@@ -297,7 +298,7 @@ bool sval_store_flush_step(void) {
     if (!writable) return false;
     if (!dirty) return true;
     if (!checkpoint_pending) checkpoint_start();
-    if (checkpoint_step()) return true;
+    if (checkpoint_step(true)) return true;
     checkpoint_pending = false;
     writable           = false;
     health             = SVAL_STORE_READ_ONLY;
