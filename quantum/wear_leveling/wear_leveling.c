@@ -156,6 +156,10 @@
         ╚════════════════╝
         0 <= Address <= 0x3FFE (16382) */
 
+#ifndef WEAR_LEVELING_READ_ATTEMPTS
+#    define WEAR_LEVELING_READ_ATTEMPTS 3
+#endif
+
 /**
  * Storage area for the wear-leveling cache.
  */
@@ -163,6 +167,7 @@ static struct __attribute__((__aligned__(BACKING_STORE_WRITE_SIZE))) {
     __attribute__((__aligned__(BACKING_STORE_WRITE_SIZE))) uint8_t cache[(WEAR_LEVELING_LOGICAL_SIZE)];
     uint32_t                                                       write_address;
     bool                                                           unlocked;
+    bool                                                           data_lost;
 } wear_leveling;
 
 /**
@@ -231,13 +236,16 @@ static wear_leveling_status_t wear_leveling_read_consolidated(void) {
 #elif BACKING_STORE_WRITE_SIZE == 8
         backing_store_read((WEAR_LEVELING_LOGICAL_SIZE) + 0, &entry.raw64);
 #endif
-        // If we have a mismatch, clear the cache but do not flag a failure,
-        // which will cater for the completely clean MCU case.
-        if (entry.raw64 == expected) {
+        // A store that has never been consolidated still has an erased image and checksum.
+        bool erased = entry.raw64 == 0;
+        for (size_t i = 0; erased && i < (WEAR_LEVELING_LOGICAL_SIZE); ++i) {
+            erased = wear_leveling.cache[i] == 0;
+        }
+        if (entry.raw64 == expected || erased) {
             wl_dprintf("Checksum matches, consolidated data is correct\n");
         } else {
-            wl_dprintf("Checksum mismatch, clearing cache\n");
-            wear_leveling_clear_cache();
+            wl_dprintf("Checksum mismatch\n");
+            status = WEAR_LEVELING_FAILED;
         }
     }
 
@@ -600,15 +608,18 @@ static wear_leveling_status_t wear_leveling_playback_log(void) {
 
     // We've reached the end of the log, so we're at the new write location
     wear_leveling.write_address = address;
+    return status;
+}
 
-    if (status == WEAR_LEVELING_FAILED) {
-        // If we had a failure during readback, assume we're corrupted -- force a consolidation with the data we already have
-        status = wear_leveling_consolidate_force();
-    } else {
-        // Consolidate the cache + write log if required
-        status = wear_leveling_consolidate_if_needed();
+/**
+ * Loads the consolidated data and replays the write log into the cache.
+ */
+static wear_leveling_status_t wear_leveling_load(void) {
+    wear_leveling_clear_cache();
+    wear_leveling_status_t status = wear_leveling_read_consolidated();
+    if (status != WEAR_LEVELING_FAILED) {
+        status = wear_leveling_playback_log();
     }
-
     return status;
 }
 
@@ -617,6 +628,7 @@ static wear_leveling_status_t wear_leveling_playback_log(void) {
  */
 wear_leveling_status_t wear_leveling_init(void) {
     wl_dprintf("Init\n");
+    wear_leveling.data_lost = false;
 
     // Reset the cache
     wear_leveling_clear_cache();
@@ -628,22 +640,26 @@ wear_leveling_status_t wear_leveling_init(void) {
         return WEAR_LEVELING_FAILED;
     }
 
-    // Read the previous consolidated values, then replay the existing write log so that the cache has the "live" values
-    wear_leveling_status_t status = wear_leveling_read_consolidated();
-    if (status == WEAR_LEVELING_FAILED) {
-        // If it failed, clear the cache and return with failure
-        wear_leveling_clear_cache();
-        return status;
+    // Read the previous consolidated values, then replay the existing write log so that the cache has the "live" values.
+    // Retry, so that one bad read does not discard the stored data.
+    for (int attempt = 0; attempt < (WEAR_LEVELING_READ_ATTEMPTS); ++attempt) {
+        if (wear_leveling_load() != WEAR_LEVELING_FAILED) {
+            return wear_leveling_consolidate_if_needed();
+        }
     }
 
-    status = wear_leveling_playback_log();
-    if (status == WEAR_LEVELING_FAILED) {
-        // If it failed, clear the cache and return with failure
-        wear_leveling_clear_cache();
-        return status;
-    }
+    // The stored data cannot be read: start again from an erased store, and report the loss.
+    wl_dprintf("Stored data unreadable, erasing\n");
+    wear_leveling.data_lost = true;
+    wear_leveling_clear_cache();
+    return wear_leveling_consolidate_force();
+}
 
-    return status;
+/**
+ * Whether initialization found stored data it could not read, and erased it.
+ */
+bool wear_leveling_data_lost(void) {
+    return wear_leveling.data_lost;
 }
 
 /**

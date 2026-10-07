@@ -14,9 +14,10 @@ class WearLevelingGeneral : public ::testing::Test {
 };
 
 /**
- * This test verifies that even if there is consolidated data present, if the checksum doesn't match then the cache is zero'd after reading the consolidated area, but before write log is played back.
+ * This test verifies that consolidated data whose checksum never matches is reported as lost, and the store reset,
+ * rather than the write log being replayed over an empty cache.
  */
-TEST_F(WearLevelingGeneral, InvalidChecksum_ConsolidatedDataIgnored) {
+TEST_F(WearLevelingGeneral, InvalidChecksum_StoreReset) {
     auto& inst     = MockBackingStore::Instance();
     auto  logstart = inst.storage_begin() + (WEAR_LEVELING_LOGICAL_SIZE / sizeof(backing_store_int_t));
 
@@ -38,11 +39,69 @@ TEST_F(WearLevelingGeneral, InvalidChecksum_ConsolidatedDataIgnored) {
     (logstart + 4)->set(~entry0.raw16[0]);
 
     // Re-init
-    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_SUCCESS) << "Init returned incorrect status";
+    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_CONSOLIDATED) << "Init returned incorrect status";
+    EXPECT_TRUE(wear_leveling_data_lost()) << "Lost data should have been reported";
     EXPECT_EQ(wear_leveling_read(0, testvalue.data(), testvalue.size()), WEAR_LEVELING_SUCCESS) << "Failed to read";
     for (int i = 0; i < WEAR_LEVELING_LOGICAL_SIZE; ++i) {
-        EXPECT_EQ(testvalue[i], i == 0x01 ? 0x11 : 0x00) << "Invalid readback";
+        EXPECT_EQ(testvalue[i], 0x00) << "Store should have been reset";
     }
+}
+
+/**
+ * This test verifies that a bad read during initialization is retried, keeping the stored data.
+ */
+TEST_F(WearLevelingGeneral, TransientBadRead_DataKept) {
+    auto& inst = MockBackingStore::Instance();
+
+    std::array<std::uint8_t, WEAR_LEVELING_LOGICAL_SIZE> testvalue;
+    std::iota(testvalue.begin(), testvalue.end(), 0x20);
+    EXPECT_EQ(wear_leveling_write(0, testvalue.data(), testvalue.size()), WEAR_LEVELING_CONSOLIDATED) << "Write returned incorrect status";
+    EXPECT_EQ(wear_leveling_write(1, "\x11", 1), WEAR_LEVELING_SUCCESS) << "Write returned incorrect status";
+
+    // Corrupt the first read of the consolidated data only
+    bool corrupted = false;
+    inst.set_read_callback([&](std::uint32_t address, backing_store_int_t& value) {
+        if (address == 0 && !corrupted) {
+            corrupted = true;
+            value ^= 1;
+        }
+    });
+    uint64_t erase_count = inst.erase_invoke_count();
+
+    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_SUCCESS) << "Init returned incorrect status";
+    EXPECT_TRUE(corrupted) << "Test did not corrupt a read";
+    EXPECT_FALSE(wear_leveling_data_lost()) << "No data should have been lost";
+    EXPECT_EQ(inst.erase_invoke_count(), erase_count) << "Nothing should have been erased";
+    testvalue[1] = 0x11;
+    std::array<std::uint8_t, WEAR_LEVELING_LOGICAL_SIZE> readback;
+    EXPECT_EQ(wear_leveling_read(0, readback.data(), readback.size()), WEAR_LEVELING_SUCCESS) << "Failed to read";
+    EXPECT_EQ(readback, testvalue) << "Stored data should have been kept";
+}
+
+/**
+ * This test verifies that a store which has never been consolidated keeps its write log, and is not reported as lost.
+ */
+TEST_F(WearLevelingGeneral, LogOnlyStore_Kept) {
+    auto& inst = MockBackingStore::Instance();
+    EXPECT_EQ(wear_leveling_write(3, "\x42", 1), WEAR_LEVELING_SUCCESS) << "Write returned incorrect status";
+    uint64_t erase_count = inst.erase_invoke_count();
+
+    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_SUCCESS) << "Init returned incorrect status";
+    EXPECT_FALSE(wear_leveling_data_lost()) << "No data should have been lost";
+    EXPECT_EQ(inst.erase_invoke_count(), erase_count) << "Nothing should have been erased";
+    uint8_t tmp;
+    wear_leveling_read(3, &tmp, sizeof(tmp));
+    EXPECT_EQ(tmp, 0x42) << "Stored data should have been kept";
+}
+
+/**
+ * This test verifies that an erased store initializes empty, without reporting lost data.
+ */
+TEST_F(WearLevelingGeneral, ErasedStore_NotLost) {
+    auto& inst = MockBackingStore::Instance();
+    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_SUCCESS) << "Init returned incorrect status";
+    EXPECT_FALSE(wear_leveling_data_lost()) << "No data should have been lost";
+    EXPECT_EQ(inst.erase_invoke_count(), 0) << "Nothing should have been erased";
 }
 
 /**

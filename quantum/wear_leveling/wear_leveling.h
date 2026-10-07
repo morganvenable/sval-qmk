@@ -1,6 +1,7 @@
 // Copyright 2022 Nick Brassel (@tzarc)
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -52,3 +53,10 @@ wear_leveling_status_t wear_leveling_write(uint32_t address, const void* value, 
  * @return Status of the request
  */
 wear_leveling_status_t wear_leveling_read(uint32_t address, void* value, size_t length);
+
+/**
+ * Whether the last initialization found stored data that could not be read on any attempt, and erased it.
+ *
+ * @return true if stored data was lost
+ */
+bool wear_leveling_data_lost(void);

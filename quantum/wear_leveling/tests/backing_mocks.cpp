@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void MockBackingStore::reset_instance() {
+    read_callback = nullptr;
     for (auto&& e : backing_storage)
         e.reset();
 
@@ -121,6 +122,9 @@ bool MockBackingStore::read(uint32_t address, backing_store_int_t& value) const 
     // Read and take the complement as we're simulating flash memory -- 0xFF means 0x00
     std::size_t index = address / BACKING_STORE_WRITE_SIZE;
     value             = ~backing_storage[index].get();
+    if (read_callback) {
+        read_callback(address, value);
+    }
 
     return true;
 }

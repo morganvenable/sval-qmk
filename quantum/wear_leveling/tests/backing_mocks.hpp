@@ -107,6 +107,7 @@ class MockBackingStore {
     std::function<bool(std::uint64_t, std::uint32_t)> write_success_callback;
     // Whether locks should succeed
     std::function<bool(std::uint64_t)> lock_success_callback;
+    std::function<void(std::uint32_t, backing_store_int_t&)> read_callback;
 
     template <typename... Args>
     void append_log(Args&&... args) {
@@ -169,6 +170,10 @@ class MockBackingStore {
     }
     void set_erase_callback(std::function<bool(std::uint64_t)> callback) {
         erase_success_callback = callback;
+    }
+    // Lets a test change what a read returns, to simulate a bad read.
+    void set_read_callback(std::function<void(std::uint32_t, backing_store_int_t&)> callback) {
+        read_callback = callback;
     }
     void set_unlock_callback(std::function<bool(std::uint64_t)> callback) {
         unlock_success_callback = callback;

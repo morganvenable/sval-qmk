@@ -121,11 +121,7 @@ TEST_F(WearLeveling2Byte, PlaybackReadbackMultibyte_OOB) {
     auto& inst     = MockBackingStore::Instance();
     auto  logstart = inst.storage_begin() + (WEAR_LEVELING_LOGICAL_SIZE / sizeof(backing_store_int_t));
 
-    // Invalid FNV1a_64 hash
-    (logstart + 0)->set(0);
-    (logstart + 1)->set(0);
-    (logstart + 2)->set(0);
-    (logstart + 3)->set(0);
+    // Never consolidated: the FNV1a_64 hash is still erased
 
     // Set up a 2-byte logical write of [0x11,0x12] at logical offset 0x01
     auto entry0    = LOG_ENTRY_MAKE_MULTIBYTE(0x01, 2);
@@ -152,13 +148,14 @@ TEST_F(WearLeveling2Byte, PlaybackReadbackMultibyte_OOB) {
     (logstart + 12)->set(~entry2.raw16[2]);
 
     EXPECT_EQ(inst.erasure_count(), 0) << "Invalid initial erase count";
-    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_CONSOLIDATED) << "Readback should have failed and triggered consolidation";
+    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_CONSOLIDATED) << "Unreadable write log should have erased the store";
+    EXPECT_TRUE(wear_leveling_data_lost()) << "Lost data should have been reported";
     EXPECT_EQ(inst.erasure_count(), 1) << "Invalid final erase count";
 
     uint8_t buf[2];
     wear_leveling_read(0x01, buf, sizeof(buf));
-    EXPECT_EQ(buf[0], 0x11) << "Readback should have maintained the previous pre-failure value from the write log";
-    EXPECT_EQ(buf[1], 0x12) << "Readback should have maintained the previous pre-failure value from the write log";
+    EXPECT_EQ(buf[0], 0x00) << "Store should have been reset";
+    EXPECT_EQ(buf[1], 0x00) << "Store should have been reset";
 }
 
 /**
@@ -168,11 +165,7 @@ TEST_F(WearLeveling2Byte, PlaybackReadbackOptimized64_OOB) {
     auto& inst     = MockBackingStore::Instance();
     auto  logstart = inst.storage_begin() + (WEAR_LEVELING_LOGICAL_SIZE / sizeof(backing_store_int_t));
 
-    // Invalid FNV1a_64 hash
-    (logstart + 0)->set(0);
-    (logstart + 1)->set(0);
-    (logstart + 2)->set(0);
-    (logstart + 3)->set(0);
+    // Never consolidated: the FNV1a_64 hash is still erased
 
     // Set up a 1-byte logical write of 0x11 at logical offset 0x01
     auto entry0 = LOG_ENTRY_MAKE_OPTIMIZED_64(0x01, 0x11);
@@ -187,11 +180,12 @@ TEST_F(WearLeveling2Byte, PlaybackReadbackOptimized64_OOB) {
     (logstart + 6)->set(~entry2.raw16[0]);
 
     EXPECT_EQ(inst.erasure_count(), 0) << "Invalid initial erase count";
-    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_CONSOLIDATED) << "Readback should have failed and triggered consolidation";
+    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_CONSOLIDATED) << "Unreadable write log should have erased the store";
+    EXPECT_TRUE(wear_leveling_data_lost()) << "Lost data should have been reported";
     EXPECT_EQ(inst.erasure_count(), 1) << "Invalid final erase count";
     uint8_t tmp;
     wear_leveling_read(0x01, &tmp, sizeof(tmp));
-    EXPECT_EQ(tmp, 0x11) << "Readback should have maintained the previous pre-failure value from the write log";
+    EXPECT_EQ(tmp, 0x00) << "Store should have been reset";
 }
 
 /**
@@ -201,11 +195,7 @@ TEST_F(WearLeveling2Byte, PlaybackReadbackWord01_OOB) {
     auto& inst     = MockBackingStore::Instance();
     auto  logstart = inst.storage_begin() + (WEAR_LEVELING_LOGICAL_SIZE / sizeof(backing_store_int_t));
 
-    // Invalid FNV1a_64 hash
-    (logstart + 0)->set(0);
-    (logstart + 1)->set(0);
-    (logstart + 2)->set(0);
-    (logstart + 3)->set(0);
+    // Never consolidated: the FNV1a_64 hash is still erased
 
     // Set up a 1-byte logical write of 1 at logical offset 0x02
     auto entry0 = LOG_ENTRY_MAKE_WORD_01(0x02, 1);
@@ -220,9 +210,10 @@ TEST_F(WearLeveling2Byte, PlaybackReadbackWord01_OOB) {
     (logstart + 6)->set(~entry2.raw16[0]);
 
     EXPECT_EQ(inst.erasure_count(), 0) << "Invalid initial erase count";
-    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_CONSOLIDATED) << "Readback should have failed and triggered consolidation";
+    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_CONSOLIDATED) << "Unreadable write log should have erased the store";
+    EXPECT_TRUE(wear_leveling_data_lost()) << "Lost data should have been reported";
     EXPECT_EQ(inst.erasure_count(), 1) << "Invalid final erase count";
     uint8_t tmp;
     wear_leveling_read(0x02, &tmp, sizeof(tmp));
-    EXPECT_EQ(tmp, 1) << "Readback should have maintained the previous pre-failure value from the write log";
+    EXPECT_EQ(tmp, 0) << "Store should have been reset";
 }
