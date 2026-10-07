@@ -42,14 +42,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 #define FLASH_LEN (16 * 1024 * 1024)
-// Settings store: 128 KB of logical EEPROM on 512 KB of flash, placed directly
-// below the store that the Vial firmware used (128 KB at 0x1E0000, 64 KB
-// logical). That store is never read or written here: a board coming from Vial
-// starts from defaults, and the old Vial setup stays where it was. 512 KB,
-// not more, because a full erase runs with interrupts off (about 1.2 s here).
-#define WEAR_LEVELING_BACKING_SIZE (512 * 1024)
-#define WEAR_LEVELING_LOGICAL_SIZE (128 * 1024)
-#define WEAR_LEVELING_RP2040_FLASH_BASE 0x160000
+// Same logical EEPROM geometry, now backed by two transactional flash banks.
+// The former 0x160000..0x1E0000 store is imported read-only on first upgrade.
+#define EEPROM_SIZE (128 * 1024)
 
 // Identity (identity.c): the USB serial is "sval:" + the board's stored 8-byte
 // serial as 16 hex digits, and the product string is the user's name when set.
