@@ -1,6 +1,6 @@
 # A keyboard your apps can talk to
 
-[Keybard feature guide](README.md) · [Firmware additions](firmware-changes.md)
+[Keybard feature guide](https://github.com/svalboard/keybard/blob/main/docs/launch/README.md) · [Firmware additions](firmware-changes.md)
 
 Sval QMK gives desktop applications a two-way connection to your Svalboard. An app can read the layout stored on the keyboard, follow its active layers, inspect physical key activity, and send configuration or layer changes back. This is what makes Keybard possible—and it provides the foundation for tools that help you learn your layout or adapt it to the application you are using.
 
@@ -84,7 +84,7 @@ The trainer reads the board’s layout and cluster selections, follows active-la
 
 An overlay can describe configured tap and hold actions, but displaying a binding is different from observing which action the firmware ultimately executes. Richer feedback for resolved tap dances, combos, and other timed behaviors is a further step. Automatic default-layer reporting lets the trainer follow base-layout changes as well as momentary layers. Older firmware without the advertised capability still requires a manual default-layer choice.
 
-The Windows Keybard Host preview is available separately from the firmware download. Configure it in Keybard’s Trainer panel; see the [launch notes](launch.md#learn-your-layout-with-trainer) for installation and platform limits.
+The Windows Keybard Host preview is available separately from the firmware download. Configure it in Keybard’s Trainer panel; see the [launch notes](https://github.com/svalboard/keybard/blob/main/docs/launch/launch.md#learn-your-layout-with-trainer) for installation and platform limits.
 
 ## Layer state from the host
 
@@ -105,4 +105,4 @@ The release uses **Sval protocol version 3**, carried in 32-byte Raw HID reports
 
 App authors should serialize requests within each connection, check reply identity and command, renew client IDs, and recover cleanly from disconnects. Feature capabilities distinguish extensions that share a protocol version. A read-only companion can restrict itself to reads; an editor or layer controller can add only the writes its purpose requires.
 
-For packet formats and implementation details, see the [client-ID protocol reference](../../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [Sval command definitions](../../../../modules/svalboard/core/sval.h), [active/default-layer reporting](../../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), and [command handlers](../../../../modules/svalboard/core/sval.c).
+For packet formats and implementation details, see the [client-ID protocol reference](../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [Sval command definitions](../../../modules/svalboard/core/sval.h), [active/default-layer reporting](../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), and [command handlers](../../../modules/svalboard/core/sval.c).
