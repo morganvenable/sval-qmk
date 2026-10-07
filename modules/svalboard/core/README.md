@@ -2,7 +2,7 @@
 
 Sval is a QMK community module for configuring tap dances, combos, key overrides, alternate-repeat mappings, leader sequences, one-shot behavior, and supported QMK settings over USB. The matching Keybard client also edits keymaps/macros and exposes firmware-defined hardware menus.
 
-For the complete user-facing feature and benefit guide, read the [Svalboard QMK + Keybard launch compendium](https://github.com/svalboard/keybard/blob/main/docs/launch/README.md). The [fork-change catalog](../../../keyboards/svalboard/docs/firmware-changes.md) distinguishes upstream QMK features from this fork's integration and core patches.
+Users: see the [Keybard guide](https://github.com/svalboard/keybard/blob/main/docs/guide.md). [Core patches](docs/QMK_PATCHES.md) lists this fork's changes to QMK itself.
 
 ## Build integration
 
@@ -34,7 +34,7 @@ The keyboard sets the layer/macro counts and storage capacity. The launch Svalbo
 
 ## Defaults and custom hooks
 
-Default configuration includes `SVAL_DEFAULT_NKRO`, `SVAL_DEFAULT_PERMISSIVE_HOLD`, `SVAL_DEFAULT_CHORDAL_HOLD`, `SVAL_DEFAULT_HOLD_ON_OTHER_KEY`, and `SVAL_DEFAULT_RETRO_TAPPING`. A default flag or stored schema field alone does not establish that the corresponding upstream behavior is enabled and wired; see the [firmware-change catalog](../../../keyboards/svalboard/docs/firmware-changes.md).
+Default configuration includes `SVAL_DEFAULT_NKRO`, `SVAL_DEFAULT_PERMISSIVE_HOLD`, `SVAL_DEFAULT_CHORDAL_HOLD`, `SVAL_DEFAULT_HOLD_ON_OTHER_KEY`, and `SVAL_DEFAULT_RETRO_TAPPING`. A default flag or stored schema field alone does not establish that the corresponding upstream behavior is enabled and wired.
 
 The module provides per-key `_sval` hooks for tapping behavior where implemented. Check [`sval_qmk_settings.c`](sval_qmk_settings.c) and [`sval_tap_dance.c`](sval_tap_dance.c) before overriding a QMK hook already owned by Sval.
 
