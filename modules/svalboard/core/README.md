@@ -71,6 +71,8 @@ The read-only layer query also advertises active/default-mask reporting through 
 
 `GET_INFO` also reports the QMK keycode numbering the firmware uses (`QMK_KEYCODES_VERSION`) as three bytes after the feature flags (major, minor, patch). Hosts number keycodes to match it; all zero means older firmware that does not report it, which was always 0.0.9.
 
+The byte after those (response byte 18) is nonzero when the board reset its settings because storage could not be read. It stays set across reboots until the host sends `0x2A` (`sval_cmd_storage_reset_clear`), so a host should tell the user to reload their layout file, then clear it. Older firmware leaves it zero.
+
 Current Sval protocol version **3** includes 16-bit table indices, sparse table/label reads, and 32-bit macro-buffer offsets. The full macro capacity requires a compatible Sval client. Legacy VIA macro commands retain their 16-bit addressing limit.
 
 The maintained module name is `svalboard/core`, the regular keymap is `sval`, and definitions use `sval.json`. Earlier names in historical files or internal client identifiers are not an alternative supported mixed firmware/client pair. A generic Vial GUI is not the recommended client for this protocol.

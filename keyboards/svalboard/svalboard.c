@@ -205,6 +205,7 @@ void output_keyboard_info(void) {
 
     sprintf(output_buffer, "%s:%s @ %s\n", QMK_KEYBOARD, QMK_KEYMAP, QMK_VERSION);
     send_string(output_buffer);
+    if (sval_storage_was_reset()) send_string("Settings were reset: storage could not be read. Reload your layout file.\n");
     sprintf(output_buffer, "Left Ptr: Scroll %s, cpi: %d, Right Ptr: Scroll %s, cpi: %d\n",
 	    yes_or_no(global_saved_values.left_scroll), dpi_choices[global_saved_values.left_dpi_index],
 	    yes_or_no(global_saved_values.right_scroll), dpi_choices[global_saved_values.right_dpi_index]);

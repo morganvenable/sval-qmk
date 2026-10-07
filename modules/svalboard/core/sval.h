@@ -87,6 +87,7 @@ enum sval_command_id {
     sval_cmd_context_layer_status = 0x27,
     sval_cmd_context_layer_renew  = 0x28,
     sval_cmd_context_layer_clear  = 0x29,
+    sval_cmd_storage_reset_clear  = 0x2A, // host has told the user about a storage reset (GET_INFO byte 18)
     sval_cmd_error                = 0xFF,
 };
 
@@ -283,13 +284,19 @@ extern char sval_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][SVAL_LABEL_SIZE];
 #define SVAL_LAYER_LABEL_OFFSET (SVAL_MACRO_LABEL_OFFSET + SVAL_MACRO_LABEL_SIZE)
 #define SVAL_LAYER_LABEL_SIZE (DYNAMIC_KEYMAP_LAYER_COUNT * SVAL_LABEL_SIZE)
 
+// Nonzero after settings were reset because storage could not be read, until the host clears it
+#define SVAL_STORAGE_RESET_OFFSET (SVAL_LAYER_LABEL_OFFSET + SVAL_LAYER_LABEL_SIZE)
+#define SVAL_STORAGE_RESET_SIZE 1
+
 // Total EEPROM size (all sval storage areas)
-#define SVAL_EEPROM_SIZE (SVAL_LAYER_LABEL_OFFSET + SVAL_LAYER_LABEL_SIZE)
+#define SVAL_EEPROM_SIZE (SVAL_STORAGE_RESET_OFFSET + SVAL_STORAGE_RESET_SIZE)
 
 // Public API
 void sval_init(void);
 // Mark the stored Sval data block invalid; sval_init() then resets it.
 void sval_eeprom_invalidate(void);
+// Whether settings were reset because storage could not be read, and the host has not yet cleared it.
+bool sval_storage_was_reset(void);
 
 // Protocol handler for 0xDF commands
 // Returns true if command was handled
