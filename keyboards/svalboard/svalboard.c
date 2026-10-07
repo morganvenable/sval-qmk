@@ -1,4 +1,3 @@
-#include "storage/store.h"
 #include "svalboard.h"
 #if VIA_ENABLE
 #include "via.h"
@@ -202,13 +201,6 @@ extern bool boost_toggle_2, boost_toggle_3, boost_toggle_5;
 extern axis_scale_t boost_x;
 
 void output_keyboard_info(void) {
-    switch (sval_store_status()) {
-        case SVAL_STORE_OK: send_string("Storage: verified\n"); break;
-        case SVAL_STORE_IMPORTED: send_string("Storage: imported previous Sval settings\n"); break;
-        case SVAL_STORE_RECOVERED: send_string("Storage: recovered a verified copy\n"); break;
-        case SVAL_STORE_READ_ONLY: send_string("Storage: READ ONLY - settings are temporary; export a backup before EE_CLR\n"); break;
-    }
-
     char output_buffer[256];
 
     sprintf(output_buffer, "%s:%s @ %s\n", QMK_KEYBOARD, QMK_KEYMAP, QMK_VERSION);
@@ -503,7 +495,6 @@ static void sval_usb_wake_handler(void) {
 }
 
 void housekeeping_task_kb(void) {
-    sval_storage_task();
     sval_usb_wake_handler();
     scanlab_housekeeping();
 #ifdef SVAL_KEYTEST
