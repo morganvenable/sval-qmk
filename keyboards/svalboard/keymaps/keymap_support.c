@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "keymap_support.h"
 #include "axis_scale.h"
 #include "caps_word.h"
+#include "pvs.h"
 
 // in keymap.c:
 #ifdef POINTING_DEVICE_AUTO_MOUSE_ENABLE
@@ -109,6 +110,9 @@ bool sniper_toggle_5 = false;
 
 static bool scroll_hold    = false,
             scroll_toggle  = false;
+
+static bool pvs_hold    = false,
+            pvs_toggle  = false;
 
 
 #define AXIS_LOCK_BREAKAWAY_THRESHOLD 18750
@@ -221,6 +225,41 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
         reportMouse2.y = add_to_axis(&sniper_y, reportMouse2.y);
         reportMouse2.h = add_to_axis(&sniper_h, reportMouse2.h);
         reportMouse2.v = add_to_axis(&sniper_v, reportMouse2.v);
+    }
+
+    // PVS intercept: when active, feed deltas into PVS and bypass normal scroll
+    if (pvs_is_active()) {
+        // Use the scroll-side trackball as PVS input (matches normal scroll-side selection)
+        int16_t pvs_dx, pvs_dy;
+        if (global_saved_values.left_scroll) {
+            pvs_dx = reportMouse1.x;
+            pvs_dy = reportMouse1.y;
+            reportMouse1.x = 0;
+            reportMouse1.y = 0;
+        } else {
+            pvs_dx = reportMouse2.x;
+            pvs_dy = reportMouse2.y;
+            reportMouse2.x = 0;
+            reportMouse2.y = 0;
+        }
+
+        int16_t pvs_h = 0, pvs_v = 0;
+        pvs_process_deltas(pvs_dx, -pvs_dy, &pvs_h, &pvs_v);  // negate Y for natural scroll direction
+
+        reportMouse1.h = pvs_h;
+        reportMouse1.v = pvs_v;
+
+        if (pvs_h != 0 || pvs_v != 0) {
+            mouse_mode(true);
+        }
+
+        ret_mouse = pointing_device_combine_reports(reportMouse1, reportMouse2);
+
+        if (global_saved_values.natural_scroll) {
+            ret_mouse.v = -ret_mouse.v;
+        }
+
+        return pointing_device_task_user(ret_mouse);
     }
 
     if (reportMouse1.x == 0 && reportMouse1.y == 0 && reportMouse2.x == 0 && reportMouse2.y == 0)
@@ -527,6 +566,37 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
 	        global_saved_values.natural_scroll = !global_saved_values.natural_scroll;
 	        write_eeprom_kb();
 	        return false;
+	    case SV_PVS_HOLD:
+	        pvs_hold = true;
+	        pvs_activate(global_saved_values.left_scroll ? get_left_dpi() : get_right_dpi());
+	        return false;
+	    case SV_PVS_TOGGLE:
+	        pvs_toggle = !pvs_toggle;
+	        if (pvs_toggle) {
+	            pvs_activate(global_saved_values.left_scroll ? get_left_dpi() : get_right_dpi());
+	        } else {
+	            pvs_deactivate();
+	        }
+	        return false;
+	    case SV_PVS_CYCLE_MODE:
+	        global_saved_values.pvs_config.curve_mode = (global_saved_values.pvs_config.curve_mode + 1) % 2;
+	        pvs_set_config(&global_saved_values.pvs_config);
+	        write_eeprom_kb();
+	        return false;
+	    case SV_PVS_SPEED_UP:
+	        if (global_saved_values.pvs_config.max_velocity_index < 7) {
+	            global_saved_values.pvs_config.max_velocity_index++;
+	            pvs_set_config(&global_saved_values.pvs_config);
+	            write_eeprom_kb();
+	        }
+	        return false;
+	    case SV_PVS_SPEED_DOWN:
+	        if (global_saved_values.pvs_config.max_velocity_index > 0) {
+	            global_saved_values.pvs_config.max_velocity_index--;
+	            pvs_set_config(&global_saved_values.pvs_config);
+	            write_eeprom_kb();
+	        }
+	        return false;
         }
     } else { // key released
         switch (keycode) {
@@ -562,6 +632,17 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
                 return false;
             case SV_SCROLL_TOGGLE:
                 scroll_toggle ^= true;
+                return false;
+            case SV_PVS_HOLD:
+                pvs_hold = false;
+                if (!pvs_toggle) {
+                    pvs_deactivate();
+                }
+                return false;
+            case SV_PVS_TOGGLE:
+            case SV_PVS_CYCLE_MODE:
+            case SV_PVS_SPEED_UP:
+            case SV_PVS_SPEED_DOWN:
                 return false;
         }
     }

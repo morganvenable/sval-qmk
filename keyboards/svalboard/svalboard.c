@@ -81,6 +81,7 @@ void read_eeprom_kb(void) {
         global_saved_values.natural_scroll = false;
         global_saved_values.automouse_threshold = 50;
         global_saved_values.automouse_decay = 7;  // 70ms
+        global_saved_values.pvs_config = (pvs_config_t)PVS_DEFAULT_CONFIG;
 
         // Layer colors
         global_saved_values.layer_colors[0] = HSV(0x55FFFF);  // Green
@@ -230,6 +231,7 @@ void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen
 void keyboard_post_init_kb(void) {
     read_eeprom_kb();
     set_dpi_from_eeprom();
+    pvs_set_config(&global_saved_values.pvs_config);
     keyboard_post_init_user();
     transaction_register_rpc(KEYBOARD_SYNC_A, kb_sync_listener);
     if (is_keyboard_master()) {

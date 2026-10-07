@@ -353,6 +353,31 @@
             "name": "SV_SNIPER_5_TG",
             "title": "Toggle slowing the cursor 5x.",
             "shortName": "Sniper\n5xTG"
+        },
+        {
+            "name": "SV_PVS_HOLD",
+            "title": "Hold for proportional velocity scrolling. Trackball displacement from press point sets scroll speed.",
+            "shortName": "PVS\nHold"
+        },
+        {
+            "name": "SV_PVS_TOGGLE",
+            "title": "Toggle proportional velocity scrolling on/off.",
+            "shortName": "PVS\nToggle"
+        },
+        {
+            "name": "SV_PVS_CYCLE_MODE",
+            "title": "Cycle PVS curve mode: continuous quadratic / 7-zone shuttle.",
+            "shortName": "PVS\nMode"
+        },
+        {
+            "name": "SV_PVS_SPEED_UP",
+            "title": "Increase PVS maximum scroll velocity.",
+            "shortName": "PVS\nSpeed+"
+        },
+        {
+            "name": "SV_PVS_SPEED_DOWN",
+            "title": "Decrease PVS maximum scroll velocity.",
+            "shortName": "PVS\nSpeed-"
         }
     ],
     "menus": [

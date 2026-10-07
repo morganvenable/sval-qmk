@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include "quantum.h"
+#include "pvs.h"
 
 extern const int16_t mh_timer_choices[6];
 
@@ -40,6 +41,7 @@ struct __attribute__((__packed__)) saved_values {
     uint8_t turbo_scan;
     uint16_t automouse_threshold; // Movement distance required for layer activation (0=disabled)
     uint8_t automouse_decay;      // Accumulator decay time in 10ms units (0=no decay)
+    pvs_config_t pvs_config;      // 8 bytes
 };
 
 // RPC structure for split keyboard sync

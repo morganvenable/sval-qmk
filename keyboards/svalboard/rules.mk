@@ -10,7 +10,7 @@ WS2812_DRIVER   = vendor
 
 CUSTOM_MATRIX = lite
 
-SRC += axis_scale.c matrix.c
+SRC += axis_scale.c matrix.c pvs.c
 
 SERIAL_DRIVER = vendor
 
