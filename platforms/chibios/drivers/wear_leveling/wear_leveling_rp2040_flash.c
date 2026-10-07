@@ -189,7 +189,7 @@ bool backing_store_init(void) {
     interrupts    = save_and_disable_interrupts();
     flash_do_cmd(tx, rx, sizeof(tx));
     restore_interrupts(interrupts);
-    flash_present = rx[3] >= 16 && rx[3] < 32 && (WEAR_LEVELING_RP2040_FLASH_BASE) + (WEAR_LEVELING_BACKING_SIZE) <= (1u << rx[3]);
+    flash_present = rx[3] >= 16 && rx[3] < 32 && (WEAR_LEVELING_RP2040_FLASH_BASE) + (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES) <= (1u << rx[3]);
     return flash_present;
 }
 
@@ -208,10 +208,18 @@ bool backing_store_erase(void) {
 
     if (!flash_present) return false;
     interrupts = save_and_disable_interrupts();
-    pico_erase((WEAR_LEVELING_RP2040_FLASH_BASE), (WEAR_LEVELING_BACKING_SIZE));
+    pico_erase((WEAR_LEVELING_RP2040_FLASH_BASE), (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES));
     restore_interrupts(interrupts);
 
     bs_dprintf("Backing store erase took %ldms to complete\n", ((long)(timer_read32() - start)));
+    return true;
+}
+
+bool backing_store_erase_range(uint32_t address, uint32_t length) {
+    if (!flash_present || address % (1 << 16) || length % (1 << 16) || address + length > (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES)) return false;
+    interrupts = save_and_disable_interrupts();
+    pico_erase((WEAR_LEVELING_RP2040_FLASH_BASE) + address, length);
+    restore_interrupts(interrupts);
     return true;
 }
 

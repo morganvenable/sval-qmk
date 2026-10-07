@@ -42,12 +42,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 #define FLASH_LEN (16 * 1024 * 1024)
-// Settings: QMK wear leveling, 128 KB logical on 512 KB of flash at 0x500000,
-// a region no earlier Svalboard firmware used, so a reflashed board starts from
-// defaults rather than reading another format's leftovers.
+// Settings: QMK wear leveling, 128 KB logical on two mirrored 512 KB copies at
+// 0x500000, a region no earlier Svalboard firmware used, so a reflashed board
+// starts from defaults rather than reading another format's leftovers.
 #define WEAR_LEVELING_BACKING_SIZE (512 * 1024)
 #define WEAR_LEVELING_LOGICAL_SIZE (128 * 1024)
 #define WEAR_LEVELING_RP2040_FLASH_BASE 0x500000
+#define WEAR_LEVELING_COPIES 2
 
 // Identity (identity.c): the USB serial is "sval:" + the board's stored 8-byte
 // serial as 16 hex digits, and the product string is the user's name when set.

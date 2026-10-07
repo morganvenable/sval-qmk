@@ -64,3 +64,15 @@ wear_leveling_8byte_SRC := \
 	$(QUANTUM_PATH)/wear_leveling/tests/wear_leveling_8byte.cpp
 wear_leveling_8byte_INC := \
 	$(wear_leveling_common_INC)
+
+wear_leveling_mirror_DEFS := \
+	$(wear_leveling_common_DEFS) \
+	-DBACKING_STORE_WRITE_SIZE=2 \
+	-DWEAR_LEVELING_BACKING_SIZE=48 \
+	-DWEAR_LEVELING_LOGICAL_SIZE=16 \
+	-DWEAR_LEVELING_COPIES=2
+wear_leveling_mirror_SRC := \
+	$(wear_leveling_common_SRC) \
+	$(QUANTUM_PATH)/wear_leveling/tests/wear_leveling_mirror.cpp
+wear_leveling_mirror_INC := \
+	$(wear_leveling_common_INC)

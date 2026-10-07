@@ -20,7 +20,7 @@ using MOCK_WRITE_LOG_MAX_ENTRIES = std::integral_constant<std::size_t, 1024>;
 // Complement to the backing store integral, for emulating flash erases of all bytes=0xFF
 using BACKING_STORE_INTEGRAL_COMPLEMENT = std::integral_constant<backing_store_int_t, ((backing_store_int_t)(~(backing_store_int_t)0))>;
 // Total number of elements stored in the backing arrays
-using BACKING_STORE_ELEMENT_COUNT = std::integral_constant<std::size_t, (WEAR_LEVELING_BACKING_SIZE / sizeof(backing_store_int_t))>;
+using BACKING_STORE_ELEMENT_COUNT = std::integral_constant<std::size_t, (WEAR_LEVELING_BACKING_SIZE * WEAR_LEVELING_COPIES / sizeof(backing_store_int_t))>;
 
 class MockBackingStoreElement {
    private:
@@ -160,6 +160,7 @@ class MockBackingStore {
     bool init();
     bool unlock();
     bool erase();
+    bool erase_range(std::uint32_t address, std::uint32_t length);
     bool write(std::uint32_t address, backing_store_int_t value);
     bool lock();
     bool read(std::uint32_t address, backing_store_int_t& value) const;
