@@ -12,6 +12,10 @@ CUSTOM_MATRIX = lite
 
 SRC += axis_scale.c matrix.c scanlab.c power.c identity.c
 
+# Full-settings redundant store in the additional 16 MiB flash space.
+EEPROM_DRIVER = custom
+SRC += storage/store.c storage/legacy.c storage/flash.c storage/eeprom.c
+
 SERIAL_DRIVER = vendor
 
 POINTING_DEVICE_ENABLE = yes
@@ -45,3 +49,6 @@ ifeq ($(strip $(SVAL_KEYTEST)), yes)
   SRC += keytest.c
   OPT_DEFS += -DSVAL_KEYTEST
 endif
+
+# Keep firmware clear of the existing settings during upgrades.
+LDFLAGS += -Wl,-T,keyboards/svalboard/storage/reservation.ld
