@@ -121,10 +121,14 @@ The following checks passed:
   observation, not an upper bound on interrupt latency.
 
 A further test damaged both snapshots, then stalled in Windows HID discovery
-during recovery. This case is unresolved on hardware and is not counted as a
-pass. The simulator's no-automatic-erasure test passes. Release validation still
-needs this case resolved, physical power interruption during writes, initialization
-and full-journal timing, and testing with a split partner. Software reboots and
+during recovery. After manual BOOTSEL entry, a verified flash save confirmed both
+banks and the witness were byte-for-byte unchanged: automatic initialization had
+not erased or replaced them. The healthy backup was restored with readback
+verification; the mule reconnected in 2.923 seconds and its original full keymap
+matched. The temporary-edit portion did not complete, so the full two-bank test
+is not counted as a pass. Release validation still needs the discovery failure
+and volatile-edit case resolved, physical power interruption during writes,
+initialization and full-journal timing, and testing with a split partner. Software reboots and
 synthetic reports do not demonstrate physical power-cut or sensor behavior.
 
 The hardware-tested UF2 SHA-256 is
