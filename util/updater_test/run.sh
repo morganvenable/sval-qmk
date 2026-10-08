@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Host tests for the Svalboard in-firmware updater (keyboards/svalboard/updater).
+# Standalone: needs gcc (or cc) and python3, no QMK build.
+#
+#   util/updater_test/run.sh [REAL.uf2 ...]
+#
+# REAL.uf2: optional QMK builds (with a .bin beside each) to run make_update.py on.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+kb="$root/keyboards/svalboard"
+tests="$root/tests/sval_updater"
+out="$(mktemp -d)"
+trap 'rm -rf "$out"' EXIT
+
+python3 -I "$tests/test_make_update.py" "$out/cross" "$@"
+
+${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
+    -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
+    -DSVAL_UPDATER_HOST_TEST -include "$kb/config.h" \
+    -I"$tests" -I"$kb" -I"$kb/updater" -I"$kb/updater/vendor" \
+    "$tests/test_updater.c" \
+    "$kb/updater/update_image.c" "$kb/updater/update_keys.c" \
+    "$kb/updater/vendor/monocypher.c" "$kb/updater/vendor/optional/monocypher-ed25519.c" \
+    -o "$out/test_updater"
+"$out/test_updater" "$out/cross"
+
+# A release build (SVAL_UPDATE_RELEASE) must not contain the TEST-ONLY public key.
+key_hex="$(python3 -I "$kb/tools/make_update.py" --print-public --signer pure)"
+for flags in "" "-DSVAL_UPDATE_RELEASE"; do
+    ${CC:-cc} -std=c11 -O1 $flags -include "$kb/config.h" -I"$kb/updater" -I"$kb/updater/vendor" \
+        -c "$kb/updater/update_keys.c" -o "$out/keys.o"
+    found=no
+    od -An -v -tx1 "$out/keys.o" | tr -d ' \n' | grep -q "$key_hex" && found=yes
+    want=yes; [ -n "$flags" ] && want=no
+    if [ "$found" != "$want" ]; then echo "FAIL: test key present=$found with '${flags:-test build}'"; exit 1; fi
+done
+echo "test key: in test builds, absent from release builds"

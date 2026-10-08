@@ -1,0 +1,617 @@
+// Copyright 2026 Morgan Venable
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Host tests for the updater's foundation: manifest bounds, structure checks,
+// boot2 CRC vectors, Ed25519 and SHA-512 vectors (Monocypher), signatures made
+// by make_update.py, and staging-slot flash access against a mock die.
+// Run by util/updater_test/run.sh under ASan and UBSan.
+//
+//   test_updater [CROSS_DIR]   CROSS_DIR: .svup files written by test_make_update.py
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "update_manifest.h"
+#include "update_image.h"
+#include "update_keys.h"
+#include "optional/monocypher-ed25519.h"
+#include "boot2_page0.h"
+
+// update_flash.c is built into this file so the tests can reset its state and
+// reach its RAM routine directly.
+#include "update_flash.c"
+
+static int checks, failures;
+
+#define CHECK(cond)                                                                   \
+    do {                                                                              \
+        checks++;                                                                     \
+        if (!(cond)) {                                                                \
+            failures++;                                                               \
+            fprintf(stderr, "%s:%d: CHECK failed: %s\n", __FILE__, __LINE__, #cond); \
+        }                                                                             \
+    } while (0)
+
+#define CHECK_EQ(a, b)                                                                                                       \
+    do {                                                                                                                     \
+        long long _a = (long long)(a), _b = (long long)(b);                                                                  \
+        checks++;                                                                                                            \
+        if (_a != _b) {                                                                                                      \
+            failures++;                                                                                                      \
+            fprintf(stderr, "%s:%d: CHECK_EQ failed: %s == %lld, expected %s == %lld\n", __FILE__, __LINE__, #a, _a, #b, _b); \
+        }                                                                                                                    \
+    } while (0)
+
+static void hex(const char *s, uint8_t *out, size_t n) {
+    if (strlen(s) != 2 * n) {
+        fprintf(stderr, "bad hex length for %zu bytes: %s\n", n, s);
+        exit(2);
+    }
+    for (size_t i = 0; i < n; i++) {
+        unsigned v;
+        sscanf(s + 2 * i, "%2x", &v);
+        out[i] = (uint8_t)v;
+    }
+}
+
+// ---- boot2 CRC (CRC-32/MPEG-2) -------------------------------------------------------
+
+static void test_boot2_crc(void) {
+    CHECK_EQ(update_crc32_mpeg2((const uint8_t *)"123456789", 9), 0x0376E6E7u); // the catalogue check value
+
+    // Page 0 of a real build (svalboard/trackball/pmw3389/right:sval at 2ee7df613f).
+    CHECK_EQ(update_crc32_mpeg2(boot2_page0, 252), 0xd58f0b07u);
+    CHECK(update_boot2_valid(boot2_page0));
+
+    uint8_t page[256];
+    memset(page, 0x00, sizeof(page));
+    CHECK_EQ(update_crc32_mpeg2(page, 252), 0x7065399au);
+    CHECK(!update_boot2_valid(page)); // a zeroed page 0 never boots (commit step 2)
+    memset(page, 0xFF, sizeof(page));
+    CHECK_EQ(update_crc32_mpeg2(page, 252), 0x0b8fd31au);
+    CHECK(!update_boot2_valid(page)); // nor does an erased one
+
+    // Any single flipped bit in the code or the stored CRC invalidates it.
+    for (int byte = 0; byte < 256; byte += 1) {
+        memcpy(page, boot2_page0, sizeof(page));
+        page[byte] ^= (uint8_t)(1u << (byte % 8));
+        CHECK(!update_boot2_valid(page));
+    }
+}
+
+// ---- manifest bounds -------------------------------------------------------------------
+
+static const update_device_t test_dev = {
+    .hand           = UPDATE_HAND_RIGHT,
+    .pointing_id    = UPDATE_POINTING_PMW3389,
+    .security_epoch = 3,
+    .storage_format = SVAL_UPDATE_STORAGE_FORMAT,
+    .release_build  = false,
+    .max_image      = SVAL_UPDATE_MAX_IMAGE,
+};
+
+static sval_update_manifest_t good_manifest(void) {
+    sval_update_manifest_t m;
+    memset(&m, 0, sizeof(m));
+    m.magic          = UPDATE_MANIFEST_MAGIC;
+    m.manifest_ver   = UPDATE_MANIFEST_VERSION;
+    m.key_id         = UPDATE_KEY_TEST;
+    m.hand           = UPDATE_HAND_RIGHT;
+    m.pointing_id    = UPDATE_POINTING_PMW3389;
+    m.keymap_id      = UPDATE_KEYMAP_SVAL;
+    m.security_epoch = 3;
+    m.storage_format = SVAL_UPDATE_STORAGE_FORMAT;
+    m.updater_proto  = UPDATE_PROTOCOL_VERSION;
+    m.image_len      = 0x18000;
+    m.fw_version     = 1;
+    memcpy(m.version, "test", 4);
+    return m;
+}
+
+static void test_manifest_layout(void) {
+    CHECK_EQ(sizeof(sval_update_manifest_t), 108);
+    CHECK_EQ(UPDATE_SIGNED_MANIFEST_BYTES, 172);
+    CHECK_EQ(offsetof(sval_update_manifest_t, flags), 10);
+    CHECK_EQ(offsetof(sval_update_manifest_t, security_epoch), 12);
+    CHECK_EQ(offsetof(sval_update_manifest_t, fw_version), 20);
+    CHECK_EQ(offsetof(sval_update_manifest_t, reserved), 24);
+    CHECK_EQ(offsetof(sval_update_manifest_t, version), 28);
+    const uint8_t magic[4] = {'S', 'V', 'U', 'P'};
+    sval_update_manifest_t m = good_manifest();
+    CHECK(memcmp(&m.magic, magic, 4) == 0);
+}
+
+static void test_manifest_check(void) {
+    update_device_t rel = test_dev;
+    rel.release_build   = true;
+    sval_update_manifest_t m;
+
+#define EXPECT(dev, mutate, status)       \
+    do {                                  \
+        m = good_manifest();              \
+        mutate;                           \
+        CHECK_EQ(update_manifest_check(&m, &(dev)), status); \
+    } while (0)
+
+    EXPECT(test_dev, (void)0, UPDATE_OK);
+    EXPECT(test_dev, m.magic ^= 1, UPDATE_INVALID);
+    EXPECT(test_dev, m.manifest_ver = 2, UPDATE_UNSUPPORTED);
+    EXPECT(test_dev, m.manifest_ver = 0, UPDATE_UNSUPPORTED);
+    EXPECT(test_dev, m.reserved = 1, UPDATE_INVALID);
+    EXPECT(test_dev, m.flags = 0x0004, UPDATE_INVALID);
+    EXPECT(test_dev, m.flags = 0x8000, UPDATE_INVALID);
+    // keys and flags
+    EXPECT(test_dev, m.key_id = 3, UPDATE_BAD_SIG);
+    EXPECT(test_dev, m.key_id = 255, UPDATE_BAD_SIG);
+    EXPECT(test_dev, m.flags = UPDATE_FLAG_RELEASE, UPDATE_BAD_SIG); // test key never signs RELEASE
+    EXPECT(test_dev, m.flags = UPDATE_FLAG_DIAGNOSTIC, UPDATE_OK);  // fine on a test build
+    EXPECT(test_dev, (m.key_id = 1, m.flags = UPDATE_FLAG_RELEASE), UPDATE_OK);
+    EXPECT(rel, (void)0, UPDATE_BAD_SIG); // release build: no test key
+    EXPECT(rel, m.key_id = 1, UPDATE_OK);
+    EXPECT(rel, (m.key_id = 2, m.flags = UPDATE_FLAG_RELEASE), UPDATE_OK);
+    EXPECT(rel, (m.key_id = 1, m.flags = UPDATE_FLAG_DIAGNOSTIC), UPDATE_BAD_IMAGE);
+    // this half, this build
+    EXPECT(test_dev, m.hand = UPDATE_HAND_LEFT, UPDATE_UNSUPPORTED);
+    EXPECT(test_dev, m.hand = 7, UPDATE_UNSUPPORTED);
+    EXPECT(test_dev, m.pointing_id = UPDATE_POINTING_PMW3360, UPDATE_WRONG_HW);
+    EXPECT(test_dev, m.pointing_id = UPDATE_POINTING_NONE, UPDATE_WRONG_HW);
+    EXPECT(test_dev, m.keymap_id = 99, UPDATE_OK); // display only
+    EXPECT(test_dev, m.fw_version = 0, UPDATE_OK); // downgrades are allowed (D19)
+    // floors
+    EXPECT(test_dev, m.security_epoch = 2, UPDATE_EPOCH);
+    EXPECT(test_dev, m.security_epoch = 4, UPDATE_OK);
+    EXPECT(test_dev, m.storage_format = SVAL_UPDATE_STORAGE_FORMAT - 1, UPDATE_EPOCH);
+    EXPECT(test_dev, m.storage_format = SVAL_UPDATE_STORAGE_FORMAT + 1, UPDATE_OK);
+    // length bounds
+    EXPECT(test_dev, m.image_len = 0, UPDATE_BAD_IMAGE);
+    EXPECT(test_dev, m.image_len = 0x100, UPDATE_BAD_IMAGE);
+    EXPECT(test_dev, m.image_len = 0x1FF, UPDATE_BAD_IMAGE);
+    EXPECT(test_dev, m.image_len = 0x200, UPDATE_OK);
+    EXPECT(test_dev, m.image_len = 0x201, UPDATE_BAD_IMAGE);
+    EXPECT(test_dev, m.image_len = 0x2FF, UPDATE_BAD_IMAGE);
+    EXPECT(test_dev, m.image_len = SVAL_UPDATE_MAX_IMAGE, UPDATE_OK);
+    EXPECT(test_dev, m.image_len = SVAL_UPDATE_MAX_IMAGE - 1, UPDATE_BAD_IMAGE);
+    EXPECT(test_dev, m.image_len = SVAL_UPDATE_MAX_IMAGE + 0x100, UPDATE_TOO_LARGE);
+    EXPECT(test_dev, m.image_len = 0x80000000u, UPDATE_TOO_LARGE);
+    EXPECT(test_dev, m.image_len = 0xFFFFFF00u, UPDATE_TOO_LARGE);
+    EXPECT(test_dev, m.image_len = 0xFFFFFFFFu, UPDATE_TOO_LARGE);
+#undef EXPECT
+}
+
+// ---- image head checks ---------------------------------------------------------------
+
+static void put32(uint8_t *p, uint32_t v) {
+    for (int i = 0; i < 4; i++) p[i] = (uint8_t)(v >> (8 * i));
+}
+
+static void make_head(uint8_t head[UPDATE_HEAD_BYTES], uint32_t sp, uint32_t reset) {
+    memcpy(head, boot2_page0, 256);
+    put32(head + 0x100, sp);
+    put32(head + 0x104, reset);
+}
+
+static void test_head_check(void) {
+    uint8_t        head[UPDATE_HEAD_BYTES];
+    const uint32_t len = 0x18000;
+
+    make_head(head, 0x20041000, 0x100001F7);
+    CHECK_EQ(update_image_head_check(head, len), UPDATE_OK);
+    // length rules apply here too
+    CHECK_EQ(update_image_head_check(head, 0x1F00), UPDATE_OK);
+    CHECK_EQ(update_image_head_check(head, 0x180), UPDATE_BAD_IMAGE);
+    CHECK_EQ(update_image_head_check(head, len + 1), UPDATE_BAD_IMAGE);
+    CHECK_EQ(update_image_head_check(head, 0xFFFFFF00u), UPDATE_BAD_IMAGE);
+    // boot2
+    head[17] ^= 0x40;
+    CHECK_EQ(update_image_head_check(head, len), UPDATE_BAD_IMAGE);
+    make_head(head, 0x20041000, 0x100001F7);
+    head[253] ^= 1;
+    CHECK_EQ(update_image_head_check(head, len), UPDATE_BAD_IMAGE);
+    // initial SP within [0x20000000, 0x20042000]
+    const struct { uint32_t sp; update_status_t want; } sps[] = {
+        {0x20000000, UPDATE_OK}, {0x20042000, UPDATE_OK}, {0x1FFFFFFC, UPDATE_BAD_IMAGE}, {0x20042004, UPDATE_BAD_IMAGE},
+        {0x00000000, UPDATE_BAD_IMAGE}, {0xFFFFFFFF, UPDATE_BAD_IMAGE}, {0x10000400, UPDATE_BAD_IMAGE},
+    };
+    for (size_t i = 0; i < sizeof(sps) / sizeof(sps[0]); i++) {
+        make_head(head, sps[i].sp, 0x100001F7);
+        CHECK_EQ(update_image_head_check(head, len), sps[i].want);
+    }
+    // reset vector: odd, inside [0x10000100, 0x10000000 + len)
+    const struct { uint32_t reset; update_status_t want; } resets[] = {
+        {0x10000101, UPDATE_OK}, {0x10000000 + len - 1, UPDATE_OK}, {0x100001F6, UPDATE_BAD_IMAGE},
+        {0x100000FF, UPDATE_BAD_IMAGE}, {0x10000001, UPDATE_BAD_IMAGE}, {0x10000000 + len + 1, UPDATE_BAD_IMAGE},
+        {0x20000001, UPDATE_BAD_IMAGE}, {0x00000001, UPDATE_BAD_IMAGE}, {0xFFFFFFFF, UPDATE_BAD_IMAGE},
+    };
+    for (size_t i = 0; i < sizeof(resets) / sizeof(resets[0]); i++) {
+        make_head(head, 0x20041000, resets[i].reset);
+        CHECK_EQ(update_image_head_check(head, len), resets[i].want);
+    }
+    // a zeroed or erased page 0 always fails
+    memset(head, 0, sizeof(head));
+    CHECK_EQ(update_image_head_check(head, len), UPDATE_BAD_IMAGE);
+    memset(head, 0xFF, sizeof(head));
+    CHECK_EQ(update_image_head_check(head, len), UPDATE_BAD_IMAGE);
+}
+
+// ---- SHA-512 and Ed25519 (Monocypher) ----------------------------------------------------
+
+static void test_sha512(void) {
+    uint8_t got[64], want[64];
+    crypto_sha512(got, (const uint8_t *)"abc", 3);
+    hex("ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f", want, 64);
+    CHECK(memcmp(got, want, 64) == 0);
+    crypto_sha512(got, (const uint8_t *)"", 0);
+    hex("cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e", want, 64);
+    CHECK(memcmp(got, want, 64) == 0);
+    // Incremental, in uneven pieces, as the verify slices will feed it.
+    static uint8_t big[3000];
+    for (size_t i = 0; i < sizeof(big); i++) big[i] = (uint8_t)(i * 7 + 1);
+    uint8_t           one[64];
+    crypto_sha512_ctx ctx;
+    crypto_sha512(one, big, sizeof(big));
+    crypto_sha512_init(&ctx);
+    for (size_t off = 0, step = 1; off < sizeof(big); off += step, step = step * 3 % 517 + 1) {
+        crypto_sha512_update(&ctx, big + off, off + step > sizeof(big) ? sizeof(big) - off : step);
+    }
+    crypto_sha512_final(&ctx, got);
+    CHECK(memcmp(got, one, 64) == 0);
+}
+
+// RFC 8032 section 7.1, tests 1-3 (public key, message, signature).
+static const struct {
+    const char *pub, *msg, *sig;
+} rfc8032[] = {
+    {"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "",
+     "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"},
+    {"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c", "72",
+     "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00"},
+    {"fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025", "af82",
+     "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a"},
+};
+
+static void test_ed25519(void) {
+    static const uint8_t L[32] = {0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14,
+                                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+    for (size_t v = 0; v < sizeof(rfc8032) / sizeof(rfc8032[0]); v++) {
+        uint8_t pub[32], sig[64], msg[8];
+        size_t  n = strlen(rfc8032[v].msg) / 2;
+        hex(rfc8032[v].pub, pub, 32);
+        hex(rfc8032[v].sig, sig, 64);
+        hex(rfc8032[v].msg, msg, n);
+        CHECK_EQ(crypto_ed25519_check(sig, pub, msg, n), 0);
+        // every bit of R and S matters
+        for (int bit = 0; bit < 512; bit += 7) {
+            sig[bit / 8] ^= (uint8_t)(1u << (bit % 8));
+            CHECK(crypto_ed25519_check(sig, pub, msg, n) != 0);
+            sig[bit / 8] ^= (uint8_t)(1u << (bit % 8));
+        }
+        // S + L is the same point but must be refused (malleability)
+        uint8_t mall[64];
+        memcpy(mall, sig, 64);
+        unsigned carry = 0;
+        for (int i = 0; i < 32; i++) {
+            unsigned s = mall[32 + i] + L[i] + carry;
+            mall[32 + i] = (uint8_t)s;
+            carry        = s >> 8;
+        }
+        CHECK(crypto_ed25519_check(mall, pub, msg, n) != 0);
+        // another message, another key
+        uint8_t other[9];
+        memcpy(other, msg, n);
+        other[n] = 0;
+        CHECK(crypto_ed25519_check(sig, pub, other, n + 1) != 0);
+        pub[0] ^= 1;
+        CHECK(crypto_ed25519_check(sig, pub, msg, n) != 0);
+    }
+    // The core EdDSA check (BLAKE2b) must not accept standard Ed25519: this is
+    // why the firmware calls crypto_ed25519_check.
+    uint8_t pub[32], sig[64];
+    hex(rfc8032[0].pub, pub, 32);
+    hex(rfc8032[0].sig, sig, 64);
+    CHECK(crypto_eddsa_check(sig, pub, NULL, 0) != 0);
+}
+
+static void test_keys(void) {
+    CHECK(update_key(UPDATE_KEY_TEST) != NULL);
+    CHECK(update_key(UPDATE_KEY_RELEASE_1) == NULL);
+    CHECK(update_key(UPDATE_KEY_RELEASE_2) == NULL);
+    CHECK(update_key(3) == NULL);
+    CHECK(update_key(255) == NULL);
+    uint8_t blob[UPDATE_SIGNED_MANIFEST_BYTES];
+    memset(blob, 0, sizeof(blob));
+    blob[6] = 1; // key_id 1: no such key in this build
+    CHECK_EQ(update_manifest_signature(blob), UPDATE_BAD_SIG);
+    blob[6] = 0; // the test key, but a zero signature
+    CHECK_EQ(update_manifest_signature(blob), UPDATE_BAD_SIG);
+}
+
+// ---- make_update.py signatures ------------------------------------------------------------
+
+static uint8_t *read_file(const char *path, size_t *len) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t *buf = malloc(n > 0 ? (size_t)n : 1);
+    if (buf && fread(buf, 1, (size_t)n, f) != (size_t)n) {
+        free(buf);
+        buf = NULL;
+    }
+    fclose(f);
+    *len = (size_t)n;
+    return buf;
+}
+
+static void test_cross(const char *dir) {
+    char   path[4096];
+    size_t len;
+    snprintf(path, sizeof(path), "%s/test_pubkey.hex", dir);
+    uint8_t *pubhex = read_file(path, &len);
+    CHECK(pubhex != NULL && len >= 64);
+    if (pubhex) {
+        char    s[65];
+        uint8_t pub[32];
+        memcpy(s, pubhex, 64);
+        s[64] = 0;
+        hex(s, pub, 32);
+        CHECK(memcmp(pub, update_key(UPDATE_KEY_TEST), 32) == 0); // firmware key == the TEST-ONLY key file
+        free(pubhex);
+    }
+
+    snprintf(path, sizeof(path), "%s/index.txt", dir);
+    FILE *idx = fopen(path, "r");
+    CHECK(idx != NULL);
+    if (!idx) return;
+    char name[256], expect[32];
+    int  files = 0;
+    while (fscanf(idx, "%255s %31s", name, expect) == 2) {
+        files++;
+        snprintf(path, sizeof(path), "%s/%s", dir, name);
+        uint8_t *buf = read_file(path, &len);
+        CHECK(buf != NULL && len >= UPDATE_SIGNED_MANIFEST_BYTES);
+        if (!buf || len < UPDATE_SIGNED_MANIFEST_BYTES) continue;
+        const sval_update_manifest_t *m      = (const sval_update_manifest_t *)buf;
+        const uint8_t                *image  = buf + UPDATE_SIGNED_MANIFEST_BYTES;
+        size_t                        ilen   = len - UPDATE_SIGNED_MANIFEST_BYTES;
+        update_status_t               sigst  = update_manifest_signature(buf);
+        bool                          ok     = strcmp(expect, "ok") == 0;
+        bool                          badimg = strcmp(expect, "badimage") == 0;
+        if (ok || badimg) {
+            CHECK_EQ(sigst, UPDATE_OK);
+            CHECK_EQ(m->image_len, ilen);
+            uint8_t h[64];
+            crypto_sha512(h, image, ilen);
+            CHECK(memcmp(h, m->sha512, 64) == 0);
+            update_device_t dev = test_dev;
+            dev.hand            = m->hand;
+            dev.pointing_id     = m->pointing_id;
+            dev.security_epoch  = 0;
+            CHECK_EQ(update_manifest_check(m, &dev), UPDATE_OK);
+            if (ilen >= UPDATE_HEAD_BYTES) CHECK_EQ(update_image_head_check(image, m->image_len), ok ? UPDATE_OK : UPDATE_BAD_IMAGE);
+        } else {
+            CHECK_EQ(sigst, UPDATE_BAD_SIG);
+        }
+        if (failures) fprintf(stderr, "  (in %s, expected %s)\n", name, expect);
+        free(buf);
+    }
+    fclose(idx);
+    CHECK(files >= 4);
+    printf("cross-checked %d make_update.py outputs\n", files);
+}
+
+// ---- staging-slot flash (mock die) --------------------------------------------------------
+
+uint8_t              update_host_flash[UPDATE_HOST_FLASH_BYTES] __attribute__((aligned(4096)));
+static uint8_t       before[UPDATE_HOST_FLASH_BYTES];
+const uint8_t        BOOT2_ROM[256] = BOOT2_PAGE0_BYTES;
+static bool          xip_on = true, irq_off, connected;
+static int           erase_ops, program_ops, sequence_errors, outside_ops;
+static int           tear_next; // the next ROM erase/program leaves random bytes
+static uint8_t       capacity = 0x18;
+static uint32_t      rng      = 12345;
+
+static uint8_t rnd(void) {
+    rng = rng * 1103515245u + 12345u;
+    return (uint8_t)(rng >> 16);
+}
+
+static void mock_connect(void) {
+    if (!irq_off || !xip_on) sequence_errors++;
+    connected = true;
+}
+static void mock_exit_xip(void) {
+    if (!connected) sequence_errors++;
+    xip_on = false;
+}
+static void mock_flush(void) {
+    if (xip_on) sequence_errors++;
+}
+static bool slot_only(uint32_t addr, size_t count) {
+    // Invariant (a): during staging, only [SLOT_BASE, SLOT_BASE + SIZE) changes.
+    bool inside = addr >= SVAL_UPDATE_BASE && addr + count <= SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE && count <= SVAL_UPDATE_SIZE;
+    if (!inside) outside_ops++;
+    return inside;
+}
+static void mock_erase(uint32_t addr, size_t count, uint32_t block_size, uint8_t cmd) {
+    erase_ops++;
+    if (xip_on || !irq_off) sequence_errors++;
+    if (addr % 0x10000 || count != 0x10000 || block_size != 0x10000 || cmd != 0xD8) sequence_errors++;
+    if (!slot_only(addr, count)) return;
+    for (size_t i = 0; i < count; i++) update_host_flash[addr + i] = tear_next ? rnd() : 0xFF;
+    tear_next = 0;
+}
+static void mock_program(uint32_t addr, const uint8_t *data, size_t count) {
+    program_ops++;
+    if (xip_on || !irq_off) sequence_errors++;
+    if (addr % 256 || count != 256) sequence_errors++;
+    if (!slot_only(addr, count)) return;
+    for (size_t i = 0; i < count; i++) update_host_flash[addr + i] = tear_next ? rnd() : (update_host_flash[addr + i] & data[i]); // NOR clears bits
+    tear_next = 0;
+}
+
+void *rom_func_lookup_inline(uint32_t code) {
+    switch (code) {
+        case ROM_FUNC_CONNECT_INTERNAL_FLASH: return (void *)mock_connect;
+        case ROM_FUNC_FLASH_EXIT_XIP: return (void *)mock_exit_xip;
+        case ROM_FUNC_FLASH_RANGE_ERASE: return (void *)mock_erase;
+        case ROM_FUNC_FLASH_RANGE_PROGRAM: return (void *)mock_program;
+        case ROM_FUNC_FLASH_FLUSH_CACHE: return (void *)mock_flush;
+        default: return NULL;
+    }
+}
+uint32_t save_and_disable_interrupts(void) {
+    bool was = irq_off;
+    irq_off  = true;
+    return was;
+}
+void restore_interrupts(uint32_t status) {
+    irq_off = status;
+}
+void flash_do_cmd(const uint8_t *tx, uint8_t *rx, size_t count) {
+    if (!irq_off || count != 4 || tx[0] != 0x9F) sequence_errors++;
+    rx[0] = 0xFF;
+    rx[1] = 0xEF; // Winbond
+    rx[2] = 0x40;
+    rx[3] = capacity;
+}
+void update_host_enter_xip(const uint32_t *copy) {
+    if (memcmp(copy, BOOT2_ROM, 256) != 0) sequence_errors++; // XIP comes back only through a good boot2 copy
+    connected = false;
+    xip_on    = true;
+}
+
+static void die_reset(void) {
+    for (size_t i = 0; i < sizeof(update_host_flash); i++) update_host_flash[i] = rnd() | 0x01; // never all 0xFF, rarely erased-looking
+    memset(update_host_flash + SVAL_UPDATE_BASE, 0x00, SVAL_UPDATE_SIZE);
+    probed = false; // update_flash.c state
+    erase_ops = program_ops = sequence_errors = outside_ops = tear_next = 0;
+    capacity  = 0x18;
+}
+
+static void snap(void) {
+    memcpy(before, update_host_flash, sizeof(before));
+}
+
+// Nothing outside [lo, hi) (flash offsets) changed since snap().
+static bool unchanged_outside(uint32_t lo, uint32_t hi) {
+    return memcmp(before, update_host_flash, lo) == 0 && memcmp(before + hi, update_host_flash + hi, sizeof(before) - hi) == 0;
+}
+
+static void test_flash(void) {
+    const uint32_t slot_lo = SVAL_UPDATE_BASE, slot_hi = SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE;
+    uint8_t        page[256];
+    for (int i = 0; i < 256; i++) page[i] = (uint8_t)(i ^ 0x5A);
+
+    // JEDEC and availability
+    die_reset();
+    CHECK(update_flash_available());
+    uint8_t id[3];
+    update_flash_jedec(id);
+    CHECK(id[0] == 0xEF && id[1] == 0x40 && id[2] == 0x18);
+
+    // a die that is not 16 MiB: nothing is touched (D26)
+    die_reset();
+    capacity = 0x15; // 2 MiB
+    snap();
+    CHECK(!update_flash_available());
+    CHECK_EQ(update_flash_erase_block(0), UPDATE_UNAVAILABLE);
+    CHECK_EQ(update_flash_program_page(0, page), UPDATE_UNAVAILABLE);
+    CHECK(erase_ops == 0 && program_ops == 0);
+    CHECK(memcmp(before, update_host_flash, sizeof(before)) == 0);
+
+    // erase every block of the slot, one at a time: only that block changes
+    die_reset();
+    for (uint32_t off = 0; off < SVAL_UPDATE_SIZE; off += UPDATE_FLASH_BLOCK) {
+        snap();
+        CHECK_EQ(update_flash_erase_block(off), UPDATE_OK);
+        CHECK(unchanged_outside(slot_lo + off, slot_lo + off + UPDATE_FLASH_BLOCK));
+        CHECK(update_flash_block_erased(off));
+    }
+    CHECK_EQ(erase_ops, SVAL_UPDATE_SIZE / UPDATE_FLASH_BLOCK);
+    // an erased block is not erased again
+    CHECK_EQ(update_flash_erase_block(0), UPDATE_OK);
+    CHECK_EQ(erase_ops, SVAL_UPDATE_SIZE / UPDATE_FLASH_BLOCK);
+    CHECK(xip_on && !irq_off);
+
+    // erase refusals: misaligned, outside, wrapping; nothing touched
+    snap();
+    const uint32_t bad_erase[] = {0x1000, 0xFF, SVAL_UPDATE_SIZE, SVAL_UPDATE_SIZE + UPDATE_FLASH_BLOCK, 0xFFFF0000u, 0x80000000u, 0xFFFFFFFFu, (uint32_t)-SVAL_UPDATE_BASE};
+    for (size_t i = 0; i < sizeof(bad_erase) / sizeof(bad_erase[0]); i++) CHECK_EQ(update_flash_erase_block(bad_erase[i]), UPDATE_INVALID);
+    CHECK(memcmp(before, update_host_flash, sizeof(before)) == 0);
+
+    // program: first and last page; then refusals
+    snap();
+    CHECK_EQ(update_flash_program_page(0, page), UPDATE_OK);
+    CHECK_EQ(update_flash_program_page(SVAL_UPDATE_SIZE - 256, page), UPDATE_OK);
+    CHECK(memcmp(update_host_flash + slot_lo, page, 256) == 0);
+    CHECK(memcmp(update_host_flash + slot_hi - 256, page, 256) == 0);
+    CHECK(unchanged_outside(slot_lo, slot_hi));
+    int ops = program_ops;
+    snap();
+    CHECK_EQ(update_flash_program_page(0, page), UPDATE_INVALID); // not erased
+    CHECK_EQ(update_flash_program_page(0x80, page), UPDATE_INVALID);
+    CHECK_EQ(update_flash_program_page(SVAL_UPDATE_SIZE, page), UPDATE_INVALID);
+    CHECK_EQ(update_flash_program_page(0xFFFFFF00u, page), UPDATE_INVALID);
+    CHECK_EQ(update_flash_program_page((uint32_t)-SVAL_UPDATE_BASE, page), UPDATE_INVALID);
+    CHECK_EQ(update_flash_program_page(256, NULL), UPDATE_INVALID);
+    CHECK_EQ(program_ops, ops);
+    CHECK(memcmp(before, update_host_flash, sizeof(before)) == 0);
+
+    // source data in "flash": copied to RAM before XIP goes off
+    CHECK_EQ(update_flash_program_page(256, update_host_flash + 0x1000), UPDATE_OK);
+    CHECK(memcmp(update_host_flash + slot_lo + 256, update_host_flash + 0x1000, 256) == 0);
+
+    // torn operations read back wrong and are reported, and stay in the slot
+    snap();
+    tear_next = 1;
+    CHECK_EQ(update_flash_program_page(512, page), UPDATE_FLASH_ERR);
+    CHECK(unchanged_outside(slot_lo + 512, slot_lo + 768));
+    snap();
+    tear_next = 1;
+    CHECK_EQ(update_flash_erase_block(0), UPDATE_FLASH_ERR);
+    CHECK(unchanged_outside(slot_lo, slot_lo + UPDATE_FLASH_BLOCK));
+    CHECK_EQ(update_flash_erase_block(0), UPDATE_OK); // and a retry clears it
+
+    // the RAM routine's own guard: called directly with addresses outside the
+    // slot, it makes no ROM call at all
+    snap();
+    ops                        = erase_ops + program_ops;
+    const uint32_t bad_abs[]   = {0, SVAL_UPDATE_BASE - UPDATE_FLASH_BLOCK, slot_hi, slot_hi - 0x100, IDENTITY_SECTOR_A, WEAR_LEVELING_RP2040_FLASH_BASE, 0xFFFFFF00u};
+    for (size_t i = 0; i < sizeof(bad_abs) / sizeof(bad_abs[0]); i++) {
+        irq_off = true;
+        slot_flash_op(bad_abs[i], NULL);
+        if (bad_abs[i] != slot_hi - 0x100) {
+            slot_flash_op(bad_abs[i], page);
+        }
+        irq_off = false;
+    }
+    CHECK_EQ(erase_ops + program_ops, ops);
+    CHECK(memcmp(before, update_host_flash, sizeof(before)) == 0);
+
+    // the slot view
+    CHECK(update_slot_read(0, SVAL_UPDATE_SIZE) == update_host_flash + slot_lo);
+    CHECK(update_slot_read(SVAL_UPDATE_SIZE, 0) != NULL);
+    CHECK(update_slot_read(SVAL_UPDATE_SIZE, 1) == NULL);
+    CHECK(update_slot_read(1, SVAL_UPDATE_SIZE) == NULL);
+    CHECK(update_slot_read(0xFFFFFFFFu, 2) == NULL);
+    CHECK(!update_slot_range_ok(2, 0xFFFFFFFFu));
+
+    CHECK_EQ(sequence_errors, 0);
+    CHECK_EQ(outside_ops, 0);
+}
+
+int main(int argc, char **argv) {
+    test_boot2_crc();
+    test_manifest_layout();
+    test_manifest_check();
+    test_head_check();
+    test_sha512();
+    test_ed25519();
+    test_keys();
+    test_flash();
+    if (argc > 1) test_cross(argv[1]);
+    printf("%d checks, %d failures\n", checks, failures);
+    return failures ? 1 : 0;
+}
