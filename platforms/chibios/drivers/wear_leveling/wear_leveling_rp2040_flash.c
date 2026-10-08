@@ -192,22 +192,32 @@ static void __no_inline_not_in_flash_func(pico_erase)(uint32_t flash_address, ui
     flash_enable_xip_via_boot2();
 }
 
+// Whether one erase unit reads back fully erased, uncached.
+static bool block_erased(uint32_t block) {
+    const volatile uint32_t *p = (const volatile uint32_t *)((XIP_NOCACHE_NOALLOC_BASE) + block);
+    for (size_t i = 0; i < ERASE_UNIT / sizeof(uint32_t); ++i) {
+        if (p[i] != 0xFFFFFFFF) return false;
+    }
+    return true;
+}
+
 // Erases one unit at a time, skipping units already erased, with interrupts
 // restored in between: USB keeps being serviced, and a fresh board's first-boot
-// format erases nothing.
-static void erase_blocks(uint32_t flash_address, uint32_t length) {
+// format erases nothing. Fails if a unit doesn't read back erased.
+static bool erase_blocks(uint32_t flash_address, uint32_t length) {
     for (uint32_t block = flash_address; block < flash_address + length; block += ERASE_UNIT) {
-        const volatile uint32_t *p = (const volatile uint32_t *)((XIP_NOCACHE_NOALLOC_BASE) + block);
-        bool                     erased = true;
-        for (size_t i = 0; erased && i < ERASE_UNIT / sizeof(uint32_t); ++i) {
-            erased = p[i] == 0xFFFFFFFF;
-        }
-        if (erased) continue;
+        if (block_erased(block)) continue;
         interrupts = save_and_disable_interrupts();
         pico_erase(block, ERASE_UNIT);
         restore_interrupts(interrupts);
+        if (!block_erased(block)) return false;
     }
+    return true;
 }
+
+#ifndef WEAR_LEVELING_RP2040_PROBE_ATTEMPTS
+#    define WEAR_LEVELING_RP2040_PROBE_ATTEMPTS 5
+#endif
 
 bool backing_store_init(void) {
     bs_dprintf("Init\n");
@@ -216,12 +226,16 @@ bool backing_store_init(void) {
 
 #if (WEAR_LEVELING_RP2040_FLASH_BASE) + (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES) > (PICO_FLASH_SIZE_BYTES)
     // Beyond the configured flash size, refuse a die too small for the backing
-    // store: addresses past its end would wrap onto the firmware.
-    uint8_t tx[4] = {0x9F, 0, 0, 0}, rx[4] = {0};
-    interrupts    = save_and_disable_interrupts();
-    flash_do_cmd(tx, rx, sizeof(tx));
-    restore_interrupts(interrupts);
-    flash_present = rx[3] >= 16 && rx[3] < 32 && (WEAR_LEVELING_RP2040_FLASH_BASE) + (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES) <= (1u << rx[3]);
+    // store: addresses past its end would wrap onto the firmware. Retry the
+    // probe, since one bad read would leave nothing saved until the next boot.
+    flash_present = false;
+    for (int attempt = 0; !flash_present && attempt < (WEAR_LEVELING_RP2040_PROBE_ATTEMPTS); ++attempt) {
+        uint8_t tx[4] = {0x9F, 0, 0, 0}, rx[4] = {0};
+        interrupts    = save_and_disable_interrupts();
+        flash_do_cmd(tx, rx, sizeof(tx));
+        restore_interrupts(interrupts);
+        flash_present = rx[3] >= 16 && rx[3] < 32 && (WEAR_LEVELING_RP2040_FLASH_BASE) + (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES) <= (1u << rx[3]);
+    }
 #else
     flash_present = true;
 #endif
@@ -242,16 +256,15 @@ bool backing_store_erase(void) {
     STATIC_ASSERT((WEAR_LEVELING_BACKING_SIZE) % (FLASH_SECTOR_SIZE) == 0, "Backing size must be a multiple of FLASH_SECTOR_SIZE");
 
     if (!flash_present) return false;
-    erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE), (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES));
+    bool ok = erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE), (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES));
 
     bs_dprintf("Backing store erase took %ldms to complete\n", ((long)(timer_read32() - start)));
-    return true;
+    return ok;
 }
 
 bool backing_store_erase_range(uint32_t address, uint32_t length) {
     if (!flash_present || address % ERASE_UNIT || length % ERASE_UNIT || address + length > (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES)) return false;
-    erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE) + address, length);
-    return true;
+    return erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE) + address, length);
 }
 
 bool backing_store_write(uint32_t address, backing_store_int_t value) {
@@ -266,6 +279,13 @@ bool backing_store_write_bulk(uint32_t address, backing_store_int_t *values, siz
     interrupts = save_and_disable_interrupts();
     pico_program_bulk(offset, values, item_count);
     restore_interrupts(interrupts);
+
+    // Programming can only clear bits, and reports nothing; read back uncached to
+    // confirm the values landed.
+    const volatile backing_store_int_t *loc = (const volatile backing_store_int_t *)((XIP_NOCACHE_NOALLOC_BASE) + offset);
+    for (size_t i = 0; i < item_count; ++i) {
+        if (loc[i] != (backing_store_int_t)~values[i]) return false;
+    }
     return true;
 }
 

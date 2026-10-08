@@ -60,3 +60,13 @@ wear_leveling_status_t wear_leveling_read(uint32_t address, void* value, size_t 
  * @return true if stored data was lost
  */
 bool wear_leveling_data_lost(void);
+
+/**
+ * Whether the backing store could not be opened at the last initialization, or a write or erase has failed since.
+ *
+ * Reads are served from the cache, so a failed write still reads back as written: anything changed while this is set
+ * may be lost on the next restart.
+ *
+ * @return true if a change may not have been saved
+ */
+bool wear_leveling_write_failed(void);

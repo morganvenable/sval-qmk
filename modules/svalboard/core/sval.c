@@ -106,6 +106,14 @@ bool sval_storage_was_reset(void) {
     return reset != 0;
 }
 
+bool sval_storage_write_failed(void) {
+#ifdef EEPROM_WEAR_LEVELING
+    return wear_leveling_write_failed();
+#else
+    return false;
+#endif
+}
+
 void sval_init(void) {
     // Initialize client wrapper for multi-client support
     client_wrapper_init();
@@ -431,9 +439,11 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             data[15] = QMK_KEYCODES_VERSION_MAJOR;
             data[16] = QMK_KEYCODES_VERSION_MINOR;
             data[17] = QMK_KEYCODES_VERSION_PATCH;
-            // Nonzero: settings were reset because storage could not be read; the
+            // Bit 0: settings were reset because storage could not be read; the
             // host should ask the user to reload their layout, then send 0x2A.
-            data[18] = sval_storage_was_reset();
+            // Bit 1: since this boot, a change could not be saved to flash; the
+            // board shows it but will lose it on restart. Clears on restart only.
+            data[18] = (sval_storage_was_reset() ? 1 : 0) | (sval_storage_write_failed() ? 2 : 0);
             break;
         }
 

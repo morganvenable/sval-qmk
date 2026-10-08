@@ -27,6 +27,7 @@ Now:
 - **Power lost during consolidation** leaves a complete copy: consolidation erases and rewrites one copy at a time, and the next boot repairs the other.
 - **Power lost while a change is saved** can lose only that change, which was never confirmed. A log entry cut short at the end of a copy is ignored, and a copy whose log stops at an invalid entry keeps the entries before it; if the other copy reads completely, it is used instead.
 - **Both copies unreadable**: the board starts from defaults and remembers that it did. Keybard tells you on its next connection to reload your layout file, and `SV_OUTPUT_STATUS` prints the same notice.
+- **A change that doesn't reach flash** is reported instead of passing silently. Every program and erase is read back, and the boot-time check that the flash chip is large enough is retried. If the store can't be opened, or a write or erase doesn't read back, the board keeps working from memory, so the change still shows, but it reports that changes won't survive a restart (GET_INFO byte 18, bit 1) until it is restarted. Keybard warns you, and `SV_OUTPUT_STATUS` prints the same notice.
 
 A single wrong write log entry that still reads as valid is not detected; QMK's log entries carry no checksum of their own. Your layout file remains the recovery for anything the board cannot read.
 
