@@ -409,6 +409,14 @@ const uint8_t        BOOT2_ROM[256] = BOOT2_PAGE0_BYTES;
 static bool          xip_on = true, irq_off, connected;
 static int           erase_ops, program_ops, sequence_errors, outside_ops;
 static int           tear_next; // the next ROM erase/program leaves random bytes
+static int           sector_erases, block_erases;
+// Simulated time (test_session.c's clock). Each ROM flash operation costs what
+// it would on a W25Q128JV-class die: a 4 KiB sector erase 45 ms and a 64 KiB
+// block erase 150 ms (typical), a page program 3 ms (maximum).
+#define SIM_SECTOR_ERASE_US 45000u
+#define SIM_BLOCK_ERASE_US 150000u
+#define SIM_PAGE_PROGRAM_US 3000u
+static uint64_t      sim_us;
 static uint8_t       capacity = 0x18;
 static uint32_t      rng      = 12345;
 
@@ -437,7 +445,12 @@ static bool slot_only(uint32_t addr, size_t count) {
 static void mock_erase(uint32_t addr, size_t count, uint32_t block_size, uint8_t cmd) {
     erase_ops++;
     if (xip_on || !irq_off) sequence_errors++;
-    if (addr % 0x10000 || count != 0x10000 || block_size != 0x10000 || cmd != 0xD8) sequence_errors++;
+    // one aligned 64 KiB block or one aligned 4 KiB sector, passed as the SDK does
+    bool block = count == 0x10000 && addr % 0x10000 == 0, sector = count == 0x1000 && addr % 0x1000 == 0;
+    if (!(block || sector) || block_size != 0x10000 || cmd != 0xD8) sequence_errors++;
+    if (block) block_erases++;
+    if (sector) sector_erases++;
+    sim_us += block ? SIM_BLOCK_ERASE_US : SIM_SECTOR_ERASE_US;
     if (!slot_only(addr, count)) return;
     for (size_t i = 0; i < count; i++) update_host_flash[addr + i] = tear_next ? rnd() : 0xFF;
     tear_next = 0;
@@ -446,6 +459,7 @@ static void mock_program(uint32_t addr, const uint8_t *data, size_t count) {
     program_ops++;
     if (xip_on || !irq_off) sequence_errors++;
     if (addr % 256 || count != 256) sequence_errors++;
+    sim_us += SIM_PAGE_PROGRAM_US;
     if (!slot_only(addr, count)) return;
     for (size_t i = 0; i < count; i++) update_host_flash[addr + i] = tear_next ? rnd() : (update_host_flash[addr + i] & data[i]); // NOR clears bits
     tear_next = 0;
@@ -486,7 +500,7 @@ static void die_reset(void) {
     for (size_t i = 0; i < sizeof(update_host_flash); i++) update_host_flash[i] = rnd() | 0x01; // never all 0xFF, rarely erased-looking
     memset(update_host_flash + SVAL_UPDATE_BASE, 0x00, SVAL_UPDATE_SIZE);
     probed = false; // update_flash.c state
-    erase_ops = program_ops = sequence_errors = outside_ops = tear_next = 0;
+    erase_ops = program_ops = sequence_errors = outside_ops = tear_next = sector_erases = block_erases = 0;
     capacity  = 0x18;
 }
 
@@ -498,6 +512,8 @@ static void snap(void) {
 static bool unchanged_outside(uint32_t lo, uint32_t hi) {
     return memcmp(before, update_host_flash, lo) == 0 && memcmp(before + hi, update_host_flash + hi, sizeof(before) - hi) == 0;
 }
+
+static void test_session(void);
 
 static void test_flash(void) {
     const uint32_t slot_lo = SVAL_UPDATE_BASE, slot_hi = SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE;
@@ -581,14 +597,53 @@ static void test_flash(void) {
     const uint32_t bad_abs[]   = {0, SVAL_UPDATE_BASE - UPDATE_FLASH_BLOCK, slot_hi, slot_hi - 0x100, IDENTITY_SECTOR_A, WEAR_LEVELING_RP2040_FLASH_BASE, 0xFFFFFF00u};
     for (size_t i = 0; i < sizeof(bad_abs) / sizeof(bad_abs[0]); i++) {
         irq_off = true;
-        slot_flash_op(bad_abs[i], NULL);
+        slot_flash_op(bad_abs[i], NULL, UPDATE_FLASH_BLOCK);
+        slot_flash_op(bad_abs[i], NULL, UPDATE_FLASH_SECTOR);
         if (bad_abs[i] != slot_hi - 0x100) {
-            slot_flash_op(bad_abs[i], page);
+            slot_flash_op(bad_abs[i], page, 0);
         }
         irq_off = false;
     }
+    // inside the slot, but an erase size other than a sector or a block, or
+    // misaligned for its size: no ROM call either
+    irq_off = true;
+    slot_flash_op(slot_lo, NULL, 0x2000);
+    slot_flash_op(slot_lo, NULL, 0);
+    slot_flash_op(slot_lo + 0x1000, NULL, UPDATE_FLASH_BLOCK);
+    slot_flash_op(slot_lo + 0x100, NULL, UPDATE_FLASH_SECTOR);
+    slot_flash_op(slot_lo + 0x80, page, 0);
+    irq_off = false;
     CHECK_EQ(erase_ops + program_ops, ops);
     CHECK(memcmp(before, update_host_flash, sizeof(before)) == 0);
+
+    // sector erase: every sector of the slot, one at a time; only that sector changes
+    die_reset();
+    for (uint32_t off = 0; off < SVAL_UPDATE_SIZE; off += UPDATE_FLASH_SECTOR) {
+        if (off % 0x40000 == 0 || off + UPDATE_FLASH_SECTOR == SVAL_UPDATE_SIZE) snap(); // a whole-die compare is slow
+        CHECK_EQ(update_flash_erase_sector(off), UPDATE_OK);
+        CHECK(update_flash_sector_erased(off));
+        if (off % 0x40000 == 0 || off + UPDATE_FLASH_SECTOR == SVAL_UPDATE_SIZE) CHECK(unchanged_outside(slot_lo + off, slot_lo + off + UPDATE_FLASH_SECTOR));
+    }
+    CHECK_EQ(sector_erases, SVAL_UPDATE_SIZE / UPDATE_FLASH_SECTOR);
+    CHECK_EQ(block_erases, 0);
+    CHECK_EQ(update_flash_erase_sector(0), UPDATE_OK); // already erased: no ROM call
+    CHECK_EQ(sector_erases, SVAL_UPDATE_SIZE / UPDATE_FLASH_SECTOR);
+    snap();
+    const uint32_t bad_sector[] = {0x80, 0x100, 0xFFF, SVAL_UPDATE_SIZE, SVAL_UPDATE_SIZE - 0x800, 0xFFFFF000u, (uint32_t)-SVAL_UPDATE_BASE};
+    for (size_t i = 0; i < sizeof(bad_sector) / sizeof(bad_sector[0]); i++) CHECK_EQ(update_flash_erase_sector(bad_sector[i]), UPDATE_INVALID);
+    CHECK(!update_flash_sector_erased(0x80));
+    CHECK(memcmp(before, update_host_flash, sizeof(before)) == 0);
+    memset(update_host_flash + slot_lo + 0x3000 + 77, 0x12, 1);
+    snap();
+    tear_next = 1;
+    CHECK_EQ(update_flash_erase_sector(0x3000), UPDATE_FLASH_ERR);
+    CHECK(unchanged_outside(slot_lo + 0x3000, slot_lo + 0x4000));
+    CHECK_EQ(update_flash_erase_sector(0x3000), UPDATE_OK);
+    capacity = 0x17;
+    probed   = false;
+    CHECK_EQ(update_flash_erase_sector(0x3000), UPDATE_UNAVAILABLE);
+    capacity = 0x18;
+    probed   = false;
 
     // the slot view
     CHECK(update_slot_read(0, SVAL_UPDATE_SIZE) == update_host_flash + slot_lo);
@@ -602,6 +657,39 @@ static void test_flash(void) {
     CHECK_EQ(outside_ops, 0);
 }
 
+// The session state machine: updater.c and update_gesture.c against these mocks.
+#include "test_session.c"
+
+#ifdef SVAL_UPDATER_HOST_LIB
+// Entry points for tests/sval_updater/test_sval_update_tool.py (ctypes).
+void host_lib_reset(int commit_available) {
+    fresh(0x3000);
+    commit_avail = commit_available != 0;
+}
+void host_via(uint8_t *pkt, uint32_t client) {
+    port_client = client;
+    updater_via_command(pkt, 32);
+    port_client = 0;
+}
+void host_passes(int n) {
+    for (int i = 0; i < n; i++) pass();
+}
+void host_chord(void) {
+    chord();
+}
+int host_state(void) {
+    return updater_state();
+}
+const uint8_t *host_slot(void) {
+    return update_host_flash + SVAL_UPDATE_BASE;
+}
+int host_commit_runs(void) {
+    return commit_runs;
+}
+uint32_t host_commit_crc(void) {
+    return commit_crc;
+}
+#else
 int main(int argc, char **argv) {
     test_boot2_crc();
     test_manifest_layout();
@@ -612,6 +700,8 @@ int main(int argc, char **argv) {
     test_keys();
     test_flash();
     if (argc > 1) test_cross(argv[1]);
+    test_session();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
+#endif

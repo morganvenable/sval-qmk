@@ -19,10 +19,29 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     -DSVAL_UPDATER_HOST_TEST -include "$kb/config.h" \
     -I"$tests" -I"$kb" -I"$kb/updater" -I"$kb/updater/vendor" \
     "$tests/test_updater.c" \
+    "$kb/updater/updater.c" "$kb/updater/update_gesture.c" \
     "$kb/updater/update_image.c" "$kb/updater/update_keys.c" \
     "$kb/updater/vendor/monocypher.c" "$kb/updater/vendor/optional/monocypher-ed25519.c" \
     -o "$out/test_updater"
 "$out/test_updater" "$out/cross"
+
+# kb/tools/sval_update.py against the same state machine, through ctypes
+# (no sanitizers: they need to be preloaded into python).
+${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -shared -fPIC \
+    -DSVAL_UPDATER_HOST_TEST -DSVAL_UPDATER_HOST_LIB -include "$kb/config.h" \
+    -I"$tests" -I"$kb" -I"$kb/updater" -I"$kb/updater/vendor" \
+    "$tests/test_updater.c" \
+    "$kb/updater/updater.c" "$kb/updater/update_gesture.c" \
+    "$kb/updater/update_image.c" "$kb/updater/update_keys.c" \
+    "$kb/updater/vendor/monocypher.c" "$kb/updater/vendor/optional/monocypher-ed25519.c" \
+    -o "$out/libupdater_host.so"
+python3 -I "$tests/test_sval_update_tool.py" "$out/libupdater_host.so" "$out/tool"
+
+# The commit stub refuses until the commit routine lands.
+${CC:-cc} -std=c11 -Wall -Wextra -Werror -O1 -fsanitize=address,undefined -fno-sanitize-recover=all \
+    -DSVAL_UPDATER_HOST_TEST -include "$kb/config.h" -I"$kb/updater" \
+    "$tests/test_commit_stub.c" "$kb/updater/update_commit.c" -o "$out/test_commit_stub"
+"$out/test_commit_stub"
 
 # A release build (SVAL_UPDATE_RELEASE) must not contain the TEST-ONLY public key.
 key_hex="$(python3 -I "$kb/tools/make_update.py" --print-public --signer pure)"
