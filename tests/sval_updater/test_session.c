@@ -52,12 +52,14 @@ void update_led_show(update_led_mode_t mode) {
     led_seen |= 1 << mode;
 }
 
-// The real update_commit.c is a stub that refuses; it is checked on its own by
-// run.sh (test_commit_stub.c). This mock lets the COMMITTING path run.
+// A mock commit, so the COMMITTING path can be tested on its own. The real
+// update_commit.c is tested by test_commit.c, in the build of this harness
+// with -DSVAL_TEST_REAL_COMMIT.
 static bool            commit_avail;
 static int             commit_runs;
 static uint32_t        commit_crc, commit_len;
 static update_status_t commit_result;
+#ifndef SVAL_TEST_REAL_COMMIT
 bool update_commit_available(void) {
     return commit_avail;
 }
@@ -67,6 +69,7 @@ update_status_t update_commit_run(const sval_update_manifest_t *m, uint32_t crc_
     commit_len = m->image_len;
     return commit_result;
 }
+#endif
 
 // ---- driving it -------------------------------------------------------------------------
 
@@ -169,7 +172,7 @@ static void chord(void) {
 
 // ---- a signed update ------------------------------------------------------------------------
 
-#define IMG_MAX 0x30000
+#define IMG_MAX SVAL_UPDATE_MAX_IMAGE
 static uint8_t  img[IMG_MAX];
 static uint8_t  blob[UPDATE_SIGNED_MANIFEST_BYTES];
 static uint32_t img_len;

@@ -8,6 +8,7 @@
 //
 //   test_updater [CROSS_DIR]   CROSS_DIR: .svup files written by test_make_update.py
 
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -420,6 +421,65 @@ static uint64_t      sim_us;
 static uint8_t       capacity = 0x18;
 static uint32_t      rng      = 12345;
 
+// Where ROM erases and programs may land: the slot while staging (invariant
+// (a)); test_commit.c widens it to [0, round_up(image_len, 64 KiB)) for the
+// commit (invariant (b)). Anything else counts in outside_ops and is not done.
+static uint32_t allow_lo = SVAL_UPDATE_BASE, allow_hi = SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE;
+static bool     multi_page; // the commit programs up to a sector per ROM call; staging one page
+
+// Power cuts: after ROM op number cut_at (1-based, counted in flash_ops) has
+// run, or been torn when cut_tear is set, control jumps to cut_env.
+static jmp_buf cut_env;
+static int     flash_ops, cut_at;
+static bool    cut_tear;
+
+// A program that does not take: the byte at bad_at keeps its old value on the
+// bad_nth ROM program covering it, and on the bad_times - 1 after that.
+static uint32_t bad_at = 0xFFFFFFFFu;
+static int      bad_nth, bad_times, bad_seen;
+
+// Watchdog accounting for the commit: worst-case flash time since the last
+// feed (W25Q128JV maxima: sector erase 400 ms, block erase 2 s, page program
+// 3 ms), while the mock watchdog is enabled.
+#define WORST_SECTOR_ERASE_US 400000u
+#define WORST_BLOCK_ERASE_US 2000000u
+#define WORST_PAGE_PROGRAM_US 3000u
+static bool     mock_wd_on;
+static uint64_t wd_since_feed_us, wd_gap_max_us;
+
+// Every ROM erase and program, in order.
+typedef struct {
+    char     op; // 'E' or 'P'
+    uint32_t addr, count;
+    bool     zeros; // a program of all zero bytes
+} oplog_t;
+static oplog_t oplog[1024];
+static int     noplog;
+
+static void wd_spend(uint64_t us) {
+    if (!mock_wd_on) return;
+    wd_since_feed_us += us;
+    if (wd_since_feed_us > wd_gap_max_us) wd_gap_max_us = wd_since_feed_us;
+}
+
+static void log_op(char op, uint32_t addr, uint32_t count, const uint8_t *data) {
+    bool zeros = data != NULL;
+    for (uint32_t i = 0; data && i < count; i++) zeros &= data[i] == 0;
+    if (noplog < (int)(sizeof(oplog) / sizeof(oplog[0]))) oplog[noplog] = (oplog_t){op, addr, count, zeros};
+    noplog++;
+}
+
+// Called after each counted ROM op (test_commit.c: a slot byte going bad
+// mid-commit).
+static void (*after_op)(int op);
+
+// Counts a ROM op that changes the die: true when the cut comes after it.
+static bool cut_now(void) {
+    flash_ops++;
+    if (after_op) after_op(flash_ops);
+    return cut_at && flash_ops == cut_at;
+}
+
 static uint8_t rnd(void) {
     rng = rng * 1103515245u + 12345u;
     return (uint8_t)(rng >> 16);
@@ -437,8 +497,9 @@ static void mock_flush(void) {
     if (xip_on) sequence_errors++;
 }
 static bool slot_only(uint32_t addr, size_t count) {
-    // Invariant (a): during staging, only [SLOT_BASE, SLOT_BASE + SIZE) changes.
-    bool inside = addr >= SVAL_UPDATE_BASE && addr + count <= SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE && count <= SVAL_UPDATE_SIZE;
+    // Invariant (a): during staging, only [SLOT_BASE, SLOT_BASE + SIZE) changes;
+    // (b) during the commit, only [0, round_up(image_len, 64 KiB)).
+    bool inside = addr >= allow_lo && addr <= allow_hi && count <= allow_hi - addr;
     if (!inside) outside_ops++;
     return inside;
 }
@@ -451,18 +512,34 @@ static void mock_erase(uint32_t addr, size_t count, uint32_t block_size, uint8_t
     if (block) block_erases++;
     if (sector) sector_erases++;
     sim_us += block ? SIM_BLOCK_ERASE_US : SIM_SECTOR_ERASE_US;
+    wd_spend(block ? WORST_BLOCK_ERASE_US : WORST_SECTOR_ERASE_US);
+    log_op('E', addr, (uint32_t)count, NULL);
     if (!slot_only(addr, count)) return;
+    bool cut = cut_now();
+    if (cut && cut_tear) tear_next = 1;
     for (size_t i = 0; i < count; i++) update_host_flash[addr + i] = tear_next ? rnd() : 0xFF;
     tear_next = 0;
+    if (cut) longjmp(cut_env, 1);
 }
 static void mock_program(uint32_t addr, const uint8_t *data, size_t count) {
     program_ops++;
     if (xip_on || !irq_off) sequence_errors++;
-    if (addr % 256 || count != 256) sequence_errors++;
-    sim_us += SIM_PAGE_PROGRAM_US;
+    if (addr % 256 || count == 0 || count % 256 || count > (multi_page ? 4096u : 256u)) sequence_errors++;
+    sim_us += SIM_PAGE_PROGRAM_US * (count / 256);
+    wd_spend(WORST_PAGE_PROGRAM_US * (count / 256));
+    log_op('P', addr, (uint32_t)count, data);
     if (!slot_only(addr, count)) return;
+    bool    cut  = cut_now();
+    bool    bad  = bad_at >= addr && bad_at < addr + count && ++bad_seen >= bad_nth && bad_times > 0;
+    uint8_t keep = bad ? update_host_flash[bad_at] : 0;
+    if (cut && cut_tear) tear_next = 1;
     for (size_t i = 0; i < count; i++) update_host_flash[addr + i] = tear_next ? rnd() : (update_host_flash[addr + i] & data[i]); // NOR clears bits
+    if (bad) {
+        update_host_flash[bad_at] = keep; // this byte did not take
+        bad_times--;
+    }
     tear_next = 0;
+    if (cut) longjmp(cut_env, 1);
 }
 
 void *rom_func_lookup_inline(uint32_t code) {
@@ -501,7 +578,19 @@ static void die_reset(void) {
     memset(update_host_flash + SVAL_UPDATE_BASE, 0x00, SVAL_UPDATE_SIZE);
     probed = false; // update_flash.c state
     erase_ops = program_ops = sequence_errors = outside_ops = tear_next = sector_erases = block_erases = 0;
-    capacity  = 0x18;
+    capacity   = 0x18;
+    allow_lo   = SVAL_UPDATE_BASE;
+    allow_hi   = SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE;
+    multi_page = false;
+    flash_ops = cut_at = noplog = 0;
+    cut_tear  = false;
+    bad_at    = 0xFFFFFFFFu;
+    bad_nth = bad_times = bad_seen = 0;
+    after_op  = NULL;
+    mock_wd_on       = false;
+    wd_since_feed_us = wd_gap_max_us = 0;
+    xip_on           = true;
+    irq_off = connected = false;
 }
 
 static void snap(void) {
@@ -660,6 +749,11 @@ static void test_flash(void) {
 // The session state machine: updater.c and update_gesture.c against these mocks.
 #include "test_session.c"
 
+#ifdef SVAL_TEST_REAL_COMMIT
+// The commit routine itself (update_commit.c) against the same mocks.
+#    include "test_commit.c"
+#endif
+
 #ifdef SVAL_UPDATER_HOST_LIB
 // Entry points for tests/sval_updater/test_sval_update_tool.py (ctypes).
 void host_lib_reset(int commit_available) {
@@ -691,6 +785,13 @@ uint32_t host_commit_crc(void) {
 }
 #else
 int main(int argc, char **argv) {
+#ifdef SVAL_TEST_REAL_COMMIT
+    (void)argc;
+    (void)argv;
+    test_commit();
+    printf("%d checks, %d failures\n", checks, failures);
+    return failures ? 1 : 0;
+#endif
     test_boot2_crc();
     test_manifest_layout();
     test_manifest_check();
