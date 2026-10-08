@@ -192,3 +192,64 @@ TEST_F(WearLevelingMirror, PowerLossDuringConsolidation) {
         }
     }
 }
+
+#if WEAR_LEVELING_LOGICAL_SIZE > 64
+static constexpr std::size_t LOG_START = IMAGE_ELEMENTS + 8 / sizeof(backing_store_int_t);
+
+// First erased log slot of a copy.
+static std::size_t log_end(std::size_t copy) {
+    std::size_t i = LOG_START;
+    while (i < COPY_ELEMENTS && !(MockBackingStore::Instance().storage_begin() + copy * COPY_ELEMENTS + i)->is_erased()) {
+        ++i;
+    }
+    return i;
+}
+
+/**
+ * This test verifies that a multi-word log entry cut off by the end of a copy, from power loss while it was written,
+ * ends the log instead of being completed with whatever follows the copy.
+ */
+TEST_F(WearLevelingMirror, EntryCutOffAtCopyEnd_Ignored) {
+    auto data = seed();
+    EXPECT_NE(wear_leveling_init(), WEAR_LEVELING_FAILED) << "Init failed";
+    for (std::size_t copy = 0; copy < 2; ++copy) {
+        // Fill the log with harmless entries, leaving only the last slot
+        for (std::size_t i = log_end(copy); i + 1 < COPY_ELEMENTS; ++i) {
+            element(copy, i).set(~LOG_ENTRY_MAKE_OPTIMIZED_64(0, data[0]).raw16[0]);
+        }
+        // Only the first word of a write to address 100 made it into the last slot
+        element(copy, COPY_ELEMENTS - 1).set(~LOG_ENTRY_MAKE_MULTIBYTE(100, 1).raw16[0]);
+    }
+    // Power was lost after consolidation had erased the first copy
+    for (std::size_t i = 0; i < COPY_ELEMENTS; ++i) {
+        element(0, i).erase();
+    }
+    expect_recovered(data);
+}
+
+/**
+ * This test verifies that a copy which replays completely wins over one whose log stops at an invalid entry.
+ */
+TEST_F(WearLevelingMirror, TruncatedFirstCopy_LoadsSecond) {
+    auto data = seed();
+    EXPECT_NE(wear_leveling_init(), WEAR_LEVELING_FAILED) << "Init failed";
+    std::size_t slot = log_end(0);
+    element(0, slot).set(0x3FFF);                                             // invalid entry type in the first copy
+    element(1, slot).set(~LOG_ENTRY_MAKE_OPTIMIZED_64(5, 0x99).raw16[0]); // a real entry in the second
+    data[5] = 0x99;
+    expect_recovered(data);
+}
+
+/**
+ * This test verifies that when every copy's log stops at an invalid entry, the entries before it are kept and
+ * nothing is reported lost.
+ */
+TEST_F(WearLevelingMirror, BothCopiesTruncated_PrefixKept) {
+    auto data = seed();
+    EXPECT_NE(wear_leveling_init(), WEAR_LEVELING_FAILED) << "Init failed";
+    std::size_t slot = log_end(0);
+    element(0, slot).set(0x3FFF);
+    element(1, slot).set(0x3FFF);
+    expect_recovered(data);
+}
+#endif

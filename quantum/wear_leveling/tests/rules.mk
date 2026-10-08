@@ -76,3 +76,15 @@ wear_leveling_mirror_SRC := \
 	$(QUANTUM_PATH)/wear_leveling/tests/wear_leveling_mirror.cpp
 wear_leveling_mirror_INC := \
 	$(wear_leveling_common_INC)
+
+wear_leveling_mirror_large_DEFS := \
+	$(wear_leveling_common_DEFS) \
+	-DBACKING_STORE_WRITE_SIZE=2 \
+	-DWEAR_LEVELING_BACKING_SIZE=256 \
+	-DWEAR_LEVELING_LOGICAL_SIZE=128 \
+	-DWEAR_LEVELING_COPIES=2
+wear_leveling_mirror_large_SRC := \
+	$(wear_leveling_common_SRC) \
+	$(QUANTUM_PATH)/wear_leveling/tests/wear_leveling_mirror.cpp
+wear_leveling_mirror_large_INC := \
+	$(wear_leveling_common_INC)

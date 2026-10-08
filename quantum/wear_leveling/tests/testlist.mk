@@ -4,4 +4,5 @@ TEST_LIST += \
 	wear_leveling_2byte \
 	wear_leveling_4byte \
 	wear_leveling_8byte \
-	wear_leveling_mirror
+	wear_leveling_mirror \
+	wear_leveling_mirror_large

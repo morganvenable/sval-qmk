@@ -533,6 +533,11 @@ static wear_leveling_status_t wear_leveling_playback_log(uint8_t copy) {
         switch (LOG_ENTRY_GET_TYPE(log)) {
             case LOG_ENTRY_TYPE_MULTIBYTE: {
 #if BACKING_STORE_WRITE_SIZE == 2
+                if (address + (BACKING_STORE_WRITE_SIZE) > (WEAR_LEVELING_BACKING_SIZE)) {
+                    // Only the start of this entry fits in the copy: power was lost while it was written, so it ends the log.
+                    cancel_playback = true;
+                    break;
+                }
                 ok = backing_store_read(copy_base(copy) + address, &log.raw16[1]);
                 if (!ok) {
                     wl_dprintf("Failed to load from backing store, skipping playback of write log\n");
@@ -553,6 +558,11 @@ static wear_leveling_status_t wear_leveling_playback_log(uint8_t copy) {
 
 #if BACKING_STORE_WRITE_SIZE == 2
                 if (l > 1) {
+                    if (address + (BACKING_STORE_WRITE_SIZE) > (WEAR_LEVELING_BACKING_SIZE)) {
+                        // Only the start of this entry fits in the copy: power was lost while it was written, so it ends the log.
+                        cancel_playback = true;
+                        break;
+                    }
                     ok = backing_store_read(copy_base(copy) + address, &log.raw16[2]);
                     if (!ok) {
                         wl_dprintf("Failed to load from backing store, skipping playback of write log\n");
@@ -563,6 +573,11 @@ static wear_leveling_status_t wear_leveling_playback_log(uint8_t copy) {
                     address += (BACKING_STORE_WRITE_SIZE);
                 }
                 if (l > 3) {
+                    if (address + (BACKING_STORE_WRITE_SIZE) > (WEAR_LEVELING_BACKING_SIZE)) {
+                        // Only the start of this entry fits in the copy: power was lost while it was written, so it ends the log.
+                        cancel_playback = true;
+                        break;
+                    }
                     ok = backing_store_read(copy_base(copy) + address, &log.raw16[3]);
                     if (!ok) {
                         wl_dprintf("Failed to load from backing store, skipping playback of write log\n");
@@ -574,6 +589,11 @@ static wear_leveling_status_t wear_leveling_playback_log(uint8_t copy) {
                 }
 #elif BACKING_STORE_WRITE_SIZE == 4
                 if (l > 1) {
+                    if (address + (BACKING_STORE_WRITE_SIZE) > (WEAR_LEVELING_BACKING_SIZE)) {
+                        // Only the start of this entry fits in the copy: power was lost while it was written, so it ends the log.
+                        cancel_playback = true;
+                        break;
+                    }
                     ok = backing_store_read(copy_base(copy) + address, &log.raw32[1]);
                     if (!ok) {
                         wl_dprintf("Failed to load from backing store, skipping playback of write log\n");
@@ -626,36 +646,52 @@ static wear_leveling_status_t wear_leveling_playback_log(uint8_t copy) {
     return status;
 }
 
+typedef enum { COPY_UNREADABLE, COPY_TRUNCATED, COPY_EMPTY, COPY_VALID } copy_state_t;
+
 /**
- * Loads one copy's consolidated data and replays its write log into the cache.
+ * Loads one copy's consolidated data and replays its write log into the cache. A copy whose log stops at an invalid
+ * entry keeps the entries before it.
  */
-static wear_leveling_status_t wear_leveling_load(uint8_t copy, bool *empty) {
+static copy_state_t wear_leveling_load(uint8_t copy) {
     wear_leveling_clear_cache();
-    bool                   erased = false;
-    wear_leveling_status_t status = wear_leveling_read_consolidated(copy, &erased);
-    if (status != WEAR_LEVELING_FAILED) {
-        status = wear_leveling_playback_log(copy);
+    bool erased = false;
+    if (wear_leveling_read_consolidated(copy, &erased) == WEAR_LEVELING_FAILED) {
+        return COPY_UNREADABLE;
     }
-    *empty = erased && wear_leveling.write_address == (WEAR_LEVELING_LOGICAL_SIZE) + 8;
-    return status;
+    if (wear_leveling_playback_log(copy) == WEAR_LEVELING_FAILED) {
+        return COPY_TRUNCATED;
+    }
+    return erased && wear_leveling.write_address == (WEAR_LEVELING_LOGICAL_SIZE) + 8 ? COPY_EMPTY : COPY_VALID;
 }
 
 /**
- * Loads the first copy that holds data. An empty copy is used only when no copy holds data or is unreadable, as a
- * consolidation that was interrupted after an erase leaves one copy empty.
+ * Loads the best copy: the first that holds data and replays completely, else the first whose log stops at an invalid
+ * entry. An empty copy is used only when no copy holds data or is unreadable, as a consolidation that was interrupted
+ * after an erase leaves one copy empty.
  *
- * @return the copy loaded, or -1 if none could be
+ * @param complete set to whether the loaded copy replayed completely
+ * @return the copy loaded, or -1 if no copy could be read
  */
-static int wear_leveling_load_any(void) {
+static int wear_leveling_load_any(bool *complete) {
     bool unreadable = false;
+    int  truncated  = -1;
     for (uint8_t copy = 0; copy < (WEAR_LEVELING_COPIES); ++copy) {
-        bool empty;
-        if (wear_leveling_load(copy, &empty) == WEAR_LEVELING_FAILED) {
-            unreadable = true;
-        } else if (!empty) {
+        copy_state_t state = wear_leveling_load(copy);
+        if (state == COPY_VALID) {
+            *complete = true;
             return copy;
         }
+        if (state == COPY_TRUNCATED && truncated < 0) {
+            truncated = copy;
+        }
+        unreadable |= state == COPY_UNREADABLE;
     }
+    if (truncated >= 0) {
+        *complete = false;
+        wear_leveling_load(truncated);
+        return truncated;
+    }
+    *complete = true;
     wear_leveling_clear_cache();
     return unreadable ? -1 : 0;
 }
@@ -701,22 +737,23 @@ wear_leveling_status_t wear_leveling_init(void) {
 
     // Read the previous consolidated values, then replay the existing write log so that the cache has the "live" values.
     // Retry, so that one bad read neither discards the stored data nor rewrites a healthy copy.
-    int copy = -1;
+    int  copy     = -1;
+    bool complete = false;
     for (int attempt = 0; attempt < (WEAR_LEVELING_READ_ATTEMPTS); ++attempt) {
-        copy = wear_leveling_load_any();
-        if (copy == 0 && wear_leveling_copies_match()) {
+        copy = wear_leveling_load_any(&complete);
+        if (copy == 0 && complete && wear_leveling_copies_match()) {
             return wear_leveling_consolidate_if_needed();
         }
     }
 
     if (copy < 0) {
-        // The stored data cannot be read: start again from an erased store, and report the loss.
+        // No copy's consolidated data can be read: start again from an erased store, and report the loss.
         wl_dprintf("Stored data unreadable, erasing\n");
         wear_leveling.data_lost = true;
         wear_leveling_clear_cache();
     }
 
-    // Rewrite every copy from the cache, repairing a damaged or lagging copy.
+    // Rewrite every copy from the cache: repairs a damaged or lagging copy, or drops an invalid log entry.
     return wear_leveling_consolidate_force();
 }
 
