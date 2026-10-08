@@ -38,6 +38,15 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length);
 bool client_wrapper_in_via(void);
 #define CLIENT_WRAPPER_OVERHEAD 6
 
+// The client ID of the wrapped VIA command being processed, for handlers that
+// bind a session to one client (the Svalboard updater). CLIENT_ID_BOOTSTRAP (0)
+// when client_wrapper_in_via() is false: no valid ID is ever 0. Built only when
+// a build defines CLIENT_WRAPPER_ID_GETTER: even an unused function here moves
+// the linker's veneers, and builds without it must stay byte-identical.
+#ifdef CLIENT_WRAPPER_ID_GETTER
+uint32_t client_wrapper_current_id(void);
+#endif
+
 // Allocate a new client ID
 uint32_t client_wrapper_allocate_id(void);
 

@@ -29,14 +29,22 @@ bool update_slot_range_ok(uint32_t off, uint32_t len);
 // NULL when [off, off + len) is outside the slot.
 const volatile uint8_t *update_slot_read(uint32_t off, uint32_t len);
 
-// Whether one 64 KiB block of the slot (off aligned to it) reads all 0xFF.
+// Whether one 64 KiB block / 4 KiB sector of the slot (off aligned to it)
+// reads all 0xFF.
 bool update_flash_block_erased(uint32_t off);
+bool update_flash_sector_erased(uint32_t off);
 
 // Erases one 64 KiB block of the slot (off aligned to it) unless it already
 // reads erased, then checks it reads back erased. Interrupts are off for the
 // erase itself. UPDATE_OK, UPDATE_INVALID (range or alignment),
 // UPDATE_UNAVAILABLE (die not 16 MiB) or UPDATE_FLASH_ERR.
 update_status_t update_flash_erase_block(uint32_t off);
+
+// The same for one 4 KiB sector (off aligned to it). The updater stages with
+// these: a sector erase keeps interrupts off for about 45 ms (W25Q128JV tSE
+// typical; 400 ms max) against 150 ms (2 s max) for a block, so no host op
+// waits on a whole block erase.
+update_status_t update_flash_erase_sector(uint32_t off);
 
 // Programs one 256 B page of the slot (off aligned to it) from data, which may
 // be anywhere; it is copied to RAM first. The page must read erased beforehand

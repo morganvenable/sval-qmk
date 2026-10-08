@@ -51,6 +51,12 @@ bool client_wrapper_in_via(void) {
     return wrapper_pending;
 }
 
+#ifdef CLIENT_WRAPPER_ID_GETTER
+uint32_t client_wrapper_current_id(void) {
+    return wrapper_pending ? wrapper_client_id : CLIENT_ID_BOOTSTRAP;
+}
+#endif
+
 // Override raw_hid_send to wrap responses when needed
 void raw_hid_send(uint8_t *data, uint8_t length) {
     if (wrapper_pending) {

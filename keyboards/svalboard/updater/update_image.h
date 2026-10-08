@@ -36,7 +36,11 @@ typedef struct {
 void update_device_self(update_device_t *dev);
 
 // CRC-32/MPEG-2: poly 0x04C11DB7, init 0xFFFFFFFF, no reflection, no xorout.
+// The _update form continues a CRC over more bytes, starting from
+// UPDATE_CRC32_INIT.
+#define UPDATE_CRC32_INIT 0xFFFFFFFFu
 uint32_t update_crc32_mpeg2(const uint8_t *p, size_t n);
+uint32_t update_crc32_mpeg2_update(uint32_t crc, const uint8_t *p, size_t n);
 
 // Whether page 0 carries a boot2 the ROM would run.
 bool update_boot2_valid(const uint8_t page0[UPDATE_BOOT2_BYTES]);

@@ -48,13 +48,16 @@ void update_device_self(update_device_t *dev) {
 
 // ---- checks ------------------------------------------------------------------------
 
-uint32_t update_crc32_mpeg2(const uint8_t *p, size_t n) {
-    uint32_t crc = 0xFFFFFFFFu;
+uint32_t update_crc32_mpeg2_update(uint32_t crc, const uint8_t *p, size_t n) {
     while (n--) {
         crc ^= (uint32_t)*p++ << 24;
         for (uint8_t b = 0; b < 8; b++) crc = (crc << 1) ^ (0x04C11DB7u & -(crc >> 31));
     }
     return crc;
+}
+
+uint32_t update_crc32_mpeg2(const uint8_t *p, size_t n) {
+    return update_crc32_mpeg2_update(UPDATE_CRC32_INIT, p, n);
 }
 
 static uint32_t get32(const uint8_t *p) {
