@@ -12,9 +12,9 @@ Svalboard keeps its settings (keymap, macros, Sval tables, pointing settings) in
 
 Firmware updates keep settings, as long as the settings layout is compatible. To carry settings across a reflash that changes it, export the layout file in Keybard first and load it again afterwards.
 
-## Upgrading from the previous firmware
+## Upgrading from earlier firmware
 
-The previous firmware kept a dual-bank store at `0x200000`–`0x40FFFF`, and at `0x160000` an older copy of the settings in today's format. On the first boot after the upgrade, before settings load, the firmware erases `0x160000`–`0x40FFFF` (`settings_upgrade.c`), so that old copy is never read as current. This takes a few seconds, once. The board starts from defaults: load your layout file to restore your setup. A board that never ran the dual-bank firmware keeps the settings it already has at `0x160000`.
+Settings that any earlier firmware left at `0x160000` don't carry this firmware's `EECONFIG_MAGIC_NUMBER` (config.h), so on the first boot QMK resets every setting to defaults. That boot takes a few seconds longer than usual. Load your layout file to restore your setup. Data earlier firmware left elsewhere in flash is never read, and that space stays free. When a later change needs every stored setting reset again, decrement the magic.
 
 ## What it protects against
 

@@ -11,8 +11,7 @@ The earlier five-file/~70-line inventory predates the storage and identity chang
 - `wear_leveling.c`: loading retries `WEAR_LEVELING_READ_ATTEMPTS` times. Only an erased image and checksum count as never consolidated; upstream treats any checksum mismatch that way and replays the log over zeros. A store whose consolidated data cannot be read in any copy is erased and reported by `wear_leveling_data_lost()`. A log that stops at an invalid entry keeps the entries before it, as upstream does, and a log entry cut off by the end of a copy ends the log.
 - `WEAR_LEVELING_COPIES`: mirrored copies of the backing store. Log entries go to every copy, consolidation rewrites one copy at a time, and loading prefers a copy that holds data and replays completely, repairing any copy that differs.
 - `wear_leveling_internal.h`: `backing_store_erase_range()`, required when there is more than one copy.
-- RP2040 backing store: ROM erase beyond `PICO_FLASH_SIZE_BYTES`; when the store extends beyond it, a JEDEC capacity check; uncached reads so retries reread the flash; erasing one 64 KB block (or 4 KB sector, for stores not 64 KB-aligned) at a time, skipping erased ones, with interrupts restored in between; and `backing_store_erase_range()`.
-- `quantum/keyboard.c`: a weak `keyboard_pre_eeprom_init_kb()` hook, run before the EEPROM driver initializes. Svalboard uses it to clear the previous firmware's stores before settings load.
+- RP2040 backing store: ROM erase beyond `PICO_FLASH_SIZE_BYTES`; when the store extends beyond it, a JEDEC capacity check; uncached reads so retries reread the flash; erasing one 64 KB block (or 4 KB sector, for stores not 64 KB-aligned) at a time, skipping erased ones, with interrupts restored in between; skipping program operations for batches that are all erased; and `backing_store_erase_range()`.
 - Tests: upstream tests that seeded an invalid checksum beside a never-consolidated image now leave it erased, as QMK writes it, and also check nothing is reported lost; `wear_leveling_mirror` and `wear_leveling_mirror_large` are new.
 
 ## Merge/rebase checks
@@ -27,6 +26,7 @@ The earlier five-file/~70-line inventory predates the storage and identity chang
 8. Verify runtime product strings and prefixed serial descriptors retain their descriptor-size constraints.
 9. Run `python3 -m unittest discover -s tests/sval_storage -v`, `python3 -m unittest discover -s tests/sval_layers`, and every `make test:wear_leveling_*` suite (including `wear_leveling_mirror`), and compile the maintained sensor/side builds.
 10. Keep the wear-leveling changes when upstream changes `quantum/wear_leveling/`: retries, the erased-only never-consolidated rule, `wear_leveling_data_lost()`, and copies.
-11. Exercise migration, interrupted updates, identity persistence, and reconnects on hardware before claiming release-level coverage.
+11. Svalboard sets its own `EECONFIG_MAGIC_NUMBER` (config.h). If upstream lowers its value to the same or below Svalboard's, pick a new Svalboard value below both.
+12. Exercise migration, interrupted updates, identity persistence, and reconnects on hardware before claiming release-level coverage.
 
 [Client ID protocol](CLIENT_ID_PROTOCOL.md) documents communication routing separately from the core patch inventory.

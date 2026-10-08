@@ -138,8 +138,15 @@ static void __no_inline_not_in_flash_func(pico_program_bulk)(uint32_t flash_addr
 
     while (item_count) {
         size_t batch_size = MIN(item_count, WEAR_LEVELING_RP2040_FLASH_BULK_COUNT);
+        bool   erased     = true;
         for (size_t i = 0; i < batch_size; i++, values++, item_count--) {
             bulk_write_buffer[i] = ~(*values);
+            erased &= bulk_write_buffer[i] == (backing_store_int_t)~0;
+        }
+        if (erased) {
+            // Programming all ones changes nothing, so skip it: consolidated data is mostly zeros.
+            flash_address += batch_size * sizeof(backing_store_int_t);
+            continue;
         }
         __compiler_memory_barrier();
 
