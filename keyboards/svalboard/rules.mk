@@ -10,7 +10,10 @@ WS2812_DRIVER   = vendor
 
 CUSTOM_MATRIX = lite
 
-SRC += axis_scale.c matrix.c scanlab.c power.c identity.c
+SRC += axis_scale.c matrix.c scanlab.c power.c identity.c settings_upgrade.c
+
+# Settings start at 0x160000; keep firmware below them.
+LDFLAGS += -Wl,-T,keyboards/svalboard/flash_reservation.ld
 
 SERIAL_DRIVER = vendor
 

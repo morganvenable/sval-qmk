@@ -355,12 +355,19 @@ __attribute__((weak)) bool matrix_can_read(void) {
     return true;
 }
 
+/** \brief keyboard_pre_eeprom_init_kb
+ *
+ * Runs before the EEPROM driver initializes, e.g. to prepare its storage.
+ */
+__attribute__((weak)) void keyboard_pre_eeprom_init_kb(void) {}
+
 /** \brief keyboard_setup
  *
  * FIXME: needs doc
  */
 void keyboard_setup(void) {
     print_set_sendchar(sendchar);
+    keyboard_pre_eeprom_init_kb();
 #ifdef EEPROM_DRIVER
     eeprom_driver_init();
 #endif
