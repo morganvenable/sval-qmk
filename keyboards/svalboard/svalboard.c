@@ -417,6 +417,11 @@ void sval_idle_status(sval_idle_status_t *st) {
 void sval_set_active_layer(uint32_t layer, bool save) {
     if (layer > 15) layer = 15;
     sval_active_layer = layer;
+    // Layer callbacks first run from quantum_init(), before rgblight_init(). Right
+    // after settings are initialized the RGB defaults are already enabled in RAM,
+    // and driving the uninitialized LEDs blocks the first boot for good.
+    // keyboard_post_init_kb() applies the colour once lighting is up.
+    if (!is_rgblight_initialized) return;
     struct layer_hsv cols  = global_saved_values.layer_colors[layer];
     uint8_t          awake = sval_rgb_awake_val();
     uint8_t          shown = rgb_idle_applied == 1 ? rgb_dim_val : awake;
