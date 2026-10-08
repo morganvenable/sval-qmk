@@ -43,11 +43,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define FLASH_LEN (16 * 1024 * 1024)
 // Settings: QMK wear leveling, 128 KB logical on two mirrored 512 KB copies,
-// directly after the firmware area (0x160000..0x25FFFF). settings_upgrade.c
-// clears what the previous firmware left there on the first boot after it.
+// directly after the firmware area (0x160000..0x25FFFF).
 #define WEAR_LEVELING_BACKING_SIZE (512 * 1024)
 #define WEAR_LEVELING_LOGICAL_SIZE (128 * 1024)
 #define WEAR_LEVELING_RP2040_FLASH_BASE 0x160000
+// Settings any earlier firmware left in this region don't match this magic, so
+// QMK resets them all to defaults on the first boot. Decrement it (never reuse
+// a value, and stay below QMK's own) whenever stored settings must all reset.
+#define EECONFIG_MAGIC_NUMBER (uint16_t)0xFEE2
 #define WEAR_LEVELING_COPIES 2
 
 // Identity (identity.c): the USB serial is "sval:" + the board's stored 8-byte
