@@ -181,7 +181,30 @@ def decode_info(st, r):
 def decode_diag(st, r):
     return dict(status=status_name(st), stack_unused=struct.unpack_from("<H", r, 0)[0],
                 stack_size=struct.unpack_from("<H", r, 2)[0], longest_pass_ms=struct.unpack_from("<H", r, 4)[0],
-                longest_pass_state=state_name(r[6]))
+                longest_pass_state=state_name(r[6]), **decode_crumbs(r))
+
+
+OP_NAMES = ["INFO", "MANIFEST", "ARM", "BEGIN", "CHUNK", "END", "STATUS", "COMMIT", "ABORT", "REBIND", "TEST_HALT", "DIAG"]
+
+
+def decode_crumbs(r):
+    """Why the chip last reset, and what the updater was doing just before (watchdog scratch 0-3)."""
+    if len(r) < 20:
+        return {}
+    f = r[7]
+    why = [n for b, n in ((1, "power-on/brown-out"), (2, "RUN pin"), (4, "debugger"), (8, "watchdog timer"),
+                          (16, "watchdog force")) if f & b] or ["none of POR/RUN/watchdog: software or core reset"]
+    out = dict(last_reset=why)
+    if not f & 0x80:
+        out["before_reset"] = "no breadcrumbs (first boot, power-on or RUN pin)"
+        return out
+    c1, c2, c3 = struct.unpack_from("<III", r, 8)
+    op, state, st = c1 >> 24, (c1 >> 16) & 0xFF, (c1 >> 8) & 0xFF
+    out["before_reset"] = dict(
+        last_op=OP_NAMES[op] if op < len(OP_NAMES) else f"op {op}", state=state_name(state),
+        op_status="still inside the op" if st == 0xFF else status_name(st), op_count=c1 & 0xFF,
+        last_op_ms=c2, last_pass_ms=c3)
+    return out
 
 
 def decode_status(st, r):

@@ -392,6 +392,56 @@ static update_status_t op_test_halt(uint32_t client, const uint8_t *req) {
 }
 #endif
 
+// ---- reset breadcrumbs (M1 hardware debugging) -----------------------------------------------
+// Watchdog scratch 0-3 survive every reset except power-on and the RUN pin
+// (the boot ROM and the commit use only scratch 4-7). scratch0 marks them
+// valid, scratch1 = last op << 24 | state << 16 | status << 8 | op count,
+// scratch2 = ms of that op, scratch3 = ms of the last updater_task pass. At
+// boot the previous values and the reset reason are latched for DIAG.
+#ifndef SVAL_UPDATER_HOST_TEST
+#    include "hardware/structs/watchdog.h"
+#    include "hardware/structs/vreg_and_chip_reset.h"
+#    define CRUMB_MAGIC 0x5C0B0001u
+static bool     crumbs_latched;
+static uint8_t  reset_flags; // bit0 POR/brown-out, 1 RUN pin, 2 debugger, 3 watchdog timer, 4 watchdog force, 7 crumbs valid
+static uint32_t prev_crumb[3];
+static uint8_t  crumb_count;
+
+static void crumbs_latch(void) {
+    if (crumbs_latched) return;
+    crumbs_latched = true;
+    uint32_t cr = vreg_and_chip_reset_hw->chip_reset, wr = watchdog_hw->reason;
+    reset_flags = (cr & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_POR_BITS ? 0x01 : 0) | (cr & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_RUN_BITS ? 0x02 : 0) | (cr & VREG_AND_CHIP_RESET_CHIP_RESET_HAD_PSM_RESTART_BITS ? 0x04 : 0) | (wr & WATCHDOG_REASON_TIMER_BITS ? 0x08 : 0) | (wr & WATCHDOG_REASON_FORCE_BITS ? 0x10 : 0);
+    if (watchdog_hw->scratch[0] == CRUMB_MAGIC) {
+        reset_flags |= 0x80;
+        for (int i = 0; i < 3; i++) prev_crumb[i] = watchdog_hw->scratch[i + 1];
+    }
+    watchdog_hw->scratch[1] = watchdog_hw->scratch[2] = watchdog_hw->scratch[3] = 0;
+    watchdog_hw->scratch[0] = CRUMB_MAGIC;
+}
+
+static void crumb_op(uint8_t op, uint8_t st) {
+    crumbs_latch();
+    watchdog_hw->scratch[1] = (uint32_t)op << 24 | (uint32_t)s.state << 16 | (uint32_t)st << 8 | crumb_count++;
+    watchdog_hw->scratch[2] = updater_port_now_ms();
+}
+
+static void crumb_pass(void) {
+    crumbs_latch();
+    watchdog_hw->scratch[3] = updater_port_now_ms();
+}
+
+static void crumbs_report(uint8_t *rsp) {
+    crumbs_latch();
+    rsp[8] = reset_flags;
+    for (int i = 0; i < 3; i++) put32(&rsp[9 + 4 * i], prev_crumb[i]);
+}
+#else
+#    define crumb_op(op, st) ((void)0)
+#    define crumb_pass() ((void)0)
+#    define crumbs_report(rsp) ((void)0)
+#endif
+
 static update_status_t op_diag(const uint8_t *req, uint8_t *rsp) {
     uint16_t size   = 0;
     uint16_t unused = updater_port_stack_free(&size);
@@ -399,6 +449,7 @@ static update_status_t op_diag(const uint8_t *req, uint8_t *rsp) {
     put16(&rsp[3], size);
     put16(&rsp[5], pass_max_ms);
     rsp[7] = pass_max_state;
+    crumbs_report(rsp);
     if (req[1] == 1) {
         pass_max_ms    = 0;
         pass_max_state = 0;
@@ -444,6 +495,7 @@ void updater_via_command(uint8_t *data, uint8_t length) {
     } else if (s.state == UPDATE_STATE_COMMITTING && op != UPDATE_OP_INFO && op != UPDATE_OP_STATUS) {
         st = UPDATE_BUSY;
     } else {
+        crumb_op(op, 0xFF); // 0xFF: inside the op
         switch (op) {
             case UPDATE_OP_INFO:
                 st = op_info(rsp);
@@ -485,6 +537,7 @@ void updater_via_command(uint8_t *data, uint8_t length) {
                 break;
         }
         if (op == UPDATE_OP_BEGIN || op == UPDATE_OP_END || op == UPDATE_OP_COMMIT || op == UPDATE_OP_ABORT || op == UPDATE_OP_REBIND || op == UPDATE_OP_TEST_HALT) rsp[1] = s.state;
+        crumb_op(op, st);
     }
     rsp[0] = st;
     memcpy(value, rsp, VALUE_BYTES);
@@ -628,6 +681,7 @@ void updater_task(void) {
         pass_max_state = pass_st;
     }
     update_led_show(led_mode());
+    crumb_pass();
 }
 
 bool updater_active(void) {
