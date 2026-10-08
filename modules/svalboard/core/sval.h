@@ -88,6 +88,7 @@ enum sval_command_id {
     sval_cmd_context_layer_renew  = 0x28,
     sval_cmd_context_layer_clear  = 0x29,
     sval_cmd_storage_reset_clear  = 0x2A, // host has told the user about a storage reset (GET_INFO byte 18)
+    sval_cmd_default_layer_set    = 0x2B, // advertised by sval_flag2_default_layer_set
     sval_cmd_error                = 0xFF,
 };
 
@@ -100,6 +101,12 @@ enum sval_feature_flags {
     sval_flag_context_layer       = (1 << 5), // context-layer commands available
     sval_flag_default_layer_state = (1 << 6), // 0x16 includes default_layer_state
     // Bit 4 is allocated by the context feature branches; bit 7 reserved.
+};
+
+// Second feature byte, GET_INFO byte 19 (after the storage flags in byte 18).
+// Older firmware leaves it zero.
+enum sval_feature_flags2 {
+    sval_flag2_default_layer_set = (1 << 0), // 0x2B sets the saved default layer
 };
 
 // Keyboard definition chunk size (fits in 32-byte HID packet with header)
@@ -322,6 +329,7 @@ void sval_reset(void);
 
 // Get feature flags for protocol info response
 uint8_t sval_get_feature_flags(void);
+uint8_t sval_get_feature_flags2(void);
 
 // Reload functions (called after settings change)
 void sval_reload_tap_dance(void);

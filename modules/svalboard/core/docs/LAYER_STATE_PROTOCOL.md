@@ -38,3 +38,12 @@ This feature does not report physical presses, modifiers, held-key resolution, k
 - `make <keyboard>/<side>:sval -j4` passed for `svalboard`, `svalboard/trackpoint`, `svalboard/trackball/pmw3360`, `svalboard/trackball/pmw3389`, and `svalboard/azoteq`, each left and right. `svalboard/left:blank` and `svalboard/right:blank` also passed (12 builds total).
 - Builds used isolated dependency worktrees at the repository's recorded revisions and the installed Arm GNU 13.2.Rel1 toolchain. Generated UF2s remain local and untracked. No hardware or flashing was performed.
 - Branch `feat/default-layer-reporting` is based on `feat/keytest-instrumentation` at `7e6a674d36`. Only this extension's commit is required when integrating onto another compatible Sval branch; reconcile capability declarations with context branches while preserving their bits 4–5.
+
+## Setting the saved default layer
+
+`DEFAULT_LAYER_SET` (`0x2B`) makes a layer the default now and after a restart, exactly as pressing `PDF(layer)` does (`set_single_persistent_default_layer`). Hosts use it when they renumber layers, so the default stays on the same layer.
+
+- Request: `DD <client:u32 LE> DF 2B <layer:u8> ...`
+- Response: `DD <client:u32 LE> DF 2B <status:u8>`: `0` = set, `1` = the keymap has no such layer (nothing changes).
+- Discovery: GET_INFO byte 19 (inner Sval offset; full report offset 24) is a second feature byte, after the storage flags in byte 18. Bit 0 (`sval_flag2_default_layer_set`) advertises this command. Older firmware leaves the byte zero; older hosts never read it. The first feature byte is full (bit 4 is held by the tap-dance context branch, bit 7 is reserved).
+- `0x2A` is `STORAGE_RESET_CLEAR`; don't confuse the two.

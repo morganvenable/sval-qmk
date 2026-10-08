@@ -172,6 +172,10 @@ uint8_t sval_get_feature_flags(void) {
     return flags;
 }
 
+uint8_t sval_get_feature_flags2(void) {
+    return sval_flag2_default_layer_set;
+}
+
 // Storage functions - Tap Dance
 int sval_get_tap_dance(uint16_t index, sval_tap_dance_entry_t *entry) {
     if (index >= SVAL_TAP_DANCE_ENTRIES) return -1;
@@ -444,6 +448,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Bit 1: since this boot, a change could not be saved to flash; the
             // board shows it but will lose it on restart. Clears on restart only.
             data[18] = (sval_storage_was_reset() ? 1 : 0) | (sval_storage_write_failed() ? 2 : 0);
+            data[19] = sval_get_feature_flags2();
             break;
         }
 
@@ -696,6 +701,25 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             data[7]                 = (defaults >> 8) & 0xFF;
             data[8]                 = (defaults >> 16) & 0xFF;
             data[9]                 = (defaults >> 24) & 0xFF;
+            break;
+        }
+
+        case sval_cmd_default_layer_set: {
+            // Request:  [0xDF] [0x2B] [layer]
+            // Response: [0xDF] [0x2B] [status] 0 = ok, 1 = no such layer
+            // Same as pressing PDF(layer): the default layer now and after a restart.
+            // Hosts use it when they renumber layers.
+            if (length < 3) {
+                data[1] = sval_cmd_error;
+                return false;
+            }
+            const uint8_t layer = data[2];
+            if (layer >= dynamic_keymap_get_layer_count()) {
+                data[2] = 1;
+                break;
+            }
+            set_single_persistent_default_layer(layer);
+            data[2] = 0;
             break;
         }
 
