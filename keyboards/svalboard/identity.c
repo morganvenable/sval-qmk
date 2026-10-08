@@ -34,8 +34,8 @@
 #include "hardware/sync.h"
 #include "hardware/structs/rosc.h"
 
-#define IDENTITY_SECTOR_A (0x1000000u - 2 * FLASH_SECTOR_SIZE) // 0xFFE000
-#define IDENTITY_SECTOR_B (0x1000000u - 1 * FLASH_SECTOR_SIZE) // 0xFFF000
+_Static_assert(IDENTITY_SECTOR_A == 0x1000000u - 2 * FLASH_SECTOR_SIZE, "identity sector A is second-to-last");
+_Static_assert(IDENTITY_SECTOR_B == 0x1000000u - 1 * FLASH_SECTOR_SIZE, "identity sector B is last");
 #define IDENTITY_MAGIC 0x44495653u                              // "SVID"
 #define IDENTITY_VERSION 1
 #define JEDEC_CAPACITY_16MB 0x18 // 2^24 bytes

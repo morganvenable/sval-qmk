@@ -11,6 +11,11 @@
 #define IDENTITY_SERIAL_BYTES 8
 #define IDENTITY_NAME_MAX_BYTES 64 // UTF-8; the app limits names to 32 characters
 
+// The last two 4 KB sectors of the 16 MB die (flash offsets). The updater's
+// staging slot must end below IDENTITY_SECTOR_A (updater/update_flash.c).
+#define IDENTITY_SECTOR_A 0xFFE000u
+#define IDENTITY_SECTOR_B 0xFFF000u
+
 typedef enum {
     IDENTITY_SERIAL_NONE     = 0,
     IDENTITY_SERIAL_FLASH_ID = 1, // the flash die's unique ID

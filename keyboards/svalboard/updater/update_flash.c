@@ -1,0 +1,159 @@
+// Copyright 2026 Morgan Venable
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+// Staging-slot erase and program for the updater (see update_flash.h).
+//
+// Like identity.c and the wear-leveling driver, this goes through the boot ROM
+// rather than the Pico SDK's flash wrappers, which refuse addresses above
+// PICO_FLASH_SIZE_BYTES (2 MB here). The slot is far above that, so before any
+// flash operation the JEDEC capacity must say 16 MiB: on a smaller die these
+// offsets would wrap onto the firmware or the settings.
+
+#include <stddef.h>
+#include <string.h>
+#include "update_flash.h"
+#include "identity.h" // IDENTITY_SECTOR_A
+
+#ifdef SVAL_UPDATER_HOST_TEST
+#    include "update_flash_host.h" // tests/sval_updater: flash and ROM mocks
+#else
+#    include "pico/bootrom.h"
+#    include "hardware/flash.h"
+#    include "hardware/sync.h"
+#    include "hardware/regs/addressmap.h"
+#    define UPDATE_NOCACHE(off) ((const volatile uint8_t *)(XIP_NOCACHE_NOALLOC_BASE + (off)))
+extern const uint8_t BOOT2_ROM[256];
+#endif
+
+// ---- slot layout (D8, R9) -------------------------------------------------------
+
+#define SETTINGS_END (WEAR_LEVELING_RP2040_FLASH_BASE + WEAR_LEVELING_BACKING_SIZE * WEAR_LEVELING_COPIES)
+_Static_assert(SVAL_UPDATE_MAX_IMAGE % UPDATE_FLASH_BLOCK == 0, "max image is whole 64 KiB blocks");
+_Static_assert(SVAL_UPDATE_MAX_IMAGE <= WEAR_LEVELING_RP2040_FLASH_BASE, "an image never reaches the settings");
+_Static_assert(SVAL_UPDATE_BASE % UPDATE_FLASH_BLOCK == 0, "slot base is 64 KiB aligned");
+_Static_assert(SVAL_UPDATE_SIZE % UPDATE_FLASH_BLOCK == 0, "slot size is whole 64 KiB blocks");
+_Static_assert(SVAL_UPDATE_SIZE >= SVAL_UPDATE_MAX_IMAGE, "the slot holds the largest image");
+_Static_assert(SVAL_UPDATE_BASE >= SETTINGS_END, "slot starts after both settings copies");
+_Static_assert(SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE <= IDENTITY_SECTOR_A, "slot ends before the identity sectors");
+_Static_assert(IDENTITY_SECTOR_A < FLASH_LEN, "identity is on the die");
+
+#define SLOT_END (SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE)
+#define JEDEC_CAPACITY_16MB 0x18 // 2^24 bytes
+#define ERASE_BLOCK_CMD 0xD8     // 64 KiB block erase, as the SDK passes to the ROM
+
+static bool     probed;
+static bool     available;
+static uint8_t  jedec[UPDATE_JEDEC_BYTES];
+static uint32_t boot2_copy[64];
+static uint8_t  page_buf[UPDATE_FLASH_PAGE] __attribute__((aligned(4)));
+
+// ---- flash access (runs from RAM: XIP is off while the die is busy) -------------
+
+// The absolute range check is repeated here, next to the ROM calls, so that no
+// caller mistake can reach flash outside the slot.
+static bool __no_inline_not_in_flash_func(abs_in_slot)(uint32_t abs, uint32_t len) {
+    return abs >= SVAL_UPDATE_BASE && abs <= SLOT_END && len <= SLOT_END - abs;
+}
+
+static void __no_inline_not_in_flash_func(slot_flash_op)(uint32_t abs, const uint8_t *page) {
+    if (!abs_in_slot(abs, page ? UPDATE_FLASH_PAGE : UPDATE_FLASH_BLOCK)) return;
+    rom_connect_internal_flash_fn connect  = (rom_connect_internal_flash_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
+    rom_flash_exit_xip_fn         exit_xip = (rom_flash_exit_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
+    rom_flash_range_erase_fn      erase    = (rom_flash_range_erase_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_ERASE);
+    rom_flash_range_program_fn    program  = (rom_flash_range_program_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_PROGRAM);
+    rom_flash_flush_cache_fn      flush    = (rom_flash_flush_cache_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_FLUSH_CACHE);
+
+    __compiler_memory_barrier();
+    connect();
+    exit_xip();
+    if (page) {
+        program(abs, page, UPDATE_FLASH_PAGE);
+    } else {
+        erase(abs, UPDATE_FLASH_BLOCK, UPDATE_FLASH_BLOCK, ERASE_BLOCK_CMD);
+    }
+    flush();
+#ifdef SVAL_UPDATER_HOST_TEST
+    update_host_enter_xip(boot2_copy);
+#else
+    ((void (*)(void))((intptr_t)boot2_copy + 1))(); // back to XIP via boot2
+#endif
+}
+
+static uint8_t read_jedec(uint8_t id[UPDATE_JEDEC_BYTES]) {
+    uint8_t  tx[4] = {0x9F, 0, 0, 0}, rx[4] = {0};
+    uint32_t irq   = save_and_disable_interrupts();
+    flash_do_cmd(tx, rx, sizeof(tx));
+    restore_interrupts(irq);
+    memcpy(id, &rx[1], UPDATE_JEDEC_BYTES);
+    return rx[3];
+}
+
+// ---- public API -------------------------------------------------------------------
+
+void update_flash_init(void) {
+    if (probed) return;
+    probed = true;
+    // Taken at init, while page 0 is still this firmware's boot2.
+    memcpy(boot2_copy, BOOT2_ROM, sizeof(boot2_copy));
+    available = read_jedec(jedec) == JEDEC_CAPACITY_16MB;
+}
+
+bool update_flash_available(void) {
+    update_flash_init();
+    return available;
+}
+
+void update_flash_jedec(uint8_t id[UPDATE_JEDEC_BYTES]) {
+    update_flash_init();
+    memcpy(id, jedec, UPDATE_JEDEC_BYTES);
+}
+
+bool update_slot_range_ok(uint32_t off, uint32_t len) {
+    return off <= SVAL_UPDATE_SIZE && len <= SVAL_UPDATE_SIZE - off;
+}
+
+const volatile uint8_t *update_slot_read(uint32_t off, uint32_t len) {
+    if (!update_slot_range_ok(off, len)) return NULL;
+    return UPDATE_NOCACHE(SVAL_UPDATE_BASE + off);
+}
+
+// Whole words: each uncached read is a flash transaction. off and len are
+// page-aligned wherever this is called.
+static bool range_is(uint32_t off, uint32_t len, uint8_t value) {
+    const volatile uint32_t *p    = (const volatile uint32_t *)UPDATE_NOCACHE(SVAL_UPDATE_BASE + off);
+    uint32_t                 word = value * 0x01010101u;
+    for (uint32_t i = 0; i < len / 4; i++) {
+        if (p[i] != word) return false;
+    }
+    return true;
+}
+
+bool update_flash_block_erased(uint32_t off) {
+    if (off % UPDATE_FLASH_BLOCK || !update_slot_range_ok(off, UPDATE_FLASH_BLOCK)) return false;
+    return range_is(off, UPDATE_FLASH_BLOCK, 0xFF);
+}
+
+update_status_t update_flash_erase_block(uint32_t off) {
+    if (off % UPDATE_FLASH_BLOCK || !update_slot_range_ok(off, UPDATE_FLASH_BLOCK)) return UPDATE_INVALID;
+    if (!update_flash_available()) return UPDATE_UNAVAILABLE;
+    if (update_flash_block_erased(off)) return UPDATE_OK;
+    uint32_t irq = save_and_disable_interrupts();
+    slot_flash_op(SVAL_UPDATE_BASE + off, NULL);
+    restore_interrupts(irq);
+    return update_flash_block_erased(off) ? UPDATE_OK : UPDATE_FLASH_ERR;
+}
+
+update_status_t update_flash_program_page(uint32_t off, const uint8_t data[UPDATE_FLASH_PAGE]) {
+    if (!data || off % UPDATE_FLASH_PAGE || !update_slot_range_ok(off, UPDATE_FLASH_PAGE)) return UPDATE_INVALID;
+    if (!update_flash_available()) return UPDATE_UNAVAILABLE;
+    if (!range_is(off, UPDATE_FLASH_PAGE, 0xFF)) return UPDATE_INVALID;
+    memcpy(page_buf, data, UPDATE_FLASH_PAGE); // the ROM reads it with XIP off
+    uint32_t irq = save_and_disable_interrupts();
+    slot_flash_op(SVAL_UPDATE_BASE + off, page_buf);
+    restore_interrupts(irq);
+    const volatile uint8_t *p = UPDATE_NOCACHE(SVAL_UPDATE_BASE + off);
+    for (uint32_t i = 0; i < UPDATE_FLASH_PAGE; i++) {
+        if (p[i] != page_buf[i]) return UPDATE_FLASH_ERR;
+    }
+    return UPDATE_OK;
+}

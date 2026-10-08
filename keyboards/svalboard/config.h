@@ -53,6 +53,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define EECONFIG_MAGIC_NUMBER (uint16_t)0xFEE2
 #define WEAR_LEVELING_COPIES 2
 
+// In-firmware updater (updater/, built with SVAL_UPDATER=yes). Offsets from the
+// start of the flash die. The staging slot sits in the free space between the
+// settings (ending 0x260000) and the identity sectors (0xFFE000), and an image
+// is at most the firmware area; updater/update_flash.c asserts both.
+#define SVAL_UPDATE_BASE 0x800000
+#define SVAL_UPDATE_SIZE 0x160000
+#define SVAL_UPDATE_MAX_IMAGE 0x160000
+// Downgrade floors (D19): an image whose manifest is below either is refused.
+// Raise SVAL_UPDATE_SECURITY_EPOCH in a release that fixes a security problem,
+// and SVAL_UPDATE_STORAGE_FORMAT when stored settings change incompatibly.
+#ifndef SVAL_UPDATE_SECURITY_EPOCH
+#    define SVAL_UPDATE_SECURITY_EPOCH 0
+#endif
+#define SVAL_UPDATE_STORAGE_FORMAT 2
+#if defined(SVAL_UPDATER) && defined(SVAL_KEYTEST)
+#    error "SVAL_UPDATER and SVAL_KEYTEST cannot be combined: keytest injects key events (R11)"
+#endif
+
 // Identity (identity.c): the USB serial is "sval:" + the board's stored 8-byte
 // serial as 16 hex digits, and the product string is the user's name when set.
 // Every keymap uses it, so drop the module's fixed SERIAL_NUMBER literal.
