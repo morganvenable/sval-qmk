@@ -25,7 +25,6 @@ ASSERT_COMMUNITY_MODULES_MIN_API_VERSION(1, 0, 0);
 // Global for keycode override during tap dance execution
 uint16_t g_sval_magic_keycode_override;
 
-
 // Label System v2: Fixed SVAL_LABEL_SIZE-byte UTF-8 storage arrays
 char sval_td_labels[SVAL_TAP_DANCE_ENTRIES][SVAL_LABEL_SIZE];
 char sval_macro_labels[DYNAMIC_KEYMAP_MACRO_COUNT][SVAL_LABEL_SIZE];
