@@ -163,6 +163,8 @@ static void __no_inline_not_in_flash_func(pico_program_bulk)(uint32_t flash_addr
 static int  interrupts;
 static bool flash_present;
 
+#define ERASE_BLOCK (1 << 16)
+
 // The SDK wrappers assume PICO_FLASH_SIZE_BYTES; use the ROM routines so the
 // backing store may sit anywhere on the actual die.
 static void __no_inline_not_in_flash_func(pico_erase)(uint32_t flash_address, uint32_t length) {
@@ -173,9 +175,26 @@ static void __no_inline_not_in_flash_func(pico_erase)(uint32_t flash_address, ui
     __compiler_memory_barrier();
     connect_internal_flash();
     flash_exit_xip();
-    flash_range_erase(flash_address, length, 1 << 16, 0xD8);
+    flash_range_erase(flash_address, length, ERASE_BLOCK, 0xD8);
     flash_flush_cache();
     flash_enable_xip_via_boot2();
+}
+
+// Erases one 64 KB block at a time, skipping blocks already erased, with
+// interrupts restored in between: USB keeps being serviced, and a fresh board's
+// first-boot format erases nothing.
+static void erase_blocks(uint32_t flash_address, uint32_t length) {
+    for (uint32_t block = flash_address; block < flash_address + length; block += ERASE_BLOCK) {
+        const volatile uint32_t *p = (const volatile uint32_t *)((XIP_NOCACHE_NOALLOC_BASE) + block);
+        bool                     erased = true;
+        for (size_t i = 0; erased && i < ERASE_BLOCK / sizeof(uint32_t); ++i) {
+            erased = p[i] == 0xFFFFFFFF;
+        }
+        if (erased) continue;
+        interrupts = save_and_disable_interrupts();
+        pico_erase(block, ERASE_BLOCK);
+        restore_interrupts(interrupts);
+    }
 }
 
 bool backing_store_init(void) {
@@ -204,22 +223,18 @@ bool backing_store_erase(void) {
 #endif
 
     // Ensure the backing size can be cleanly subtracted from the flash size without alignment issues.
-    STATIC_ASSERT((WEAR_LEVELING_BACKING_SIZE) % (1 << 16) == 0, "Backing size must be a multiple of the 64 KB erase block");
+    STATIC_ASSERT((WEAR_LEVELING_BACKING_SIZE) % ERASE_BLOCK == 0, "Backing size must be a multiple of the 64 KB erase block");
 
     if (!flash_present) return false;
-    interrupts = save_and_disable_interrupts();
-    pico_erase((WEAR_LEVELING_RP2040_FLASH_BASE), (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES));
-    restore_interrupts(interrupts);
+    erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE), (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES));
 
     bs_dprintf("Backing store erase took %ldms to complete\n", ((long)(timer_read32() - start)));
     return true;
 }
 
 bool backing_store_erase_range(uint32_t address, uint32_t length) {
-    if (!flash_present || address % (1 << 16) || length % (1 << 16) || address + length > (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES)) return false;
-    interrupts = save_and_disable_interrupts();
-    pico_erase((WEAR_LEVELING_RP2040_FLASH_BASE) + address, length);
-    restore_interrupts(interrupts);
+    if (!flash_present || address % ERASE_BLOCK || length % ERASE_BLOCK || address + length > (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES)) return false;
+    erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE) + address, length);
     return true;
 }
 
