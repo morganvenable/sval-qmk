@@ -138,8 +138,15 @@ static void __no_inline_not_in_flash_func(pico_program_bulk)(uint32_t flash_addr
 
     while (item_count) {
         size_t batch_size = MIN(item_count, WEAR_LEVELING_RP2040_FLASH_BULK_COUNT);
+        bool   erased     = true;
         for (size_t i = 0; i < batch_size; i++, values++, item_count--) {
             bulk_write_buffer[i] = ~(*values);
+            erased &= bulk_write_buffer[i] == (backing_store_int_t)~0;
+        }
+        if (erased) {
+            // Programming all ones changes nothing, so skip it: consolidated data is mostly zeros.
+            flash_address += batch_size * sizeof(backing_store_int_t);
+            continue;
         }
         __compiler_memory_barrier();
 
@@ -160,13 +167,65 @@ static void __no_inline_not_in_flash_func(pico_program_bulk)(uint32_t flash_addr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // QMK Wear-Leveling Backing Store implementation
 
-static int interrupts;
+static int  interrupts;
+static bool flash_present;
+
+// Erase in 64 KB blocks when the store is aligned to them, otherwise in 4 KB sectors.
+#if (WEAR_LEVELING_RP2040_FLASH_BASE) % (1 << 16) == 0 && (WEAR_LEVELING_BACKING_SIZE) % (1 << 16) == 0
+#    define ERASE_UNIT (1 << 16)
+#else
+#    define ERASE_UNIT (FLASH_SECTOR_SIZE)
+#endif
+
+// The SDK wrappers assume PICO_FLASH_SIZE_BYTES; use the ROM routines so the
+// backing store may sit anywhere on the actual die.
+static void __no_inline_not_in_flash_func(pico_erase)(uint32_t flash_address, uint32_t length) {
+    rom_connect_internal_flash_fn connect_internal_flash = (rom_connect_internal_flash_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
+    rom_flash_exit_xip_fn         flash_exit_xip         = (rom_flash_exit_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
+    rom_flash_range_erase_fn      flash_range_erase      = (rom_flash_range_erase_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_ERASE);
+    rom_flash_flush_cache_fn      flash_flush_cache      = (rom_flash_flush_cache_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_FLUSH_CACHE);
+    __compiler_memory_barrier();
+    connect_internal_flash();
+    flash_exit_xip();
+    flash_range_erase(flash_address, length, 1 << 16, 0xD8);
+    flash_flush_cache();
+    flash_enable_xip_via_boot2();
+}
+
+// Erases one unit at a time, skipping units already erased, with interrupts
+// restored in between: USB keeps being serviced, and a fresh board's first-boot
+// format erases nothing.
+static void erase_blocks(uint32_t flash_address, uint32_t length) {
+    for (uint32_t block = flash_address; block < flash_address + length; block += ERASE_UNIT) {
+        const volatile uint32_t *p = (const volatile uint32_t *)((XIP_NOCACHE_NOALLOC_BASE) + block);
+        bool                     erased = true;
+        for (size_t i = 0; erased && i < ERASE_UNIT / sizeof(uint32_t); ++i) {
+            erased = p[i] == 0xFFFFFFFF;
+        }
+        if (erased) continue;
+        interrupts = save_and_disable_interrupts();
+        pico_erase(block, ERASE_UNIT);
+        restore_interrupts(interrupts);
+    }
+}
 
 bool backing_store_init(void) {
     bs_dprintf("Init\n");
     memcpy(BOOT2_ROM_RAM, BOOT2_ROM, sizeof(BOOT2_ROM));
     __compiler_memory_barrier();
-    return true;
+
+#if (WEAR_LEVELING_RP2040_FLASH_BASE) + (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES) > (PICO_FLASH_SIZE_BYTES)
+    // Beyond the configured flash size, refuse a die too small for the backing
+    // store: addresses past its end would wrap onto the firmware.
+    uint8_t tx[4] = {0x9F, 0, 0, 0}, rx[4] = {0};
+    interrupts    = save_and_disable_interrupts();
+    flash_do_cmd(tx, rx, sizeof(tx));
+    restore_interrupts(interrupts);
+    flash_present = rx[3] >= 16 && rx[3] < 32 && (WEAR_LEVELING_RP2040_FLASH_BASE) + (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES) <= (1u << rx[3]);
+#else
+    flash_present = true;
+#endif
+    return flash_present;
 }
 
 bool backing_store_unlock(void) {
@@ -182,11 +241,16 @@ bool backing_store_erase(void) {
     // Ensure the backing size can be cleanly subtracted from the flash size without alignment issues.
     STATIC_ASSERT((WEAR_LEVELING_BACKING_SIZE) % (FLASH_SECTOR_SIZE) == 0, "Backing size must be a multiple of FLASH_SECTOR_SIZE");
 
-    interrupts = save_and_disable_interrupts();
-    flash_range_erase((WEAR_LEVELING_RP2040_FLASH_BASE), (WEAR_LEVELING_BACKING_SIZE));
-    restore_interrupts(interrupts);
+    if (!flash_present) return false;
+    erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE), (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES));
 
     bs_dprintf("Backing store erase took %ldms to complete\n", ((long)(timer_read32() - start)));
+    return true;
+}
+
+bool backing_store_erase_range(uint32_t address, uint32_t length) {
+    if (!flash_present || address % ERASE_UNIT || length % ERASE_UNIT || address + length > (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES)) return false;
+    erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE) + address, length);
     return true;
 }
 
@@ -195,6 +259,7 @@ bool backing_store_write(uint32_t address, backing_store_int_t value) {
 }
 
 bool backing_store_write_bulk(uint32_t address, backing_store_int_t *values, size_t item_count) {
+    if (!flash_present) return false;
     uint32_t offset = (WEAR_LEVELING_RP2040_FLASH_BASE) + address;
     bs_dprintf("Write ");
     wl_dump(offset, values, sizeof(backing_store_int_t) * item_count);
@@ -213,8 +278,10 @@ bool backing_store_read(uint32_t address, backing_store_int_t *value) {
 }
 
 bool backing_store_read_bulk(uint32_t address, backing_store_int_t *values, size_t item_count) {
-    uint32_t             offset = (WEAR_LEVELING_RP2040_FLASH_BASE) + address;
-    backing_store_int_t *loc    = (backing_store_int_t *)((XIP_BASE) + offset);
+    if (!flash_present) return false;
+    // Uncached, so that a retried read really reads the flash again.
+    uint32_t                      offset = (WEAR_LEVELING_RP2040_FLASH_BASE) + address;
+    const volatile backing_store_int_t *loc    = (const volatile backing_store_int_t *)((XIP_NOCACHE_NOALLOC_BASE) + offset);
     for (size_t i = 0; i < item_count; ++i) {
         values[i] = ~loc[i];
     }

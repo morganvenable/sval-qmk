@@ -13,6 +13,9 @@
 #include "layout_stamp.h"
 #include "send_string.h"
 #include "wait.h"
+#ifdef EEPROM_WEAR_LEVELING
+#    include "wear_leveling.h"
+#endif
 
 ASSERT_COMMUNITY_MODULES_MIN_API_VERSION(1, 0, 0);
 
@@ -99,6 +102,12 @@ void sval_eeprom_invalidate(void) {
     sval_write_eeprom(SVAL_MAGIC_OFFSET, zero, SVAL_MAGIC_SIZE);
 }
 
+bool sval_storage_was_reset(void) {
+    uint8_t reset = 0;
+    sval_read_eeprom(SVAL_STORAGE_RESET_OFFSET, &reset, SVAL_STORAGE_RESET_SIZE);
+    return reset != 0;
+}
+
 void sval_init(void) {
     // Initialize client wrapper for multi-client support
     client_wrapper_init();
@@ -111,6 +120,14 @@ void sval_init(void) {
         // Mark as valid
         sval_eeprom_set_valid();
     }
+
+#ifdef EEPROM_WEAR_LEVELING
+    // Remember an unreadable store until the host has told the user to reload their layout.
+    if (wear_leveling_data_lost()) {
+        uint8_t reset = 1;
+        sval_write_eeprom(SVAL_STORAGE_RESET_OFFSET, &reset, SVAL_STORAGE_RESET_SIZE);
+    }
+#endif
 
     sval_reload_tap_dance();
     sval_reload_combo();
@@ -430,7 +447,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
     }
     switch (command_id) {
         case sval_cmd_get_info: {
-            // Response: [0xDF] [0x00] [ver0-3] [uid0-7] [flags] [kc major] [kc minor] [kc patch]
+            // Response: [0xDF] [0x00] [ver0-3] [uid0-7] [flags] [kc major] [kc minor] [kc patch] [storage reset]
             // Entry counts are now in sval.json (parsed from keyboard definition)
             uint8_t uid[] = SVAL_KEYBOARD_UID;
             data[2]       = SVAL_PROTOCOL_VERSION & 0xFF;
@@ -444,6 +461,17 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             data[15] = QMK_KEYCODES_VERSION_MAJOR;
             data[16] = QMK_KEYCODES_VERSION_MINOR;
             data[17] = QMK_KEYCODES_VERSION_PATCH;
+            // Nonzero: settings were reset because storage could not be read; the
+            // host should ask the user to reload their layout, then send 0x2A.
+            data[18] = sval_storage_was_reset();
+            break;
+        }
+
+        case sval_cmd_storage_reset_clear: {
+            // Request: [0xDF] [0x2A]
+            // Response: [0xDF] [0x2A]
+            uint8_t reset = 0;
+            sval_write_eeprom(SVAL_STORAGE_RESET_OFFSET, &reset, SVAL_STORAGE_RESET_SIZE);
             break;
         }
 

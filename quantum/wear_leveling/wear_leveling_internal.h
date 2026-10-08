@@ -25,6 +25,15 @@ typedef uint64_t backing_store_int_t;
 #    error WEAR_LEVELING_LOGICAL_SIZE was not set.
 #endif
 
+/**
+ * Number of identical copies of the backing store, one after another. Each holds the consolidated data and the write
+ * log; every log entry is written to all of them, and consolidation rewrites them one at a time so that a complete
+ * copy always remains. Initialization loads whichever copy can be read.
+ */
+#ifndef WEAR_LEVELING_COPIES
+#    define WEAR_LEVELING_COPIES 1
+#endif
+
 #ifdef WEAR_LEVELING_DEBUG_OUTPUT
 #    include <debug.h>
 #    define bs_dprintf(...) dprintf("Backing store: " __VA_ARGS__)
@@ -68,6 +77,7 @@ STATIC_ASSERT(WEAR_LEVELING_BACKING_SIZE % WEAR_LEVELING_LOGICAL_SIZE == 0, "Bac
 bool backing_store_init(void);
 bool backing_store_unlock(void);
 bool backing_store_erase(void);
+bool backing_store_erase_range(uint32_t address, uint32_t length); // required when WEAR_LEVELING_COPIES > 1
 bool backing_store_write(uint32_t address, backing_store_int_t value);
 bool backing_store_write_bulk(uint32_t address, backing_store_int_t* values, size_t item_count); // weak implementation already provided, optimized implementation can be implemented by driver
 bool backing_store_lock(void);

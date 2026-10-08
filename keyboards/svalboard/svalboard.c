@@ -1,4 +1,3 @@
-#include "storage/store.h"
 #include "svalboard.h"
 #if VIA_ENABLE
 #include "via.h"
@@ -202,17 +201,11 @@ extern bool boost_toggle_2, boost_toggle_3, boost_toggle_5;
 extern axis_scale_t boost_x;
 
 void output_keyboard_info(void) {
-    switch (sval_store_status()) {
-        case SVAL_STORE_OK: send_string("Storage: verified\n"); break;
-        case SVAL_STORE_IMPORTED: send_string("Storage: imported previous Sval settings\n"); break;
-        case SVAL_STORE_RECOVERED: send_string("Storage: recovered a verified copy\n"); break;
-        case SVAL_STORE_READ_ONLY: send_string("Storage: READ ONLY - settings are temporary; export a backup before EE_CLR\n"); break;
-    }
-
     char output_buffer[256];
 
     sprintf(output_buffer, "%s:%s @ %s\n", QMK_KEYBOARD, QMK_KEYMAP, QMK_VERSION);
     send_string(output_buffer);
+    if (sval_storage_was_reset()) send_string("Settings were reset: storage could not be read. Reload your layout file.\n");
     sprintf(output_buffer, "Left Ptr: Scroll %s, cpi: %d, Right Ptr: Scroll %s, cpi: %d\n",
 	    yes_or_no(global_saved_values.left_scroll), dpi_choices[global_saved_values.left_dpi_index],
 	    yes_or_no(global_saved_values.right_scroll), dpi_choices[global_saved_values.right_dpi_index]);
@@ -424,6 +417,11 @@ void sval_idle_status(sval_idle_status_t *st) {
 void sval_set_active_layer(uint32_t layer, bool save) {
     if (layer > 15) layer = 15;
     sval_active_layer = layer;
+    // Layer callbacks first run from quantum_init(), before rgblight_init(). Right
+    // after settings are initialized the RGB defaults are already enabled in RAM,
+    // and driving the uninitialized LEDs blocks the first boot for good.
+    // keyboard_post_init_kb() applies the colour once lighting is up.
+    if (!is_rgblight_initialized) return;
     struct layer_hsv cols  = global_saved_values.layer_colors[layer];
     uint8_t          awake = sval_rgb_awake_val();
     uint8_t          shown = rgb_idle_applied == 1 ? rgb_dim_val : awake;
@@ -503,7 +501,6 @@ static void sval_usb_wake_handler(void) {
 }
 
 void housekeeping_task_kb(void) {
-    sval_storage_task();
     sval_usb_wake_handler();
     scanlab_housekeeping();
 #ifdef SVAL_KEYTEST

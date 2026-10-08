@@ -157,9 +157,7 @@ TEST_F(WearLeveling4Byte, PlaybackReadbackMultibyte_OOB) {
     auto& inst     = MockBackingStore::Instance();
     auto  logstart = inst.storage_begin() + (WEAR_LEVELING_LOGICAL_SIZE / sizeof(backing_store_int_t));
 
-    // Invalid FNV1a_64 hash
-    (logstart + 0)->set(0);
-    (logstart + 1)->set(0);
+    // Never consolidated: the FNV1a_64 hash is still erased
 
     // Set up a 2-byte logical write of [0x11,0x12] at logical offset 0x01
     auto entry0    = LOG_ENTRY_MAKE_MULTIBYTE(0x01, 2);
@@ -184,6 +182,7 @@ TEST_F(WearLeveling4Byte, PlaybackReadbackMultibyte_OOB) {
 
     EXPECT_EQ(inst.erasure_count(), 0) << "Invalid initial erase count";
     EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_CONSOLIDATED) << "Readback should have failed and triggered consolidation";
+    EXPECT_FALSE(wear_leveling_data_lost()) << "Entries before the bad one should have been kept, not reported lost";
     EXPECT_EQ(inst.erasure_count(), 1) << "Invalid final erase count";
 
     uint8_t buf[2];
