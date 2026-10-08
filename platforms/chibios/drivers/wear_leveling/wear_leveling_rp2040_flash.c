@@ -163,7 +163,12 @@ static void __no_inline_not_in_flash_func(pico_program_bulk)(uint32_t flash_addr
 static int  interrupts;
 static bool flash_present;
 
-#define ERASE_BLOCK (1 << 16)
+// Erase in 64 KB blocks when the store is aligned to them, otherwise in 4 KB sectors.
+#if (WEAR_LEVELING_RP2040_FLASH_BASE) % (1 << 16) == 0 && (WEAR_LEVELING_BACKING_SIZE) % (1 << 16) == 0
+#    define ERASE_UNIT (1 << 16)
+#else
+#    define ERASE_UNIT (FLASH_SECTOR_SIZE)
+#endif
 
 // The SDK wrappers assume PICO_FLASH_SIZE_BYTES; use the ROM routines so the
 // backing store may sit anywhere on the actual die.
@@ -175,24 +180,24 @@ static void __no_inline_not_in_flash_func(pico_erase)(uint32_t flash_address, ui
     __compiler_memory_barrier();
     connect_internal_flash();
     flash_exit_xip();
-    flash_range_erase(flash_address, length, ERASE_BLOCK, 0xD8);
+    flash_range_erase(flash_address, length, 1 << 16, 0xD8);
     flash_flush_cache();
     flash_enable_xip_via_boot2();
 }
 
-// Erases one 64 KB block at a time, skipping blocks already erased, with
-// interrupts restored in between: USB keeps being serviced, and a fresh board's
-// first-boot format erases nothing.
+// Erases one unit at a time, skipping units already erased, with interrupts
+// restored in between: USB keeps being serviced, and a fresh board's first-boot
+// format erases nothing.
 static void erase_blocks(uint32_t flash_address, uint32_t length) {
-    for (uint32_t block = flash_address; block < flash_address + length; block += ERASE_BLOCK) {
+    for (uint32_t block = flash_address; block < flash_address + length; block += ERASE_UNIT) {
         const volatile uint32_t *p = (const volatile uint32_t *)((XIP_NOCACHE_NOALLOC_BASE) + block);
         bool                     erased = true;
-        for (size_t i = 0; erased && i < ERASE_BLOCK / sizeof(uint32_t); ++i) {
+        for (size_t i = 0; erased && i < ERASE_UNIT / sizeof(uint32_t); ++i) {
             erased = p[i] == 0xFFFFFFFF;
         }
         if (erased) continue;
         interrupts = save_and_disable_interrupts();
-        pico_erase(block, ERASE_BLOCK);
+        pico_erase(block, ERASE_UNIT);
         restore_interrupts(interrupts);
     }
 }
@@ -202,13 +207,17 @@ bool backing_store_init(void) {
     memcpy(BOOT2_ROM_RAM, BOOT2_ROM, sizeof(BOOT2_ROM));
     __compiler_memory_barrier();
 
-    // Refuse a die too small for the backing store: addresses past its end
-    // would wrap onto the firmware.
+#if (WEAR_LEVELING_RP2040_FLASH_BASE) + (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES) > (PICO_FLASH_SIZE_BYTES)
+    // Beyond the configured flash size, refuse a die too small for the backing
+    // store: addresses past its end would wrap onto the firmware.
     uint8_t tx[4] = {0x9F, 0, 0, 0}, rx[4] = {0};
     interrupts    = save_and_disable_interrupts();
     flash_do_cmd(tx, rx, sizeof(tx));
     restore_interrupts(interrupts);
     flash_present = rx[3] >= 16 && rx[3] < 32 && (WEAR_LEVELING_RP2040_FLASH_BASE) + (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES) <= (1u << rx[3]);
+#else
+    flash_present = true;
+#endif
     return flash_present;
 }
 
@@ -223,7 +232,7 @@ bool backing_store_erase(void) {
 #endif
 
     // Ensure the backing size can be cleanly subtracted from the flash size without alignment issues.
-    STATIC_ASSERT((WEAR_LEVELING_BACKING_SIZE) % ERASE_BLOCK == 0, "Backing size must be a multiple of the 64 KB erase block");
+    STATIC_ASSERT((WEAR_LEVELING_BACKING_SIZE) % (FLASH_SECTOR_SIZE) == 0, "Backing size must be a multiple of FLASH_SECTOR_SIZE");
 
     if (!flash_present) return false;
     erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE), (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES));
@@ -233,7 +242,7 @@ bool backing_store_erase(void) {
 }
 
 bool backing_store_erase_range(uint32_t address, uint32_t length) {
-    if (!flash_present || address % ERASE_BLOCK || length % ERASE_BLOCK || address + length > (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES)) return false;
+    if (!flash_present || address % ERASE_UNIT || length % ERASE_UNIT || address + length > (WEAR_LEVELING_BACKING_SIZE) * (WEAR_LEVELING_COPIES)) return false;
     erase_blocks((WEAR_LEVELING_RP2040_FLASH_BASE) + address, length);
     return true;
 }
