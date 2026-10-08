@@ -25,7 +25,7 @@ def harness():
     declarations = '\n'.join(re.findall(r'enum \w+\s*\{.*?\};', header, re.S))
     version = re.search(r'#define SVAL_PROTOCOL_VERSION[^\n]+', header).group()
     cases = ''
-    for command in ('get_info', 'layer_state_get'):
+    for command in ('get_info', 'layer_state_get', 'storage_reset_clear'):
         start = source.index('        case sval_cmd_' + command + ':')
         end = source.index('\n        case ', start + 1)
         cases += source[start:end]
@@ -44,6 +44,9 @@ def harness():
 static uint32_t layer_state, default_layer_state;
 static bool storage_reset;
 static bool sval_storage_was_reset(void) { return storage_reset; }
+#define SVAL_STORAGE_RESET_OFFSET 0
+#define SVAL_STORAGE_RESET_SIZE 1
+static void sval_write_eeprom(uint16_t offset, const void *data, uint16_t size) { assert(offset == 0 && size == 1); storage_reset = *(const uint8_t *)data; }
 static uint8_t sent[32];
 static uint32_t timer_read32(void) { return 100; }
 static void host_raw_hid_send(uint8_t *p,uint8_t n) { assert(n==32); memcpy(sent,p,n); }
@@ -84,6 +87,10 @@ int main(void) {
  storage_reset=true;
  request(sval_cmd_get_info);
  assert(sent[23]==1);
+ request(sval_cmd_storage_reset_clear); // the host has told the user
+ assert(!storage_reset);
+ request(sval_cmd_get_info);
+ assert(sent[23]==0);
  uint32_t masks[]={0,1,2,0x80000000u,0x80000005u,0xFFFFFFFFu};
  for(unsigned a=0;a<sizeof(masks)/sizeof(masks[0]);a++) {
   for(unsigned d=0;d<sizeof(masks)/sizeof(masks[0]);d++) {
