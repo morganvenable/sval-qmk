@@ -44,6 +44,8 @@ def harness():
 static uint32_t layer_state, default_layer_state;
 static bool storage_reset;
 static bool sval_storage_was_reset(void) { return storage_reset; }
+static bool write_failed;
+static bool sval_storage_write_failed(void) { return write_failed; }
 #define SVAL_STORAGE_RESET_OFFSET 0
 #define SVAL_STORAGE_RESET_SIZE 1
 static void sval_write_eeprom(uint16_t offset, const void *data, uint16_t size) { assert(offset == 0 && size == 1); storage_reset = *(const uint8_t *)data; }
@@ -91,6 +93,16 @@ int main(void) {
  assert(!storage_reset);
  request(sval_cmd_get_info);
  assert(sent[23]==0);
+ write_failed=true; // a change since boot didn't reach flash
+ request(sval_cmd_get_info);
+ assert(sent[23]==2);
+ storage_reset=true;
+ request(sval_cmd_get_info);
+ assert(sent[23]==3);
+ request(sval_cmd_storage_reset_clear); // clears the reset, not the live failure
+ request(sval_cmd_get_info);
+ assert(sent[23]==2);
+ write_failed=false;
  uint32_t masks[]={0,1,2,0x80000000u,0x80000005u,0xFFFFFFFFu};
  for(unsigned a=0;a<sizeof(masks)/sizeof(masks[0]);a++) {
   for(unsigned d=0;d<sizeof(masks)/sizeof(masks[0]);d++) {

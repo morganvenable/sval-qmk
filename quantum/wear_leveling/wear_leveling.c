@@ -172,6 +172,7 @@ static struct __attribute__((__aligned__(BACKING_STORE_WRITE_SIZE))) {
     uint32_t                                                       write_address;
     bool                                                           unlocked;
     bool                                                           data_lost;
+    bool                                                           write_failed;
 } wear_leveling;
 
 /**
@@ -723,15 +724,17 @@ static bool wear_leveling_copies_match(void) {
  */
 wear_leveling_status_t wear_leveling_init(void) {
     wl_dprintf("Init\n");
-    wear_leveling.data_lost = false;
+    wear_leveling.data_lost    = false;
+    wear_leveling.write_failed = false;
 
     // Reset the cache
     wear_leveling_clear_cache();
 
     // Initialise the backing store
     if (!backing_store_init()) {
-        // If it failed, clear the cache and return with failure
+        // If it failed, clear the cache and return with failure. Nothing written until the next init can be saved.
         wear_leveling_clear_cache();
+        wear_leveling.write_failed = true;
         return WEAR_LEVELING_FAILED;
     }
 
@@ -754,7 +757,11 @@ wear_leveling_status_t wear_leveling_init(void) {
     }
 
     // Rewrite every copy from the cache: repairs a damaged or lagging copy, or drops an invalid log entry.
-    return wear_leveling_consolidate_force();
+    wear_leveling_status_t status = wear_leveling_consolidate_force();
+    if (status == WEAR_LEVELING_FAILED) {
+        wear_leveling.write_failed = true;
+    }
+    return status;
 }
 
 /**
@@ -762,6 +769,13 @@ wear_leveling_status_t wear_leveling_init(void) {
  */
 bool wear_leveling_data_lost(void) {
     return wear_leveling.data_lost;
+}
+
+/**
+ * Whether the backing store could not be opened, or a write or erase failed, since the last initialization.
+ */
+bool wear_leveling_write_failed(void) {
+    return wear_leveling.write_failed;
 }
 
 /**
@@ -794,6 +808,9 @@ wear_leveling_status_t wear_leveling_erase(void) {
         ret &= (wear_leveling_lock() != STATUS_FAILURE);
     }
 
+    if (!ret) {
+        wear_leveling.write_failed = true;
+    }
     return ret ? WEAR_LEVELING_SUCCESS : WEAR_LEVELING_FAILED;
 }
 
@@ -821,6 +838,7 @@ wear_leveling_status_t wear_leveling_write(const uint32_t address, const void *v
     backing_store_lock_status_t lock_status = wear_leveling_unlock();
     if (lock_status == STATUS_FAILURE) {
         wear_leveling_lock();
+        wear_leveling.write_failed = true;
         return WEAR_LEVELING_FAILED;
     }
 
@@ -849,6 +867,10 @@ wear_leveling_status_t wear_leveling_write(const uint32_t address, const void *v
         }
     }
 
+    // The cache already holds the new value, so reads return it either way; remember that it may not have been saved.
+    if (status == WEAR_LEVELING_FAILED) {
+        wear_leveling.write_failed = true;
+    }
     return status;
 }
 

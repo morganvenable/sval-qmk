@@ -287,6 +287,8 @@ void sval_init(void);
 void sval_eeprom_invalidate(void);
 // Whether settings were reset because storage could not be read, and the host has not yet cleared it.
 bool sval_storage_was_reset(void);
+// Whether, since this boot, storage could not be opened or a change could not be saved to flash.
+bool sval_storage_write_failed(void);
 
 // Protocol handler for 0xDF commands
 // Returns true if command was handled

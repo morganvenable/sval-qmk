@@ -152,6 +152,62 @@ TEST_F(WearLevelingMirror, TransientBadRead_NoRewrite) {
 }
 
 /**
+ * This test verifies that normal writes and restarts report no write failure.
+ */
+TEST_F(WearLevelingMirror, HealthyStore_NoWriteFailure) {
+    auto data = seed();
+    EXPECT_FALSE(wear_leveling_write_failed()) << "No write should have failed";
+    expect_recovered(data);
+    EXPECT_FALSE(wear_leveling_write_failed()) << "No write should have failed";
+}
+
+/**
+ * This test verifies that a write that doesn't reach the backing store is reported until the next init, even though
+ * the cache, and so every read, already holds the new value.
+ */
+TEST_F(WearLevelingMirror, FailedWrite_Reported) {
+    auto& inst = MockBackingStore::Instance();
+    auto  data = seed();
+    inst.set_write_callback([](std::uint64_t, std::uint32_t) { return false; });
+    std::uint8_t value = data[7] ^ 0xFF;
+    EXPECT_EQ(wear_leveling_write(7, &value, 1), WEAR_LEVELING_FAILED) << "Write should have failed";
+    EXPECT_TRUE(wear_leveling_write_failed()) << "Failed write should have been reported";
+    inst.set_write_callback(nullptr);
+
+    std::uint8_t other = data[9] ^ 0xFF;
+    EXPECT_EQ(wear_leveling_write(9, &other, 1), WEAR_LEVELING_SUCCESS) << "Later write should succeed";
+    EXPECT_TRUE(wear_leveling_write_failed()) << "Failure should stay reported until the next init";
+
+    data[9] = other;
+    expect_recovered(data); // the failed write is gone after a restart
+    EXPECT_FALSE(wear_leveling_write_failed()) << "Init should clear the report";
+}
+
+/**
+ * This test verifies that a backing store that can't be opened is reported, so that nothing written afterwards is
+ * mistaken for saved.
+ */
+TEST_F(WearLevelingMirror, FailedInit_Reported) {
+    auto& inst = MockBackingStore::Instance();
+    seed();
+    inst.set_init_callback([](std::uint64_t) { return false; });
+    EXPECT_EQ(wear_leveling_init(), WEAR_LEVELING_FAILED) << "Init should have failed";
+    EXPECT_TRUE(wear_leveling_write_failed()) << "Failed init should have been reported";
+    EXPECT_FALSE(wear_leveling_data_lost()) << "Nothing was read, so nothing is known to be lost";
+}
+
+/**
+ * This test verifies that a failed erase is reported.
+ */
+TEST_F(WearLevelingMirror, FailedErase_Reported) {
+    auto& inst = MockBackingStore::Instance();
+    seed();
+    inst.set_erase_callback([](std::uint64_t) { return false; });
+    EXPECT_EQ(wear_leveling_erase(), WEAR_LEVELING_FAILED) << "Erase should have failed";
+    EXPECT_TRUE(wear_leveling_write_failed()) << "Failed erase should have been reported";
+}
+
+/**
  * This test verifies that power loss at any write or erase of a consolidating write leaves every byte either old or
  * new, never reports lost data, and leaves a store that keeps working.
  */
