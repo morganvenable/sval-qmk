@@ -25,7 +25,6 @@ ASSERT_COMMUNITY_MODULES_MIN_API_VERSION(1, 0, 0);
 // Global for keycode override during tap dance execution
 uint16_t g_sval_magic_keycode_override;
 
-static void sval_reload_one_shot(void);
 
 // Label System v2: Fixed SVAL_LABEL_SIZE-byte UTF-8 storage arrays
 char sval_td_labels[SVAL_TAP_DANCE_ENTRIES][SVAL_LABEL_SIZE];
@@ -68,7 +67,7 @@ static uint16_t decode_keycode(uint16_t kc) {
 // can never be mistaken for a stamp.
 static void sval_get_magic(uint8_t *magic) {
     const uint32_t values[] = {
-        SVAL_TAP_DANCE_ENTRIES, sizeof(sval_tap_dance_entry_t), SVAL_COMBO_ENTRIES, sizeof(sval_combo_entry_t), SVAL_KEY_OVERRIDE_ENTRIES, sizeof(sval_key_override_entry_t), SVAL_ALT_REPEAT_KEY_ENTRIES, sizeof(sval_alt_repeat_key_entry_t), sizeof(sval_one_shot_t), SVAL_LEADER_ENTRIES, sizeof(sval_leader_entry_t), SVAL_MAGIC_OFFSET, SVAL_QMK_SETTINGS_SIZE, SVAL_FRAGMENT_SIZE, SVAL_LABEL_SIZE, DYNAMIC_KEYMAP_MACRO_COUNT, DYNAMIC_KEYMAP_LAYER_COUNT, SVAL_EEPROM_SIZE, SVAL_DATA_SCHEMA,
+        SVAL_TAP_DANCE_ENTRIES, sizeof(sval_tap_dance_entry_t), SVAL_COMBO_ENTRIES, sizeof(sval_combo_entry_t), SVAL_KEY_OVERRIDE_ENTRIES, sizeof(sval_key_override_entry_t), SVAL_ALT_REPEAT_KEY_ENTRIES, sizeof(sval_alt_repeat_key_entry_t), SVAL_LEADER_ENTRIES, sizeof(sval_leader_entry_t), SVAL_MAGIC_OFFSET, SVAL_QMK_SETTINGS_SIZE, SVAL_FRAGMENT_SIZE, SVAL_LABEL_SIZE, DYNAMIC_KEYMAP_MACRO_COUNT, DYNAMIC_KEYMAP_LAYER_COUNT, SVAL_EEPROM_SIZE, SVAL_DATA_SCHEMA,
     };
     uint32_t stamp = layout_stamp(values, sizeof(values) / sizeof(values[0]));
     magic[0]       = 0xA5;
@@ -135,7 +134,6 @@ void sval_init(void) {
     sval_reload_alt_repeat_key();
     sval_reload_leader();
     sval_reload_labels();
-    sval_reload_one_shot();
     sval_qmk_settings_init();
 }
 
@@ -146,23 +144,6 @@ __attribute__((weak)) void keyboard_post_init_core_kb(void) {}
 void keyboard_post_init_core(void) {
     keyboard_post_init_core_kb();
     sval_init();
-}
-
-// One-shot settings (commands 0x09/0x0A) cached in RAM. The cache stays zero
-// (no timeout, no tap toggle) until the EEPROM has been read, so QMK can call
-// these before init without touching storage.
-static sval_one_shot_t one_shot_cache;
-
-static void sval_reload_one_shot(void) {
-    sval_get_one_shot(&one_shot_cache);
-}
-
-uint16_t get_oneshot_timeout(void) {
-    return one_shot_cache.timeout;
-}
-
-uint8_t sval_oneshot_tap_toggle(void) {
-    return one_shot_cache.tap_toggle;
 }
 
 // Get feature flags based on what's enabled
@@ -234,16 +215,6 @@ int sval_set_alt_repeat_key(uint16_t index, const sval_alt_repeat_key_entry_t *e
     if (index >= SVAL_ALT_REPEAT_KEY_ENTRIES) return -1;
     sval_write_eeprom(SVAL_ALT_REPEAT_KEY_OFFSET + index * sizeof(sval_alt_repeat_key_entry_t), entry, sizeof(sval_alt_repeat_key_entry_t));
     return 0;
-}
-
-// Storage functions - One-Shot
-void sval_get_one_shot(sval_one_shot_t *settings) {
-    sval_read_eeprom(SVAL_ONE_SHOT_OFFSET, settings, sizeof(sval_one_shot_t));
-}
-
-void sval_set_one_shot(const sval_one_shot_t *settings) {
-    sval_write_eeprom(SVAL_ONE_SHOT_OFFSET, settings, sizeof(sval_one_shot_t));
-    one_shot_cache = *settings;
 }
 
 // Storage functions - Leader
@@ -578,21 +549,18 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         case sval_cmd_one_shot_get: {
             // Request: [0xDF] [0x09]
             // Response: [0xDF] [0x09] [timeout_lo] [timeout_hi] [tap_toggle]
-            sval_one_shot_t settings = {0};
-            sval_get_one_shot(&settings);
-            data[2] = settings.timeout & 0xFF;
-            data[3] = (settings.timeout >> 8) & 0xFF;
-            data[4] = settings.tap_toggle;
+            // The same values as QMK settings 6 (timeout) and 5 (tap toggle).
+            uint16_t timeout = get_oneshot_timeout();
+            data[2]          = timeout & 0xFF;
+            data[3]          = (timeout >> 8) & 0xFF;
+            data[4]          = sval_oneshot_tap_toggle();
             break;
         }
 
         case sval_cmd_one_shot_set: {
             // Request: [0xDF] [0x0A] [timeout_lo] [timeout_hi] [tap_toggle]
             // Response: [0xDF] [0x0A]
-            sval_one_shot_t settings;
-            settings.timeout    = data[2] | (data[3] << 8);
-            settings.tap_toggle = data[4];
-            sval_set_one_shot(&settings);
+            sval_qmk_settings_set_one_shot(data[2] | (data[3] << 8), data[4]);
             break;
         }
 

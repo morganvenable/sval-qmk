@@ -33,3 +33,7 @@ uint16_t sval_tap_code_delay(void);
 uint16_t sval_tap_hold_caps_delay(void);
 uint8_t  sval_tapping_toggle(void);
 uint8_t  sval_grave_esc_override(void);
+
+// One-shot keys (QMK settings 5 and 6), also reached through Sval commands 0x09/0x0A
+uint8_t sval_oneshot_tap_toggle(void);
+void    sval_qmk_settings_set_one_shot(uint16_t timeout, uint8_t tap_toggle);

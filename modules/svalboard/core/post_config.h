@@ -92,8 +92,8 @@ extern uint16_t sval_leader_timeout;
 #    define DYNAMIC_KEYMAP_MACRO_COUNT 16
 #endif
 
-// Total size: tap_dance*10 + combo*12 + key_override*12 + alt_repeat*6 + one_shot(3) + leader*14 + magic(6) + qmk_settings(44) + fragments(21) + labels_v2(td*16 + macro*16 + layer*16)
-#define SVAL_EEPROM_SIZE_CALC ((SVAL_TAP_DANCE_ENTRIES * 10) + (SVAL_COMBO_ENTRIES * 12) + (SVAL_KEY_OVERRIDE_ENTRIES * 12) + (SVAL_ALT_REPEAT_KEY_ENTRIES * 6) + 3 + (SVAL_LEADER_ENTRIES * 14) + 6 + SVAL_QMK_SETTINGS_SIZE + 21 + (SVAL_TAP_DANCE_ENTRIES * 16) + (DYNAMIC_KEYMAP_MACRO_COUNT * 16) + (DYNAMIC_KEYMAP_LAYER_COUNT * 16) + 1)
+// Total size: tap_dance*10 + combo*12 + key_override*12 + alt_repeat*6 + leader*14 + magic(6) + qmk_settings(44) + fragments(21) + labels_v2(td*16 + macro*16 + layer*16)
+#define SVAL_EEPROM_SIZE_CALC ((SVAL_TAP_DANCE_ENTRIES * 10) + (SVAL_COMBO_ENTRIES * 12) + (SVAL_KEY_OVERRIDE_ENTRIES * 12) + (SVAL_ALT_REPEAT_KEY_ENTRIES * 6) + (SVAL_LEADER_ENTRIES * 14) + 6 + SVAL_QMK_SETTINGS_SIZE + 21 + (SVAL_TAP_DANCE_ENTRIES * 16) + (DYNAMIC_KEYMAP_MACRO_COUNT * 16) + (DYNAMIC_KEYMAP_LAYER_COUNT * 16) + 1)
 
 #ifndef EECONFIG_KB_DATA_SIZE
 #    define EECONFIG_KB_DATA_SIZE SVAL_EEPROM_SIZE_CALC

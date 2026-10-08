@@ -48,7 +48,6 @@ Define `SVAL_KEYBOARD_UID` for file/device identification; a legacy `VIAL_KEYBOA
 | Combos | entry count × 12 bytes |
 | Key overrides | entry count × 12 bytes |
 | Alternate repeat | entry count × 6 bytes |
-| One-shot settings | 3 bytes |
 | Leaders | entry count × 14 bytes |
 | Sval validity stamp | 6 bytes |
 | QMK settings | 44 bytes |
@@ -56,6 +55,7 @@ Define `SVAL_KEYBOARD_UID` for file/device identification; a legacy `VIAL_KEYBOA
 | Tap-dance labels | tap-dance count × 16 bytes |
 | Macro labels | macro count × 16 bytes |
 | Layer labels | layer count × 16 bytes |
+| Storage-reset flag | 1 byte |
 
 The implementation is in [`sval.h`](sval.h) and [`post_config.h`](post_config.h). Keymap/macro storage and board custom configuration occupy separate regions of the shared logical EEPROM.
 
