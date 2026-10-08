@@ -82,7 +82,7 @@ update_status_t update_manifest_check(const sval_update_manifest_t *m, const upd
     if (m->pointing_id != dev->pointing_id) return UPDATE_WRONG_HW;
     // Downgrade floors (D19).
     if (m->security_epoch < dev->security_epoch) return UPDATE_EPOCH;
-    if (m->storage_format < dev->storage_format) return UPDATE_EPOCH;
+    if (m->storage_format < dev->storage_format) return UPDATE_STORAGE;
     // Length.
     if (m->image_len > dev->max_image) return UPDATE_TOO_LARGE;
     if (m->image_len < UPDATE_IMAGE_MIN || m->image_len % UPDATE_IMAGE_ALIGN) return UPDATE_BAD_IMAGE;

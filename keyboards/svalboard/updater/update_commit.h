@@ -33,18 +33,22 @@ update_status_t update_commit_run(const sval_update_manifest_t *m, uint32_t crc_
 
 #ifdef SVAL_UPDATE_TEST_HOOKS
 // Hardware-test halt points (M1 #8, #9, #10). At the chosen point the commit
-// stops for good: it spins with interrupts off, feeding the watchdog (fed: the
-// board hangs until it is unplugged) or not (it resets within the watchdog
-// period), or, for UPDATE_HALT_FAULT, executes an undefined instruction so the
-// HardFault goes through the RAM vector table.
+// stops for good: it clears RAM as step 7 does (the sector buffer and every
+// double-tap magic word), then spins with interrupts off, feeding the watchdog
+// (fed: the board hangs until it is unplugged) or not (it resets within the
+// watchdog period). For the two fault points it instead executes an undefined
+// instruction, so the HardFault goes through the RAM vector table to step 7 at
+// once: a working RAM table resets in well under a second, while a reset only
+// after the 8 s watchdog period means the RAM table was not used.
 typedef enum {
-    UPDATE_HALT_NONE        = 0,
-    UPDATE_HALT_INVALIDATED = 1, // N = -1: page 0 zeroed and read back, nothing erased
-    UPDATE_HALT_FIRST_ERASE = 2, // N = 0: sector 0 erased
-    UPDATE_HALT_MID_PROGRAM = 3, // after programming the middle sector of the image
-    UPDATE_HALT_LAST_SECTOR = 4, // after programming the last sector, page 0 still erased
-    UPDATE_HALT_PAGE0       = 5, // page 0 written and read back, before the reset
-    UPDATE_HALT_FAULT       = 6, // a HardFault straight after the invalidation (M1 #10)
+    UPDATE_HALT_NONE         = 0,
+    UPDATE_HALT_INVALIDATED  = 1, // N = -1: page 0 zeroed and read back, nothing erased
+    UPDATE_HALT_FIRST_ERASE  = 2, // N = 0: sector 0 erased
+    UPDATE_HALT_MID_PROGRAM  = 3, // after programming the middle sector of the image
+    UPDATE_HALT_LAST_SECTOR  = 4, // after programming the last sector, page 0 still erased
+    UPDATE_HALT_PAGE0        = 5, // page 0 written and read back, before the reset
+    UPDATE_HALT_FAULT        = 6, // a HardFault straight after the invalidation (M1 #10)
+    UPDATE_HALT_FAULT_ERASED = 7, // a HardFault after sector 0, with the flash vector table erased (R3)
     UPDATE_HALT_COUNT,
 } update_halt_t;
 

@@ -50,10 +50,14 @@ ifeq ($(strip $(SVAL_KEYTEST)), yes)
 endif
 
 # In-firmware updater (docs/updater-plan.md); opt in with -e SVAL_UPDATER=yes.
-# SVAL_UPDATE_TEST_HOOKS adds the commit halt points for hardware tests, and
-# SVAL_UPDATE_RELEASE makes a release updater build: no test key, and images
-# signed with it or flagged DIAGNOSTIC are refused.
+# SVAL_UPDATE_TEST_KEY accepts images signed with the TEST-ONLY key, whose seed
+# is in the repository: test boards only. SVAL_UPDATE_TEST_HOOKS adds the
+# commit halt points for hardware tests and implies the test key.
+# SVAL_UPDATE_RELEASE makes a release updater build: images signed with the
+# test key or flagged DIAGNOSTIC are refused. Until M3 adds release keys, an
+# updater build without the test key accepts no image at all.
 SVAL_UPDATER ?= no
+SVAL_UPDATE_TEST_KEY ?= no
 SVAL_UPDATE_TEST_HOOKS ?= no
 SVAL_UPDATE_RELEASE ?= no
 ifeq ($(strip $(SVAL_UPDATER)), yes)
@@ -88,12 +92,20 @@ ifeq ($(strip $(SVAL_UPDATER)), yes)
       $(error SVAL_UPDATE_TEST_HOOKS cannot be part of a release build)
     endif
     OPT_DEFS += -DSVAL_UPDATE_TEST_HOOKS
+    override SVAL_UPDATE_TEST_KEY = yes
+  endif
+  ifeq ($(strip $(SVAL_UPDATE_TEST_KEY)), yes)
+    ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
+      $(error SVAL_UPDATE_TEST_KEY cannot be part of a release build)
+    endif
+    $(warning SVAL_UPDATE_TEST_KEY: this build accepts updates signed with the TEST-ONLY key, whose seed is public. Test boards only; never ship it.)
+    OPT_DEFS += -DSVAL_UPDATE_TEST_KEY
   endif
   ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
     OPT_DEFS += -DSVAL_UPDATE_RELEASE
   endif
 else
-  ifneq ($(filter yes,$(strip $(SVAL_UPDATE_TEST_HOOKS)) $(strip $(SVAL_UPDATE_RELEASE))),)
-    $(error SVAL_UPDATE_TEST_HOOKS and SVAL_UPDATE_RELEASE need SVAL_UPDATER=yes)
+  ifneq ($(filter yes,$(strip $(SVAL_UPDATE_TEST_KEY)) $(strip $(SVAL_UPDATE_TEST_HOOKS)) $(strip $(SVAL_UPDATE_RELEASE))),)
+    $(error SVAL_UPDATE_TEST_KEY, SVAL_UPDATE_TEST_HOOKS and SVAL_UPDATE_RELEASE need SVAL_UPDATER=yes)
   endif
 endif

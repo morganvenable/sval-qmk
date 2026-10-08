@@ -93,6 +93,7 @@ typedef enum {
     UPDATE_OP_ABORT     = 0x08,
     UPDATE_OP_REBIND    = 0x09,
     UPDATE_OP_TEST_HALT = 0x0A, // SVAL_UPDATE_TEST_HOOKS builds only
+    UPDATE_OP_DIAG      = 0x0B, // measurements for the hardware tests (M1 #13)
 } update_op_t;
 
 // ---- status codes ------------------------------------------------------------------
@@ -111,13 +112,14 @@ typedef enum {
     UPDATE_BAD_SIG       = 8,  // signature fails, or key_id is not accepted by this build
     UPDATE_BAD_HASH      = 9,  // staged image does not match the manifest's SHA-512
     UPDATE_BAD_IMAGE     = 10, // structure checks failed (boot2, SP, reset vector, length, flags)
-    UPDATE_EPOCH         = 11, // security epoch or settings format below this device's floor
+    UPDATE_EPOCH         = 11, // security epoch below this device's floor
     UPDATE_OUT_OF_ORDER  = 12,
     UPDATE_OVERRUN       = 13,
     UPDATE_TOO_LARGE     = 14, // image_len above SVAL_UPDATE_MAX_IMAGE
     UPDATE_TIMEOUT       = 15,
     UPDATE_OTHER_CLIENT  = 16,
     UPDATE_UNSUPPORTED   = 17, // hand is not this half's, or a manifest/protocol version this build doesn't know
+    UPDATE_STORAGE       = 18, // settings storage format below this device's floor
 } update_status_t;
 
 // ---- states (reported by INFO and STATUS) -------------------------------------------

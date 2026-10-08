@@ -23,6 +23,7 @@ void updater_host_reset(void);
 
 static uint32_t        port_client; // 0: the packet came without the client wrapper
 static bool            port_failing;
+static bool            port_scan_override; // a Scan Lab sweep is running
 static uint32_t        port_rand = 0x2545F491u;
 static update_device_t self_dev;
 
@@ -43,6 +44,15 @@ uint32_t updater_port_random32(void) {
 }
 void update_device_self(update_device_t *dev) {
     *dev = self_dev;
+}
+bool updater_port_scan_override(void) {
+    return port_scan_override;
+}
+#define HOST_STACK_SIZE 0xAE0
+#define HOST_STACK_FREE 0x2A4
+uint16_t updater_port_stack_free(uint16_t *size) {
+    *size = HOST_STACK_SIZE;
+    return HOST_STACK_FREE;
 }
 
 static update_led_mode_t led_now;
@@ -271,7 +281,8 @@ static void fresh(uint32_t len) {
     die_reset();
     scan(false, false);
     scan(false, false);
-    port_failing  = false;
+    port_failing       = false;
+    port_scan_override = false;
     commit_avail  = false;
     commit_runs   = 0;
     commit_result = UPDATE_UNSUPPORTED;
@@ -297,7 +308,8 @@ static void test_session_info_and_wrapper(void) {
     CHECK_EQ(rsp[12], UPDATE_POINTING_PMW3389);
     CHECK_EQ(rsp[13], UPDATE_HAND_RIGHT);
     CHECK_EQ(rsp[18], SVAL_UPDATE_STORAGE_FORMAT);
-    CHECK_EQ(rsp[21], 0x01);
+    CHECK_EQ(rsp[21] & 0x07, 0x01);
+    CHECK_EQ((rsp[21] & 0x10) != 0, update_key(UPDATE_KEY_TEST) != NULL); // the TEST-ONLY key is accepted
     req_hand = 0xFF;
     CHECK_EQ(send(0, UPDATE_OP_INFO, NULL, 0), UPDATE_OK);
     CHECK_EQ(rsp[13], UPDATE_HAND_RIGHT);
@@ -315,8 +327,11 @@ static void test_session_info_and_wrapper(void) {
         CHECK_EQ(send(0, op, a, sizeof(a)), UPDATE_INVALID);
         CHECK_EQ(updater_state(), UPDATE_STATE_IDLE);
     }
-    // unknown ops, wrapped or not
+    // DIAG needs the wrapper too
+    CHECK_EQ(send(0, UPDATE_OP_DIAG, NULL, 0), UPDATE_INVALID);
+    // unknown ops, wrapped or not (TEST_HALT outside a session, or in a build without hooks)
     CHECK_EQ(send(CLIENT_A, 0x0A, NULL, 0), UPDATE_INVALID);
+    CHECK_EQ(send(CLIENT_A, 0x0C, NULL, 0), UPDATE_INVALID);
     CHECK_EQ(send(CLIENT_A, 0xFF, NULL, 0), UPDATE_INVALID);
     // VIA's save command on this channel is left alone (value byte 0 is still the request's hand)
     req_cmd = 0x09;
@@ -348,6 +363,8 @@ static void test_session_happy_path(void) {
     snap();
     max_op_us = max_pass_us = sig_pass_us = 0;
     led_seen                              = 0;
+    const uint8_t clear                   = 1;
+    CHECK_EQ(send(CLIENT_C, UPDATE_OP_DIAG, &clear, 1), UPDATE_OK); // restart the longest-pass record
 
     // record each distinct state, in order
     update_state_t seen[16];
@@ -410,6 +427,18 @@ static void test_session_happy_path(void) {
     CHECK_EQ(get24le(rsp + 5), img_len);
     CHECK_EQ(get16le(rsp + 19), body_crc() & 0xFFFF);
     CHECK_EQ(rsp[12], UPDATE_OK);
+    // DIAG (M1 #13): main's stack, and the longest pass, here a sector erase,
+    // as the device measures it (any client may ask; the session is unaffected)
+    CHECK_EQ(send(CLIENT_B, UPDATE_OP_DIAG, NULL, 0), UPDATE_OK);
+    CHECK_EQ(get16le(rsp + 1), HOST_STACK_FREE);
+    CHECK_EQ(get16le(rsp + 3), HOST_STACK_SIZE);
+    CHECK_EQ(get16le(rsp + 5), SIM_SECTOR_ERASE_US / 1000);
+    CHECK_EQ(rsp[7], UPDATE_STATE_ERASING);
+    CHECK_EQ(updater_state(), UPDATE_STATE_VERIFIED);
+    CHECK_EQ(send(CLIENT_B, UPDATE_OP_DIAG, &clear, 1), UPDATE_OK);
+    CHECK_EQ(get16le(rsp + 5), SIM_SECTOR_ERASE_US / 1000); // the reply is from before the clear
+    CHECK_EQ(send(CLIENT_B, UPDATE_OP_DIAG, NULL, 0), UPDATE_OK);
+    CHECK_EQ(get16le(rsp + 5), 0);
 
     // COMMIT: the stub refuses and nothing happens
     uint8_t c[6];
@@ -521,6 +550,46 @@ static void test_session_gesture(void) {
     CHECK_EQ(scan(false, false), 0);
     CHECK_EQ(scan(true, true), 3);
     CHECK_EQ(erase_ops + program_ops, 0);
+}
+
+// The chord is read only from frames scanned with a safe timing: while it is
+// awaited, a host-chosen scan timing (saved values or a Scan Lab sweep, which
+// can misread keys) is raised to Scan Lab's safe reference; and ARM waits
+// while a sweep runs (scanlab.c, in turn, refuses a sweep or a probe while the
+// updater is active).
+static void test_session_scan_timing(void) {
+    fresh(0x3000);
+    uint16_t pre = 0, post = 3;
+    update_gesture_timing(&pre, &post); // not waiting for the chord: untouched
+    CHECK(pre == 0 && post == 3);
+    // a sweep running: ARM refused (BUSY), nothing changes, no nonce
+    port_scan_override = true;
+    CHECK_EQ(load_manifest(CLIENT_A), UPDATE_OK);
+    CHECK_EQ(send(CLIENT_A, UPDATE_OP_ARM, NULL, 0), UPDATE_BUSY);
+    CHECK_EQ(get32le(rsp + 1), 0);
+    CHECK_EQ(updater_state(), UPDATE_STATE_MANIFEST_LOADING);
+    port_scan_override = false;
+    CHECK_EQ(send(CLIENT_A, UPDATE_OP_ARM, NULL, 0), UPDATE_OK);
+    session_nonce = get32le(rsp + 1);
+    CHECK_EQ(updater_state(), UPDATE_STATE_CONFIRM_WAIT);
+    // waiting: short waits are raised, longer ones kept
+    const uint16_t cases[][2] = {{0, 0}, {1, 1}, {SVAL_UPDATE_CHORD_PREWAIT_US - 1, 90}, {SVAL_UPDATE_CHORD_PREWAIT_US, SVAL_UPDATE_CHORD_POSTWAIT_US}, {2000, 65535}};
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        pre  = cases[i][0];
+        post = cases[i][1];
+        update_gesture_timing(&pre, &post);
+        CHECK_EQ(pre, cases[i][0] > SVAL_UPDATE_CHORD_PREWAIT_US ? cases[i][0] : SVAL_UPDATE_CHORD_PREWAIT_US);
+        CHECK_EQ(post, cases[i][1] > SVAL_UPDATE_CHORD_POSTWAIT_US ? cases[i][1] : SVAL_UPDATE_CHORD_POSTWAIT_US);
+    }
+    CHECK(SVAL_UPDATE_CHORD_PREWAIT_US >= 500 && SVAL_UPDATE_CHORD_POSTWAIT_US >= 500); // Scan Lab's safe reference
+    // once the chord is made, or the wait ends, the host's timing applies again
+    chord();
+    CHECK(update_gesture_done(NULL));
+    CHECK_EQ(send_nonce(CLIENT_A, UPDATE_OP_BEGIN, session_nonce), UPDATE_ACCEPTED);
+    pre  = 0;
+    post = 0;
+    update_gesture_timing(&pre, &post);
+    CHECK(pre == 0 && post == 0);
 }
 
 static void test_session_rebind(void) {
@@ -829,7 +898,7 @@ static void test_session_refusals(void) {
         update_status_t want;
     } const arm_cases[] = {
         {m_hand, UPDATE_UNSUPPORTED}, {m_pointing, UPDATE_WRONG_HW}, {m_large, UPDATE_TOO_LARGE}, {m_unaligned, UPDATE_BAD_IMAGE},
-        {m_storage, UPDATE_EPOCH},    {m_magic, UPDATE_INVALID},     {m_release, UPDATE_BAD_SIG},
+        {m_storage, UPDATE_STORAGE},  {m_magic, UPDATE_INVALID},     {m_release, UPDATE_BAD_SIG},
     };
     for (size_t i = 0; i < sizeof(arm_cases) / sizeof(arm_cases[0]); i++) {
         fresh(0x3000);
@@ -991,6 +1060,7 @@ static void test_session(void) {
     test_session_info_and_wrapper();
     test_session_happy_path();
     test_session_gesture();
+    test_session_scan_timing();
     test_session_rebind();
     test_session_clients_and_abort();
     test_session_chunks();

@@ -7,19 +7,24 @@
 #include "update_keys.h"
 #include "optional/monocypher-ed25519.h"
 
-#ifndef SVAL_UPDATE_RELEASE
+#if defined(SVAL_UPDATE_TEST_KEY) && defined(SVAL_UPDATE_RELEASE)
+#    error "release updater builds cannot accept the TEST-ONLY key"
+#elif defined(SVAL_UPDATE_TEST_HOOKS) && defined(SVAL_UPDATE_RELEASE)
+#    error "release updater builds cannot have test hooks"
+#endif
+
+#ifdef SVAL_UPDATE_TEST_KEY
 // TEST ONLY: the public half of keyboards/svalboard/tools/sval_update_TEST_ONLY.key,
-// whose seed is in the repository. The host tests check the two match.
+// whose seed is in the repository. Only builds made with SVAL_UPDATE_TEST_KEY=yes
+// (or SVAL_UPDATE_TEST_HOOKS=yes) carry it. The host tests check the two match.
 static const uint8_t test_key[UPDATE_PUBKEY_BYTES] = {
     0x63, 0x25, 0x77, 0x01, 0x08, 0x2d, 0x7e, 0x63, 0x64, 0x07, 0x2b, 0xee, 0x9f, 0x4a, 0x13, 0x7c,
     0x8c, 0x0c, 0xb5, 0x62, 0x1e, 0x5f, 0x9c, 0x78, 0x00, 0xfd, 0x02, 0xab, 0xb6, 0x40, 0xd1, 0xa4,
 };
-#elif defined(SVAL_UPDATE_TEST_HOOKS)
-#    error "release updater builds cannot have test hooks"
 #endif
 
 const uint8_t *update_key(uint8_t key_id) {
-#ifndef SVAL_UPDATE_RELEASE
+#ifdef SVAL_UPDATE_TEST_KEY
     if (key_id == UPDATE_KEY_TEST) return test_key;
 #endif
     (void)key_id;

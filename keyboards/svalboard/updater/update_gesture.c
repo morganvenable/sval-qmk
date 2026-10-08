@@ -41,6 +41,12 @@ bool update_gesture_done(uint32_t *when) {
     return done;
 }
 
+void update_gesture_timing(uint16_t *prewait_us, uint16_t *postwait_us) {
+    if (!watching) return;
+    if (*prewait_us < SVAL_UPDATE_CHORD_PREWAIT_US) *prewait_us = SVAL_UPDATE_CHORD_PREWAIT_US;
+    if (*postwait_us < SVAL_UPDATE_CHORD_POSTWAIT_US) *postwait_us = SVAL_UPDATE_CHORD_POSTWAIT_US;
+}
+
 void update_gesture_scan(matrix_row_t *rows) {
     if (!watching && !swallow) return;
     bool a = rows[SVAL_UPDATE_CHORD_ROW_A] & COL_BIT;

@@ -74,6 +74,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SVAL_UPDATE_CHORD_ROW_B 2
 #define SVAL_UPDATE_CHORD_COL 0
 #define SVAL_UPDATE_CHORD_HOLD_MS 1000
+// While the chord is awaited, rows are scanned with at least these waits, Scan
+// Lab's safe reference timing (scanlab.h; kb/matrix.c asserts it): the saved
+// timings and Scan Lab sweeps are set by the host, and a short pre-wait can
+// misread keys.
+#define SVAL_UPDATE_CHORD_PREWAIT_US 500
+#define SVAL_UPDATE_CHORD_POSTWAIT_US 500
 #define SVAL_UPDATE_CONFIRM_WINDOW_MS 30000 // from ARM; NOT_CONFIRMED after it
 #define SVAL_UPDATE_SESSION_TIMEOUT_MS 30000 // no op from the session for this long: TIMEOUT
 #define SVAL_UPDATE_LED_VAL 96               // LED brightness while the updater shows its states (D24)

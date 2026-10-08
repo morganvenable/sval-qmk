@@ -21,3 +21,12 @@ bool updater_port_settings_failing(void);
 
 // 32 bits for the session nonce. Not secret (D3); never 0.
 uint32_t updater_port_random32(void);
+
+// A Scan Lab sweep is running: it sets the matrix scan timing from the host,
+// so ARM waits until it ends (the chord must come from a normally scanned
+// matrix).
+bool updater_port_scan_override(void);
+
+// Main's stack (ChibiOS's process stack): its size, and the bytes at its
+// bottom never used since boot (still crt0's fill pattern). M1 #13, R5.
+uint16_t updater_port_stack_free(uint16_t *size);

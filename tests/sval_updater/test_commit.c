@@ -237,11 +237,14 @@ static bool all_is(uint32_t lo, uint32_t hi, uint8_t v) {
     return true;
 }
 
-// (b), (c), (d).
+// (b), (c), (d), and every ROM op made in sequence (XIP off, interrupts off,
+// legal arguments): an op out of sequence is refused by the mock die, so it
+// must never pass unnoticed.
 static void check_invariants(uint32_t len) {
     CHECK(unchanged_outside(0, round_block(len)));
     CHECK(!page0_valid() || image_in_place(len));
     CHECK_EQ(outside_ops, 0);
+    CHECK_EQ(sequence_errors, 0);
 }
 
 static bool nothing_started(void) {
@@ -427,6 +430,7 @@ static void test_commit_retry(void) {
     bad_times = 1;
     CHECK_EQ(commit_go(), LAND_RESET);
     CHECK(image_in_place(len) && page0_valid());
+    check_invariants(len);
     CHECK(oplog[noplog - 1].op == 'P' && oplog[noplog - 1].addr == 0 && oplog[noplog - 1].count == 256);
     // Twice in a row: the retry fails too, page 0 stays erased, BOOTSEL.
     commit_setup(len);
@@ -478,6 +482,8 @@ static void test_commit_page0_recheck(void) {
     CHECK(!page0_valid());
     CHECK(all_is(0, PAGE, 0xFF));
     CHECK(memcmp(update_host_flash + PAGE, img + PAGE, 0x13000 - PAGE) == 0);
+    CHECK_EQ(outside_ops, 0);
+    CHECK_EQ(sequence_errors, 0);
 }
 
 // Test hooks (M1 #8, #9, #10): where each halt leaves the die.
@@ -492,17 +498,32 @@ static void test_commit_halts(void) {
             int land = commit_go();
             check_invariants(len);
             CHECK(armed_ok);
-            if (point == UPDATE_HALT_FAULT) {
-                // The HardFault goes through the RAM table to the reset.
+            if (point == UPDATE_HALT_FAULT || point == UPDATE_HALT_FAULT_ERASED) {
+                // The HardFault goes through the RAM table to the reset (step 7).
                 CHECK_EQ(land, LAND_RESET);
                 CHECK_EQ(faults, 1);
+                CHECK_EQ(halts, 0);
                 CHECK(reset_ok);
-                CHECK(all_is(0, PAGE, 0x00));
-                CHECK_EQ(noplog, 1);
+                CHECK_EQ(at_reset_buf_nonzero, 0);
+                CHECK(ram0_swept());
+                if (point == UPDATE_HALT_FAULT) {
+                    CHECK(all_is(0, PAGE, 0x00));
+                    CHECK_EQ(noplog, 1);
+                } else {
+                    // sector 0, with the flash vector table at 0x100, is erased
+                    CHECK(all_is(0, SECTOR, 0xFF));
+                    CHECK_EQ(noplog, 2);
+                    CHECK(memcmp(update_host_flash + SECTOR, old_fw + SECTOR, SVAL_UPDATE_MAX_IMAGE - SECTOR) == 0);
+                }
                 continue;
             }
             CHECK_EQ(land, LAND_HALT);
             CHECK_EQ(halted_fed, fed);
+            // A halt leaves RAM as step 7 would: an unfed halt's watchdog reset
+            // starts the next image from the same state as a real commit's.
+            CHECK(buf_zero());
+            CHECK(ram0_swept());
+            CHECK_EQ(resets, 0);
             switch (point) {
                 case UPDATE_HALT_INVALIDATED:
                     CHECK_EQ(noplog, 1);
@@ -672,7 +693,6 @@ static void test_commit_end_to_end(void) {
     CHECK_EQ(full_update(len, 0, false), LAND_RESET);
     CHECK(image_in_place(len) && page0_valid());
     check_invariants(len);
-    CHECK_EQ(sequence_errors, 0);
     CHECK_EQ(latches, 1);
     CHECK(reset_ok);
     int total = flash_ops;
@@ -687,9 +707,12 @@ static void test_commit_end_to_end(void) {
                 staging_cuts++;
                 CHECK(unchanged_outside(SVAL_UPDATE_BASE, SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE));
                 CHECK(memcmp(update_host_flash, old_fw, SVAL_UPDATE_MAX_IMAGE) == 0 && page0_valid());
+                CHECK_EQ(outside_ops, 0);
+                CHECK_EQ(sequence_errors, 0);
                 // After the reboot a new session, from the dirty slot, succeeds.
                 CHECK_EQ(update_after_reboot(), LAND_RESET);
                 CHECK(image_in_place(len) && page0_valid());
+                check_invariants(len);
             } else {
                 commit_cuts++;
                 check_invariants(len);

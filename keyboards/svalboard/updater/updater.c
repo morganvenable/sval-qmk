@@ -18,7 +18,8 @@
 //                                                max image/4K u16, JEDEC[3], pointing_id, hand,
 //                                                fw_version u32, storage format, security epoch u16,
 //                                                flags (bit0 die is 16 MiB, bit1 settings writes failing,
-//                                                bit2 release build, bit3 test hooks), last error.
+//                                                bit2 release build, bit3 test hooks, bit4 the TEST-ONLY
+//                                                key is accepted), last error.
 //                                                Status UNAVAILABLE when bit0 is clear or bit1 set.
 //  0x01 MANIFEST off u8, n 1..20, bytes          filled u8 (of 172: manifest, then signature)
 //  0x02 ARM      -                               nonce u32, first 4 bytes of sha512(108 B manifest)
@@ -37,6 +38,10 @@
 //  0x0A TEST_HALT nonce u32, point u8, fed u8    state (SVAL_UPDATE_TEST_HOOKS builds only; INVALID
 //                                                elsewhere): the halt point for this session's commit
 //                                                (update_halt_t, update_commit.h), in VERIFIED only.
+//  0x0B DIAG     clear u8                        main's stack: free bytes u16 (never used since boot),
+//                                                size u16; longest updater_task() pass ms u16 and the
+//                                                state it began in u8. clear 1 restarts the pass
+//                                                maximum after replying. Any wrapped client (M1 #13).
 //
 // The image CRC is CRC-32/MPEG-2 over image bytes [0x100, image_len): the
 // range the commit checks after copying (page 0 is written last).
@@ -50,9 +55,16 @@
 // client ID when the nonce matches. While ERROR is latched anyone wrapped may
 // ABORT; ABORT never erases.
 //
+// The binding keeps well-behaved clients apart; it is not a defence against a
+// hostile one (R10). The client ID travels in every wrapped reply and the nonce
+// in ARM's, and raw HID replies reach every open handle, so another process
+// with the device open can REBIND the session to itself and then stall, ABORT
+// or COMMIT it. It still cannot change what is installed: the chord confirms
+// the manifest hash, and the signature and SHA-512 bind the image.
+//
 // Refusals of a request (INVALID, OTHER_CLIENT, BUSY, OUT_OF_ORDER, a chord not
-// made yet, a wrong COMMIT CRC, UNAVAILABLE at ARM/BEGIN/COMMIT) change no
-// state. Failures of the update itself latch ERROR with last_error set: a
+// made yet, a wrong COMMIT CRC, UNAVAILABLE at ARM/BEGIN/COMMIT, ARM during a
+// Scan Lab sweep) change no state. Failures of the update itself latch ERROR with last_error set: a
 // manifest or signature check, the image hash or structure, a flash error,
 // OVERRUN, the chord window passing (NOT_CONFIRMED), the session timeout
 // (TIMEOUT), or a refused commit.
@@ -110,6 +122,8 @@ static uint32_t          now_ms;
 static uint8_t           signed_manifest[UPDATE_SIGNED_MANIFEST_BYTES] __attribute__((aligned(4)));
 static uint8_t           page[UPDATE_FLASH_PAGE] __attribute__((aligned(4)));
 static crypto_sha512_ctx sha;
+static uint16_t          pass_max_ms; // DIAG: the longest updater_task() pass since boot or the last clear
+static uint8_t           pass_max_state;
 
 #define MANIFEST ((const sval_update_manifest_t *)signed_manifest)
 
@@ -199,7 +213,7 @@ static update_status_t op_info(uint8_t *rsp) {
     put32(&rsp[14], SVAL_FW_VERSION);
     rsp[18] = dev.storage_format;
     put16(&rsp[19], dev.security_epoch);
-    rsp[21] = (die_ok ? 0x01 : 0) | (failing ? 0x02 : 0) | (dev.release_build ? 0x04 : 0);
+    rsp[21] = (die_ok ? 0x01 : 0) | (failing ? 0x02 : 0) | (dev.release_build ? 0x04 : 0) | (update_key(UPDATE_KEY_TEST) ? 0x10 : 0);
 #ifdef SVAL_UPDATE_TEST_HOOKS
     rsp[21] |= 0x08;
 #endif
@@ -239,6 +253,10 @@ static update_status_t op_arm(uint32_t client, uint8_t *rsp) {
     s.op_ms = now_ms;
     if (s.filled != UPDATE_SIGNED_MANIFEST_BYTES) return UPDATE_INVALID;
     if (!update_flash_available() || updater_port_settings_failing()) return UPDATE_UNAVAILABLE; // D26, D12
+    // A Scan Lab sweep sets the scan timing from the host; the chord is only
+    // read from normally scanned frames (and scanlab.c refuses to start a
+    // sweep while the updater is active).
+    if (updater_port_scan_override()) return UPDATE_BUSY;
     // The fields now, so the user is never asked to approve an image this half
     // would refuse; the signature waits for BEGIN (it is the slow part).
     update_device_t dev;
@@ -374,6 +392,20 @@ static update_status_t op_test_halt(uint32_t client, const uint8_t *req) {
 }
 #endif
 
+static update_status_t op_diag(const uint8_t *req, uint8_t *rsp) {
+    uint16_t size   = 0;
+    uint16_t unused = updater_port_stack_free(&size);
+    put16(&rsp[1], unused);
+    put16(&rsp[3], size);
+    put16(&rsp[5], pass_max_ms);
+    rsp[7] = pass_max_state;
+    if (req[1] == 1) {
+        pass_max_ms    = 0;
+        pass_max_state = 0;
+    }
+    return UPDATE_OK;
+}
+
 static update_status_t op_rebind(uint32_t client, const uint8_t *req) {
     if (!s.bound) return UPDATE_INVALID;
     if (get32(&req[1]) != s.nonce) return UPDATE_OTHER_CLIENT;
@@ -399,11 +431,11 @@ void updater_via_command(uint8_t *data, uint8_t length) {
     bool            wrapped = updater_port_client(&client);
     update_status_t st;
 #ifdef SVAL_UPDATE_TEST_HOOKS
-    const uint8_t last_op = UPDATE_OP_TEST_HALT;
+    const bool test_halt_op = false;
 #else
-    const uint8_t last_op = UPDATE_OP_REBIND;
+    const bool test_halt_op = op == UPDATE_OP_TEST_HALT; // not in this build
 #endif
-    if (op > last_op) {
+    if (op > UPDATE_OP_DIAG || test_halt_op) {
         st = UPDATE_INVALID;
     } else if (op != UPDATE_OP_INFO && !wrapped) {
         st = UPDATE_INVALID; // unwrapped VIA reaches here too (sval.c); only INFO is open
@@ -445,11 +477,14 @@ void updater_via_command(uint8_t *data, uint8_t length) {
                 st = op_test_halt(client, req);
                 break;
 #endif
+            case UPDATE_OP_DIAG:
+                st = op_diag(req, rsp);
+                break;
             default: // UPDATE_OP_REBIND
                 st = op_rebind(client, req);
                 break;
         }
-        if (op == UPDATE_OP_BEGIN || op == UPDATE_OP_END || op == UPDATE_OP_COMMIT || op == UPDATE_OP_ABORT || op == UPDATE_OP_REBIND || op > UPDATE_OP_REBIND) rsp[1] = s.state;
+        if (op == UPDATE_OP_BEGIN || op == UPDATE_OP_END || op == UPDATE_OP_COMMIT || op == UPDATE_OP_ABORT || op == UPDATE_OP_REBIND || op == UPDATE_OP_TEST_HALT) rsp[1] = s.state;
     }
     rsp[0] = st;
     memcpy(value, rsp, VALUE_BYTES);
@@ -547,7 +582,9 @@ static update_led_mode_t led_mode(void) {
 }
 
 void updater_task(void) {
-    now_ms = updater_port_now_ms();
+    now_ms                 = updater_port_now_ms();
+    uint32_t       pass_t0 = now_ms;
+    update_state_t pass_st = s.state;
     if (s.state >= UPDATE_STATE_MANIFEST_LOADING && s.state <= UPDATE_STATE_VERIFIED && now_ms - s.op_ms >= SVAL_UPDATE_SESSION_TIMEOUT_MS) {
         // A half-sent manifest was never shown to the user: just drop it.
         if (s.state == UPDATE_STATE_MANIFEST_LOADING) {
@@ -585,6 +622,11 @@ void updater_task(void) {
             break;
     }
     now_ms = updater_port_now_ms();
+    // The 50 ms rule (R13) on the device: the host tests only see flash time.
+    if (now_ms - pass_t0 > pass_max_ms) {
+        pass_max_ms    = ms16(now_ms - pass_t0);
+        pass_max_state = pass_st;
+    }
     update_led_show(led_mode());
 }
 
@@ -608,6 +650,7 @@ void updater_host_reset(void) {
 #    include "timer.h"
 #    include "wait.h"
 #    include "client_wrapper.h"
+#    include "scanlab.h"
 #    include "hardware/structs/rosc.h"
 #    ifdef EEPROM_WEAR_LEVELING
 #        include "wear_leveling.h"
@@ -638,5 +681,22 @@ uint32_t updater_port_random32(void) {
     }
     v ^= timer_read32() * 2654435761u;
     return v ? v : 1;
+}
+
+bool updater_port_scan_override(void) {
+    return scanlab_active();
+}
+
+// crt0 (ChibiOS crt0_v6m.S, CRT0_INIT_STACKS on by default) fills the process
+// stack with this before main(); main() runs on that stack. The count is a
+// little optimistic if a used word happens to hold the pattern.
+#    define STACK_FILL 0x55555555u
+extern uint32_t __process_stack_base__[], __process_stack_end__[];
+
+uint16_t updater_port_stack_free(uint16_t *size) {
+    const volatile uint32_t *p = __process_stack_base__;
+    while (p < __process_stack_end__ && *p == STACK_FILL) p++;
+    *size = (uint16_t)((uintptr_t)__process_stack_end__ - (uintptr_t)__process_stack_base__);
+    return (uint16_t)((uintptr_t)p - (uintptr_t)__process_stack_base__);
 }
 #endif

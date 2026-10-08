@@ -22,6 +22,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #if VIA_ENABLE
 #    include "via.h"
 #endif
+#ifdef SVAL_UPDATER
+#    include "updater/updater.h"
+#endif
 
 // Microsecond clock for the probe. The ChibiOS system timer on the RP2040
 // port runs at 1 MHz and is readable with interrupts disabled.
@@ -221,6 +224,14 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
     switch (op) {
         case SCANLAB_OP_SET_MODE: {
             uint8_t mode = req[1];
+#ifdef SVAL_UPDATER
+            // No host-chosen scan timing while an update session is active:
+            // the updater reads its confirmation chord from the matrix.
+            if (mode == 1 && updater_active()) {
+                rsp[0] = sweep.state;
+                return;
+            }
+#endif
             if (mode == 1) {
                 sweep.prewait       = get16(&req[2]);
                 sweep.postwait      = get16(&req[4]);
@@ -237,6 +248,9 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             return;
         }
         case SCANLAB_OP_PROBE:
+#ifdef SVAL_UPDATER
+            if (updater_active()) return;  // nor drive rows by hand (rsp all zero: no probe)
+#endif
             sweep.state = SCANLAB_IDLE;  // never probe mid-sweep
             scanlab_probe_row(req[1]);
             rsp[0] = probe.valid;

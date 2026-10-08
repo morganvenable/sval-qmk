@@ -162,7 +162,7 @@ static void test_manifest_check(void) {
     // floors
     EXPECT(test_dev, m.security_epoch = 2, UPDATE_EPOCH);
     EXPECT(test_dev, m.security_epoch = 4, UPDATE_OK);
-    EXPECT(test_dev, m.storage_format = SVAL_UPDATE_STORAGE_FORMAT - 1, UPDATE_EPOCH);
+    EXPECT(test_dev, m.storage_format = SVAL_UPDATE_STORAGE_FORMAT - 1, UPDATE_STORAGE);
     EXPECT(test_dev, m.storage_format = SVAL_UPDATE_STORAGE_FORMAT + 1, UPDATE_OK);
     // length bounds
     EXPECT(test_dev, m.image_len = 0, UPDATE_BAD_IMAGE);
@@ -503,12 +503,18 @@ static bool slot_only(uint32_t addr, size_t count) {
     if (!inside) outside_ops++;
     return inside;
 }
+// A ROM erase or program out of sequence (XIP still on, interrupts on) or with
+// bad arguments counts in sequence_errors and changes nothing on the die: on
+// hardware it would hang or crash, so it must never look like it worked.
 static void mock_erase(uint32_t addr, size_t count, uint32_t block_size, uint8_t cmd) {
     erase_ops++;
-    if (xip_on || !irq_off) sequence_errors++;
     // one aligned 64 KiB block or one aligned 4 KiB sector, passed as the SDK does
     bool block = count == 0x10000 && addr % 0x10000 == 0, sector = count == 0x1000 && addr % 0x1000 == 0;
-    if (!(block || sector) || block_size != 0x10000 || cmd != 0xD8) sequence_errors++;
+    if (xip_on || !irq_off || !(block || sector) || block_size != 0x10000 || cmd != 0xD8) {
+        sequence_errors++;
+        log_op('e', addr, (uint32_t)count, NULL);
+        return;
+    }
     if (block) block_erases++;
     if (sector) sector_erases++;
     sim_us += block ? SIM_BLOCK_ERASE_US : SIM_SECTOR_ERASE_US;
@@ -523,8 +529,11 @@ static void mock_erase(uint32_t addr, size_t count, uint32_t block_size, uint8_t
 }
 static void mock_program(uint32_t addr, const uint8_t *data, size_t count) {
     program_ops++;
-    if (xip_on || !irq_off) sequence_errors++;
-    if (addr % 256 || count == 0 || count % 256 || count > (multi_page ? 4096u : 256u)) sequence_errors++;
+    if (xip_on || !irq_off || addr % 256 || count == 0 || count % 256 || count > (multi_page ? 4096u : 256u)) {
+        sequence_errors++;
+        log_op('p', addr, (uint32_t)count, NULL);
+        return;
+    }
     sim_us += SIM_PAGE_PROGRAM_US * (count / 256);
     wd_spend(WORST_PAGE_PROGRAM_US * (count / 256));
     log_op('P', addr, (uint32_t)count, data);

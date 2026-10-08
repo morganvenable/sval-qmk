@@ -16,7 +16,7 @@ python3 -I "$tests/test_make_update.py" "$out/cross" "$@"
 
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
-    -DSVAL_UPDATER_HOST_TEST -include "$kb/config.h" \
+    -DSVAL_UPDATER_HOST_TEST -DSVAL_UPDATE_TEST_KEY -include "$kb/config.h" \
     -I"$tests" -I"$kb" -I"$kb/updater" -I"$kb/updater/vendor" \
     "$tests/test_updater.c" \
     "$kb/updater/updater.c" "$kb/updater/update_gesture.c" \
@@ -28,7 +28,7 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
 # kb/tools/sval_update.py against the same state machine, through ctypes
 # (no sanitizers: they need to be preloaded into python).
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -shared -fPIC \
-    -DSVAL_UPDATER_HOST_TEST -DSVAL_UPDATER_HOST_LIB -include "$kb/config.h" \
+    -DSVAL_UPDATER_HOST_TEST -DSVAL_UPDATER_HOST_LIB -DSVAL_UPDATE_TEST_KEY -include "$kb/config.h" \
     -I"$tests" -I"$kb" -I"$kb/updater" -I"$kb/updater/vendor" \
     "$tests/test_updater.c" \
     "$kb/updater/updater.c" "$kb/updater/update_gesture.c" \
@@ -41,7 +41,7 @@ python3 -I "$tests/test_sval_update_tool.py" "$out/libupdater_host.so" "$out/too
 # same mock die, with mock registers, the test hooks and power cuts.
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
-    -DSVAL_UPDATER_HOST_TEST -DSVAL_TEST_REAL_COMMIT -DSVAL_UPDATE_TEST_HOOKS -include "$kb/config.h" \
+    -DSVAL_UPDATER_HOST_TEST -DSVAL_TEST_REAL_COMMIT -DSVAL_UPDATE_TEST_HOOKS -DSVAL_UPDATE_TEST_KEY -include "$kb/config.h" \
     -I"$tests" -I"$kb" -I"$kb/updater" -I"$kb/updater/vendor" \
     "$tests/test_updater.c" \
     "$kb/updater/updater.c" "$kb/updater/update_gesture.c" \
@@ -50,14 +50,20 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     -o "$out/test_commit"
 "$out/test_commit"
 
-# A release build (SVAL_UPDATE_RELEASE) must not contain the TEST-ONLY public key.
+# The TEST-ONLY public key is compiled in only with SVAL_UPDATE_TEST_KEY (make
+# SVAL_UPDATE_TEST_KEY=yes, or SVAL_UPDATE_TEST_HOOKS=yes), and never together
+# with SVAL_UPDATE_RELEASE.
 key_hex="$(python3 -I "$kb/tools/make_update.py" --print-public --signer pure)"
-for flags in "" "-DSVAL_UPDATE_RELEASE"; do
+for flags in "" "-DSVAL_UPDATE_TEST_KEY" "-DSVAL_UPDATE_RELEASE"; do
     ${CC:-cc} -std=c11 -O1 $flags -include "$kb/config.h" -I"$kb/updater" -I"$kb/updater/vendor" \
         -c "$kb/updater/update_keys.c" -o "$out/keys.o"
     found=no
     od -An -v -tx1 "$out/keys.o" | tr -d ' \n' | grep -q "$key_hex" && found=yes
-    want=yes; [ -n "$flags" ] && want=no
-    if [ "$found" != "$want" ]; then echo "FAIL: test key present=$found with '${flags:-test build}'"; exit 1; fi
+    want=no; [ "$flags" = "-DSVAL_UPDATE_TEST_KEY" ] && want=yes
+    if [ "$found" != "$want" ]; then echo "FAIL: test key present=$found with '${flags:-plain updater build}'"; exit 1; fi
 done
-echo "test key: in test builds, absent from release builds"
+if ${CC:-cc} -std=c11 -O1 -DSVAL_UPDATE_TEST_KEY -DSVAL_UPDATE_RELEASE -include "$kb/config.h" -I"$kb/updater" -I"$kb/updater/vendor" \
+    -c "$kb/updater/update_keys.c" -o "$out/keys.o" 2>/dev/null; then
+    echo "FAIL: a release build compiled with the test key"; exit 1
+fi
+echo "test key: only in SVAL_UPDATE_TEST_KEY builds; absent from plain and release builds; refused with release"

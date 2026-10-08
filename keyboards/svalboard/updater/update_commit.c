@@ -251,22 +251,27 @@ COMMIT_INLINE uint32_t firmware_crc(void) {
     return crc;
 }
 
-// ---- RAM functions ----------------------------------------------------------------------
-
-// Step 7, the only way out once step 1 has begun, and the handler in every slot
-// of the RAM vector table. Zeroes the sector buffer and every RAM word equal
-// to the double-tap magic: the new image's noinit magic word could land on old
-// image bytes, and the reset would then send it to BOOTSEL (R23). Then the
-// watchdog reset, with PSM_WDSEL confirmed and scratch4 cleared so the boot ROM
-// boots from flash. Never calls flash.
-static void __attribute__((noreturn)) COMMIT_RAM(commit_ram_reset)(void) {
-    irq_disable();
+// Zeroes the sector buffer and every SRAM0-3 word equal to the double-tap
+// magic: the new image's noinit magic word could land on old image bytes, and
+// the reset would then send it to BOOTSEL (R23).
+COMMIT_INLINE void wipe_ram(void) {
     for (uint32_t i = 0; i < SECTOR / 4; i++) commit_sector_buf[i] = 0;
     uint32_t magic = double_tap_magic();
     for (uint32_t i = 0; i < RAM0_WORDS; i++) {
         volatile uint32_t *w = ram0_word(i);
         if (*w == magic) *w = 0;
     }
+}
+
+// ---- RAM functions ----------------------------------------------------------------------
+
+// Step 7, the only way out once step 1 has begun, and the handler in every slot
+// of the RAM vector table: wipe_ram(), then the watchdog reset, with PSM_WDSEL
+// confirmed and scratch4 cleared so the boot ROM boots from flash. Never calls
+// flash.
+static void __attribute__((noreturn)) COMMIT_RAM(commit_ram_reset)(void) {
+    irq_disable();
+    wipe_ram();
     if (reg_rd(PSM_WDSEL) != PSM_WDSEL_ALL_BUT_OSC) reg_wr(PSM_WDSEL, PSM_WDSEL_ALL_BUT_OSC);
     reg_wr(WD_SCRATCH4, 0);
     reg_wr(WD_CTRL + REG_ALIAS_SET, WD_CTRL_TRIGGER);
@@ -310,8 +315,11 @@ static bool COMMIT_RAM(commit_ram_sector)(uint32_t off) {
 }
 
 #ifdef SVAL_UPDATE_TEST_HOOKS
+// A halt leaves RAM as step 7 would, so an unfed halt's watchdog reset starts
+// the next image from the same RAM state as a real commit's reset.
 static void __attribute__((noreturn)) COMMIT_RAM(commit_ram_halt)(void) {
-    if (halt_point == UPDATE_HALT_FAULT) fault_now();
+    if (halt_point == UPDATE_HALT_FAULT || halt_point == UPDATE_HALT_FAULT_ERASED) fault_now();
+    wipe_ram();
     halt_spin(halt_fed);
 }
 #    define HALT(point)                                \
@@ -364,6 +372,7 @@ static update_status_t COMMIT_RAM(commit_ram_main)(void) {
     // blocks up to round_up(image_len, 64 KiB).
     if (!commit_ram_flash(0, NULL, SECTOR)) commit_ram_reset();
     HALT(UPDATE_HALT_FIRST_ERASE);
+    HALT(UPDATE_HALT_FAULT_ERASED);
     for (uint32_t off = SECTOR; off < BLOCK; off += SECTOR) {
         if (!commit_ram_flash(off, NULL, SECTOR)) commit_ram_reset();
     }

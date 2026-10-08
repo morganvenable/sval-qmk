@@ -9,8 +9,9 @@
 #include "update_manifest.h"
 
 // The public key for key_id, or NULL when this build accepts no such key. The
-// TEST-ONLY key (key_id 0) is absent from release builds (SVAL_UPDATE_RELEASE);
-// release keys arrive in M3.
+// TEST-ONLY key (key_id 0) is present only when SVAL_UPDATE_TEST_KEY is defined
+// (make SVAL_UPDATE_TEST_KEY=yes, implied by SVAL_UPDATE_TEST_HOOKS=yes), never
+// in release builds; release keys arrive in M3.
 const uint8_t *update_key(uint8_t key_id);
 
 // Checks the Ed25519 signature that follows the manifest in a signed manifest

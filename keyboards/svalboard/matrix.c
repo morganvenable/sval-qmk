@@ -318,6 +318,12 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     led_on_acc_us  = 0;
 
     sval_scan_timing(&cur_prewait_us, &cur_postwait_us);
+#ifdef SVAL_UPDATER
+    // While the chord is awaited, never shorter than Scan Lab's safe timing:
+    // the timing above is the host's to choose.
+    _Static_assert(SVAL_UPDATE_CHORD_PREWAIT_US >= SCANLAB_SAFE_PREWAIT_US && SVAL_UPDATE_CHORD_POSTWAIT_US >= SCANLAB_SAFE_POSTWAIT_US, "chord timing");
+    update_gesture_timing(&cur_prewait_us, &cur_postwait_us);
+#endif
     // Set row, read cols
     for (uint8_t current_row = 0; current_row < (ROWS_PER_HAND); current_row++) {
         matrix_read_cols_on_row(curr_matrix, current_row);
