@@ -53,8 +53,8 @@ enum sval_command_id {
     sval_cmd_key_override_set   = 0x06,
     sval_cmd_alt_repeat_key_get = 0x07,
     sval_cmd_alt_repeat_key_set = 0x08,
-    sval_cmd_one_shot_get       = 0x09,
-    sval_cmd_one_shot_set       = 0x0A,
+    sval_cmd_one_shot_get       = 0x09, // QMK settings 6 and 5 (one-shot timeout, tap toggle)
+    sval_cmd_one_shot_set       = 0x0A, // as 0x09, writing them
     sval_cmd_save               = 0x0B,
     sval_cmd_reset              = 0x0C,
     sval_cmd_definition_size    = 0x0D,
@@ -199,13 +199,6 @@ enum sval_alt_repeat_key_options {
     // bits 4-7 reserved
 };
 
-// One-shot settings structure (3 bytes)
-typedef struct __attribute__((packed)) {
-    uint16_t timeout;    // One-shot timeout in ms (0 = disabled)
-    uint8_t  tap_toggle; // Number of taps to toggle (0 = disabled)
-} sval_one_shot_t;
-_Static_assert(sizeof(sval_one_shot_t) == 3, "sval_one_shot_t must be 3 bytes");
-
 // Leader entry structure (14 bytes)
 // Enabled when options bit 15 = 1
 typedef struct __attribute__((packed)) {
@@ -259,10 +252,7 @@ extern char sval_layer_labels[DYNAMIC_KEYMAP_LAYER_COUNT][SVAL_LABEL_SIZE];
 #define SVAL_ALT_REPEAT_KEY_OFFSET (SVAL_KEY_OVERRIDE_OFFSET + SVAL_KEY_OVERRIDE_SIZE)
 #define SVAL_ALT_REPEAT_KEY_SIZE (SVAL_ALT_REPEAT_KEY_ENTRIES * sizeof(sval_alt_repeat_key_entry_t))
 
-#define SVAL_ONE_SHOT_OFFSET (SVAL_ALT_REPEAT_KEY_OFFSET + SVAL_ALT_REPEAT_KEY_SIZE)
-#define SVAL_ONE_SHOT_SIZE sizeof(sval_one_shot_t)
-
-#define SVAL_LEADER_OFFSET (SVAL_ONE_SHOT_OFFSET + SVAL_ONE_SHOT_SIZE)
+#define SVAL_LEADER_OFFSET (SVAL_ALT_REPEAT_KEY_OFFSET + SVAL_ALT_REPEAT_KEY_SIZE)
 #define SVAL_LEADER_SIZE (SVAL_LEADER_ENTRIES * sizeof(sval_leader_entry_t))
 
 #define SVAL_MAGIC_SIZE 6
@@ -319,8 +309,6 @@ int sval_get_alt_repeat_key(uint16_t index, sval_alt_repeat_key_entry_t *entry);
 int sval_set_alt_repeat_key(uint16_t index, const sval_alt_repeat_key_entry_t *entry);
 
 // Storage API - One-Shot
-void sval_get_one_shot(sval_one_shot_t *settings);
-void sval_set_one_shot(const sval_one_shot_t *settings);
 
 // Storage API - Leader
 int sval_get_leader(uint16_t index, sval_leader_entry_t *entry);

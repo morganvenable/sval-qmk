@@ -533,6 +533,22 @@ uint8_t sval_tapping_toggle(void) {
     return settings.tapping_toggle ? settings.tapping_toggle : 1;
 }
 
+// One-shot keys: QMK settings 6 (timeout, 0 = none) and 5 (taps to lock; 0 or 1
+// disables locking). Sval commands 0x09/0x0A read and write the same values.
+uint16_t get_oneshot_timeout(void) {
+    return settings.osk_timeout;
+}
+
+uint8_t sval_oneshot_tap_toggle(void) {
+    return settings.osk_tap_toggle;
+}
+
+void sval_qmk_settings_set_one_shot(uint16_t timeout, uint8_t tap_toggle) {
+    settings.osk_timeout    = timeout;
+    settings.osk_tap_toggle = tap_toggle;
+    sval_qmk_settings_save();
+}
+
 // Bits as Keybard writes them: 0 Alt, 1 Control, 2 GUI, 3 Shift.
 uint8_t sval_grave_esc_override(void) {
     return settings.grave_esc_override;
