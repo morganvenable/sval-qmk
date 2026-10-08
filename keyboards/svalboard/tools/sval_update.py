@@ -10,6 +10,7 @@ open handle.
     sval_update.py status
     sval_update.py abort [--nonce N]
     sval_update.py update FILE.svup [--delay S] [--rebind-every S] [--no-commit]
+                                    [--halt POINT [--halt-unfed]]
 
 update sends the manifest, prints the manifest hash you confirm, waits for the
 chord (Index South + Middle South held for 1 s on this half), then erases,
@@ -18,6 +19,13 @@ sends the image, verifies and commits. The client ID is renewed every
 REBIND; after each REBIND the old ID must be refused. --delay S waits S
 seconds between chunks (slow-transfer test; the session times out after 30 s
 without an op).
+
+--halt POINT needs an SVAL_UPDATE_TEST_HOOKS build (M1 #8-#10): the commit
+stops for good at POINT (invalidated, first-erase, mid-program, last-sector,
+page0, or fault for a HardFault after the invalidation). It then spins
+feeding the watchdog, so the board hangs until it is unplugged, or with
+--halt-unfed it lets the watchdog reset it within 8 s. Up to last-sector the
+board comes back as RPI-RP2 (page 0 is not valid); recover it with flash.sh.
 
 The protocol is documented at the top of keyboards/svalboard/updater/updater.c.
 """
@@ -37,7 +45,8 @@ CHANNEL = 0x55
 SET_VALUE = 0x07
 WRAPPER, VIA_PROTO, WRAPPER_ERROR = 0xDD, 0xFE, 0xFF
 HAND_SELF = 0xFF
-INFO, MANIFEST, ARM, BEGIN, CHUNK, END, STATUS, COMMIT, ABORT, REBIND = range(10)
+INFO, MANIFEST, ARM, BEGIN, CHUNK, END, STATUS, COMMIT, ABORT, REBIND, TEST_HALT = range(11)
+HALT_POINTS = {"invalidated": 1, "first-erase": 2, "mid-program": 3, "last-sector": 4, "page0": 5, "fault": 6}
 MANIFEST_PIECE, CHUNK_PIECE = 20, 18
 
 STATUS_NAMES = ["OK", "INVALID", "UNAVAILABLE", "FLASH_ERR", "ACCEPTED", "BUSY", "NOT_CONFIRMED", "WRONG_HW", "BAD_SIG",
@@ -218,6 +227,8 @@ class Session:
 
         info = decode_info(*self.dev.op(INFO))
         self.hand = info["hand_id"]
+        if getattr(self.args, "halt", None) and not info["test_hooks"]:
+            raise UpdaterError("--halt needs an SVAL_UPDATE_TEST_HOOKS build on the board")
         print(f"board: {info['hand']} half, pointing {info['pointing']}, JEDEC {info['jedec']}, state {info['state']}, "
               f"status {info['status']}")
         if m["hand"] != self.hand or m["pointing_id"] != info["pointing_id"]:
@@ -280,9 +291,14 @@ class Session:
         if self.args.no_commit:
             print("--no-commit: leaving the verified image staged (ABORT to clear the session)")
             return 0
+        if getattr(self.args, "halt", None):
+            fed = not self.args.halt_unfed
+            self.need("TEST_HALT", self.nonce_op(TEST_HALT, bytes([HALT_POINTS[self.args.halt], int(fed)])), OK)
+            print(f"test hook: the commit will halt at {self.args.halt}, "
+                  f"{'feeding the watchdog (unplug to end it)' if fed else 'not feeding the watchdog (reset within 8 s)'}")
         st, r = self.nonce_op(COMMIT, struct.pack("<H", crc_body & 0xFFFF))
         if st == UNSUPPORTED:
-            print("COMMIT: UNSUPPORTED - this build cannot commit yet; the image is staged and verified")
+            print("COMMIT: UNSUPPORTED - this build cannot commit; the image is staged and verified")
             return 3
         self.need("COMMIT", (st, r), ACCEPTED)
         print("committing: the board writes the new image and resets")
@@ -312,11 +328,16 @@ def main():
     up.add_argument("--rebind-every", type=float, default=50.0, help="renew the client ID and REBIND every S seconds (0: never)")
     up.add_argument("--no-commit", action="store_true", help="stop once the image is verified")
     up.add_argument("--keep", action="store_true", help="on failure, leave the session for inspection instead of ABORTing")
+    up.add_argument("--halt", choices=sorted(HALT_POINTS, key=HALT_POINTS.get),
+                    help="test-hooks builds: stop the commit at this point for good (M1 #8-#10)")
+    up.add_argument("--halt-unfed", action="store_true", help="with --halt: let the watchdog reset the board (M1 #9)")
     args = ap.parse_args()
 
     if args.command == "list":
         print(json.dumps([{k: d.get(k) for k in ("serial_number", "product_string", "vendor_id", "product_id")} for d in devices()], indent=2))
         return 0
+    if args.command == "update" and args.halt_unfed and not args.halt:
+        ap.error("--halt-unfed needs --halt")
     if args.command == "update" and args.delay >= 30:
         print("warning: --delay of 30 s or more lets the session time out", file=sys.stderr)
     dev = Device(args.serial)

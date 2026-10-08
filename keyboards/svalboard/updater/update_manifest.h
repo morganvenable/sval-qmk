@@ -82,16 +82,17 @@ _Static_assert(__builtin_offsetof(sval_update_manifest_t, sha512) == 44, "manife
 // ---- ops (the VIA value_id byte; see updater.c for the request layouts) ----------
 
 typedef enum {
-    UPDATE_OP_INFO     = 0x00,
-    UPDATE_OP_MANIFEST = 0x01,
-    UPDATE_OP_ARM      = 0x02,
-    UPDATE_OP_BEGIN    = 0x03,
-    UPDATE_OP_CHUNK    = 0x04,
-    UPDATE_OP_END      = 0x05,
-    UPDATE_OP_STATUS   = 0x06,
-    UPDATE_OP_COMMIT   = 0x07,
-    UPDATE_OP_ABORT    = 0x08,
-    UPDATE_OP_REBIND   = 0x09,
+    UPDATE_OP_INFO      = 0x00,
+    UPDATE_OP_MANIFEST  = 0x01,
+    UPDATE_OP_ARM       = 0x02,
+    UPDATE_OP_BEGIN     = 0x03,
+    UPDATE_OP_CHUNK     = 0x04,
+    UPDATE_OP_END       = 0x05,
+    UPDATE_OP_STATUS    = 0x06,
+    UPDATE_OP_COMMIT    = 0x07,
+    UPDATE_OP_ABORT     = 0x08,
+    UPDATE_OP_REBIND    = 0x09,
+    UPDATE_OP_TEST_HALT = 0x0A, // SVAL_UPDATE_TEST_HOOKS builds only
 } update_op_t;
 
 // ---- status codes ------------------------------------------------------------------

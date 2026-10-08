@@ -65,6 +65,10 @@ ifeq ($(strip $(SVAL_UPDATER)), yes)
   SRC += updater/update_flash.c updater/update_image.c updater/update_keys.c
   SRC += updater/vendor/monocypher.c updater/vendor/optional/monocypher-ed25519.c
   EXTRAINCDIRS += keyboards/svalboard/updater/vendor
+  # The commit's RAM code must not branch into flash (R2): no jump tables, no
+  # loops turned into memcpy/memset calls. -fstack-usage writes
+  # update_commit.su for tools/check_ram_funcs.py.
+  $(INTERMEDIATE_OUTPUT)/updater/update_commit.o: FILE_SPECIFIC_CFLAGS += -fno-jump-tables -fno-tree-loop-distribute-patterns -fstack-usage
   # main()'s stack: 2 KiB by default (platforms/chibios/platform.mk); the
   # Ed25519 check alone needs about 1.9 KiB. SRAM4 (4 KiB) also holds the 1 KiB
   # exception stack and ChibiOS's 0x120-byte ch0, so 0xAE0 is the most that

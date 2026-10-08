@@ -19,3 +19,9 @@ typedef enum {
 
 // Called on every updater_task() pass with the mode for the current state.
 void update_led_show(update_led_mode_t mode);
+
+// Commit step 0: shows the writing colour, latches it with two WS2812 flushes
+// and waits until the last transfer has finished (its DMA reads RAM, so it is
+// let run rather than stopped), so no DMA is running when the commit starts.
+// The LEDs then keep that colour until the reset.
+void update_led_commit_latch(void);

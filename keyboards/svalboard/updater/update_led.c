@@ -28,6 +28,8 @@
 #define FLASH_STEP_MS 75      // white double flash: on, off, on, off (~300 ms, D4)
 #define RAINBOW_MS_PER_HUE 8  // a full hue turn in about 2 s
 #define MIN_WRITE_MS 20       // at most 50 WS2812 writes a second
+#define WS2812_FRAME_US 30    // one LED: 24 bits at 1.25 us
+#define WS2812_FIFO_FRAMES 9  // the joined 8-deep TX FIFO and the shift register
 
 static bool owned;
 
@@ -105,4 +107,17 @@ void update_led_show(update_led_mode_t mode) {
         last       = c;
         last_write = now;
     }
+}
+
+void update_led_commit_latch(void) {
+    const uint8_t v = SVAL_UPDATE_LED_VAL;
+    owned           = true;
+    shown           = UPDATE_LED_WRITING;
+    ws2812_set_color_all(v, 0, v);
+    ws2812_flush();
+    ws2812_flush(); // waits for the first transfer, then starts the second
+    // The second transfer: its DMA feeds the PIO one LED at a time, then the
+    // FIFO drains and the line must stay low for the reset time. Twice that,
+    // to be sure; commit step 1 still refuses if any DMA channel is busy.
+    wait_us(2 * (WS2812_LED_COUNT + WS2812_FIFO_FRAMES) * WS2812_FRAME_US + WS2812_TRST_US);
 }

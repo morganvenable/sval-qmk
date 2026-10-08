@@ -34,6 +34,9 @@
 //  0x07 COMMIT   nonce u32, CRC low 16 bits      state
 //  0x08 ABORT    nonce u32                       state
 //  0x09 REBIND   nonce u32                       state
+//  0x0A TEST_HALT nonce u32, point u8, fed u8    state (SVAL_UPDATE_TEST_HOOKS builds only; INVALID
+//                                                elsewhere): the halt point for this session's commit
+//                                                (update_halt_t, update_commit.h), in VERIFIED only.
 //
 // The image CRC is CRC-32/MPEG-2 over image bytes [0x100, image_len): the
 // range the commit checks after copying (page 0 is written last).
@@ -145,6 +148,9 @@ static uint8_t self_hand(void) {
 
 static void reset_session(void) {
     update_gesture_disarm();
+#ifdef SVAL_UPDATE_TEST_HOOKS
+    update_commit_test_halt(UPDATE_HALT_NONE, false);
+#endif
     memset(&s, 0, sizeof(s)); // IDLE, last_error OK
     memset(signed_manifest, 0, sizeof(signed_manifest));
     memset(page, 0, sizeof(page));
@@ -359,6 +365,15 @@ static update_status_t op_abort(uint32_t client, const uint8_t *req) {
     return UPDATE_OK;
 }
 
+#ifdef SVAL_UPDATE_TEST_HOOKS
+static update_status_t op_test_halt(uint32_t client, const uint8_t *req) {
+    update_status_t st = session(client, &req[1]);
+    if (st != UPDATE_OK) return st;
+    if (s.state != UPDATE_STATE_VERIFIED) return UPDATE_INVALID;
+    return update_commit_test_halt(req[5], req[6] != 0) ? UPDATE_OK : UPDATE_INVALID;
+}
+#endif
+
 static update_status_t op_rebind(uint32_t client, const uint8_t *req) {
     if (!s.bound) return UPDATE_INVALID;
     if (get32(&req[1]) != s.nonce) return UPDATE_OTHER_CLIENT;
@@ -383,7 +398,12 @@ void updater_via_command(uint8_t *data, uint8_t length) {
     uint32_t        client  = 0;
     bool            wrapped = updater_port_client(&client);
     update_status_t st;
-    if (op > UPDATE_OP_REBIND) {
+#ifdef SVAL_UPDATE_TEST_HOOKS
+    const uint8_t last_op = UPDATE_OP_TEST_HALT;
+#else
+    const uint8_t last_op = UPDATE_OP_REBIND;
+#endif
+    if (op > last_op) {
         st = UPDATE_INVALID;
     } else if (op != UPDATE_OP_INFO && !wrapped) {
         st = UPDATE_INVALID; // unwrapped VIA reaches here too (sval.c); only INFO is open
@@ -420,11 +440,16 @@ void updater_via_command(uint8_t *data, uint8_t length) {
             case UPDATE_OP_ABORT:
                 st = op_abort(client, req);
                 break;
+#ifdef SVAL_UPDATE_TEST_HOOKS
+            case UPDATE_OP_TEST_HALT:
+                st = op_test_halt(client, req);
+                break;
+#endif
             default: // UPDATE_OP_REBIND
                 st = op_rebind(client, req);
                 break;
         }
-        if (op == UPDATE_OP_BEGIN || op == UPDATE_OP_END || op == UPDATE_OP_COMMIT || op == UPDATE_OP_ABORT || op == UPDATE_OP_REBIND) rsp[1] = s.state;
+        if (op == UPDATE_OP_BEGIN || op == UPDATE_OP_END || op == UPDATE_OP_COMMIT || op == UPDATE_OP_ABORT || op == UPDATE_OP_REBIND || op > UPDATE_OP_REBIND) rsp[1] = s.state;
     }
     rsp[0] = st;
     memcpy(value, rsp, VALUE_BYTES);
@@ -547,6 +572,10 @@ void updater_task(void) {
             break;
         case UPDATE_STATE_COMMITTING:
             if ((int32_t)(now_ms - s.commit_due_ms) >= 0) {
+                // Image bytes in RAM are cleared before the reset (commit step
+                // 7, R23); these two are not needed any more.
+                memset(page, 0, sizeof(page));
+                memset(&sha, 0, sizeof(sha));
                 // Returns only when the commit refused before touching the firmware.
                 update_status_t st = update_commit_run(MANIFEST, s.crc_body);
                 fail(st != UPDATE_OK ? st : UPDATE_FLASH_ERR);
