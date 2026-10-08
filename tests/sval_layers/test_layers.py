@@ -25,7 +25,7 @@ def harness():
     declarations = '\n'.join(re.findall(r'enum \w+\s*\{.*?\};', header, re.S))
     version = re.search(r'#define SVAL_PROTOCOL_VERSION[^\n]+', header).group()
     cases = ''
-    for command in ('get_info', 'layer_state_get', 'storage_reset_clear'):
+    for command in ('get_info', 'layer_state_get', 'storage_reset_clear', 'default_layer_set'):
         start = source.index('        case sval_cmd_' + command + ':')
         end = source.index('\n        case ', start + 1)
         cases += source[start:end]
@@ -41,7 +41,11 @@ def harness():
 #define QMK_KEYCODES_VERSION_MAJOR 0
 #define QMK_KEYCODES_VERSION_MINOR 0
 #define QMK_KEYCODES_VERSION_PATCH 9
-static uint32_t layer_state, default_layer_state;
+static uint32_t layer_state, default_layer_state, saved_default_layer;
+static uint8_t dynamic_keymap_get_layer_count(void) { return 16; }
+static void set_single_persistent_default_layer(uint8_t layer) {
+ saved_default_layer = (uint32_t)1 << layer; default_layer_state = saved_default_layer;
+}
 static bool storage_reset;
 static bool sval_storage_was_reset(void) { return storage_reset; }
 static bool write_failed;
@@ -52,8 +56,8 @@ static void sval_write_eeprom(uint16_t offset, const void *data, uint16_t size) 
 static uint8_t sent[32];
 static uint32_t timer_read32(void) { return 100; }
 static void host_raw_hid_send(uint8_t *p,uint8_t n) { assert(n==32); memcpy(sent,p,n); }
-''' + declarations + '\n' + version + '\n' + function(
-        source, 'sval_get_feature_flags'
+''' + declarations + '\n' + version + '\n' + function(source, 'sval_get_feature_flags') + '\n' + function(
+        source, 'sval_get_feature_flags2'
     ) + '''
 bool sval_handle_command(uint8_t *data,uint8_t length) {
  switch(data[1]) {
@@ -65,13 +69,15 @@ bool sval_handle_command(uint8_t *data,uint8_t length) {
 static uint32_t get32(uint8_t *p) {
  return (uint32_t)p[0] | ((uint32_t)p[1]<<8) | ((uint32_t)p[2]<<16) | ((uint32_t)p[3]<<24);
 }
-static void request(uint8_t command) {
+static void request_with(uint8_t command, int arg) {
  uint8_t packet[32]; memset(packet,0xA5,sizeof(packet));
  packet[0]=0xDD;packet[1]=1;packet[2]=packet[3]=packet[4]=0;
  packet[5]=0xDF;packet[6]=command;
+ if(arg>=0)packet[7]=(uint8_t)arg;
  assert(client_wrapper_receive(packet,sizeof(packet)));
  assert(sent[0]==0xDD && get32(sent+1)==1 && sent[5]==0xDF && sent[6]==command);
 }
+static void request(uint8_t command) { request_with(command,-1); }
 int main(void) {
  assert(sval_cmd_layer_state_get==0x16);
  assert(sval_flag_default_layer_state==0x40);
@@ -86,6 +92,7 @@ int main(void) {
 #endif
  assert(sent[20]==0 && sent[21]==0 && sent[22]==9);
  assert(sent[23]==0); // Storage was not reset.
+ assert(sent[24]==sval_flag2_default_layer_set); // Second feature byte, after the storage flags.
  storage_reset=true;
  request(sval_cmd_get_info);
  assert(sent[23]==1);
@@ -121,6 +128,16 @@ int main(void) {
   assert(short_packet[1]==0xFF);
   for(int i=2;i<32;i++)assert(short_packet[i]==0xA5);
  }
+ // Setting the default layer saves it, like a PDF key. 0x2A stays the storage-reset clear.
+ assert(sval_cmd_default_layer_set==0x2B && sval_cmd_storage_reset_clear==0x2A);
+ layer_state=0x5;default_layer_state=1;saved_default_layer=1;storage_reset=true;
+ request_with(sval_cmd_default_layer_set,3);
+ assert(sent[7]==0 && default_layer_state==0x8 && saved_default_layer==0x8 && layer_state==0x5);
+ assert(storage_reset); // Doesn't touch the storage-reset flag.
+ request_with(sval_cmd_default_layer_set,15);
+ assert(sent[7]==0 && saved_default_layer==0x8000);
+ request_with(sval_cmd_default_layer_set,16); // No such layer: nothing changes.
+ assert(sent[7]==1 && saved_default_layer==0x8000 && default_layer_state==0x8000);
 }
 '''
 
