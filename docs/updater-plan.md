@@ -46,7 +46,7 @@ Status: **plan for your review. No feature code has been written.** Sources: [mo
 - [ ] Attach the board to WSL with usbipd (RP2 Boot, `2e8a:0003`). picotool 2.3.1 is available in WSL (it needs `LD_LIBRARY_PATH` set to its runtime). Dump, as bus addresses: the whole chip (`save -a`), settings `0x10160000`-`0x10260000`, identity `0x10FFE000`-`0x11000000`, slot `0x10800000`-`0x10960000`, as the baseline with SHA-256 sums.
 - [x] Audit every DMA channel user for any source address in XIP. Result in R6: WS2812 reads RAM; the PMW SPI TX source `dummytx` is in XIP; I2C uses no DMA; core 1 never starts.
 
-Exit: the fork builds; image size, JEDEC ID, BOOTSEL and reset access, picotool and the DMA audit are all recorded; the Section 3 decisions are answered (D12 is open by design and must be answered before M1 code that touches the hold-off).
+Exit: the fork builds; image size, JEDEC ID, BOOTSEL and reset access, picotool and the DMA audit are all recorded; the Section 3 decisions are answered.
 
 ### M1: one half updates itself over USB (no split test board)
 
@@ -68,7 +68,7 @@ Exit: the fork builds; image size, JEDEC ID, BOOTSEL and reset access, picotool 
 | `kb/config.h` | `SVAL_UPDATE_BASE/SIZE/MAX_IMAGE`, gesture and LED constants |
 | `updater.c` asserts | `MAX_IMAGE % 0x10000 == 0 && MAX_IMAGE <= WEAR_LEVELING_RP2040_FLASH_BASE`. Slot base and size 64 KiB aligned, base ≥ `WEAR_LEVELING_RP2040_FLASH_BASE + WEAR_LEVELING_BACKING_SIZE * WEAR_LEVELING_COPIES` (= `0x260000`), end ≤ `IDENTITY_SECTOR_A` (next to `kb/config.h:44-54`) |
 | `kb/svalboard.c` | Call `updater_task()` from `housekeeping_task_kb` (`:503`). Add the channel case in `via_custom_value_command_kb` (`:614-631`). Skip `sval_rgb_idle_task` and `identity_task` while active |
-| Settings hold-off | QMK's eeprom / wear-leveling path (including its multi-second consolidation, `kb/docs/settings-storage.md:37`) must not write while the updater is active. The mechanism depends on D12, which is open |
+| Settings hold-off | QMK's eeprom / wear-leveling path (including its multi-second consolidation, `kb/docs/settings-storage.md:37`) needs no hold-off for durability: writes go straight through (D12). The updater refuses `ARM`, and the commit refuses in step 0, while `wear_leveling_write_failed()` is latched (qmk#12) |
 | `kb/matrix.c` | No low clock or deep idle while active: use the same gate as `scanlab_active()` in the pacing code (`kb/matrix.c:266-307`, gate at `:268`) |
 | `modules/svalboard/core/client_wrapper.c/.h` | Add `client_wrapper_current_id()` getter (`wrapper_client_id` is static at `:19`, set at `:167`). This is a shared-module edit (D3) |
 | `kb/tools/sval_update.py` | hidapi host tool modelled on `kb/tools/keytest.py` |
@@ -118,7 +118,7 @@ typedef struct __attribute__((packed)) {
 
 **Commit routine** (RAM only, PRIMASK set, ROM functions through `rom_func_lookup_inline` as in `kb/identity.c:71-84`, no SDK flash wrappers, no `memcpy`/`memset`; buffer = a dedicated 4 KiB static sector buffer, not shared with QMK; process stack 2 KiB (3 KiB in `SVAL_UPDATER` builds) and exception stack 1 KiB, both in SRAM4, `RP2040_FLASH_TIMECRIT.ld:34,68-72`. The commit runs only from housekeeping, and on a slave only behind the split pause)
 
-0. With IRQs on: hold off settings writes (D12) and the identity task; re-run the structure checks and SHA-512 on the slot; take the commit's own 256 B RAM copy of boot2 from page 0 and check its CRC (every boot2 copy is filled from `BOOT2_ROM`, which *is* page 0, `platforms/chibios/vendors/RP/stage2_bootloaders.c:10,151`; after step 2 it would copy zeros, so the copy is taken here and never refilled; do not rely on the `identity.c:68,171` copy, which exists only if `identity_init` ran); show the "writing" colour, latch it with `ws2812_flush()` (twice), then let the last WS2812 transfer finish (≥ `WS2812_TRST_US`; its DMA reads RAM, `ws2812_vendor.c:138,297`, so it is not stopped, and aborting it would corrupt the colour).
+0. With IRQs on: refuse with no erase if `wear_leveling_write_failed()` is latched (D12); hold off the identity task; re-run the structure checks and SHA-512 on the slot; take the commit's own 256 B RAM copy of boot2 from page 0 and check its CRC (every boot2 copy is filled from `BOOT2_ROM`, which *is* page 0, `platforms/chibios/vendors/RP/stage2_bootloaders.c:10,151`; after step 2 it would copy zeros, so the copy is taken here and never refilled; do not rely on the `identity.c:68,171` copy, which exists only if `identity_init` ran); show the "writing" colour, latch it with `ws2812_flush()` (twice), then let the last WS2812 transfer finish (≥ `WS2812_TRST_US`; its DMA reads RAM, `ws2812_vendor.c:138,297`, so it is not stopped, and aborting it would corrupt the colour).
 1. Set PRIMASK. Read every DMA channel's BUSY bit; if any channel is busy, clear PRIMASK and refuse the commit with `BUSY` and **no erase** (the PMW SPI TX source `dummytx` is in XIP; it is idle whenever housekeeping runs, R6). Fill all 48 slots of a RAM vector table, aligned to 256 B, with SP and the RAM fault handler (in `.time_critical`; it clears scratch4 and triggers the watchdog), and point VTOR at it (VTOR normally points at the flash table: `platforms/chibios/vendors/RP/RP2040.mk:13`; `RP2040_FLASH_TIMECRIT.ld:44-45`). Arm the watchdog (D9) in this order: write `PSM_WDSEL = 0x1FFFC` (at `0x40010008`; `PSM_WDSEL_BITS & ~(ROSC|XOSC)` as `_watchdog_enable` does at `watchdog.c:39-40`, which this firmware never links; WDSEL resets to 0, `psm.h:299-304`, and with 0 a watchdog reset resets nothing); clear scratch4; `WATCHDOG_LOAD = period_µs × 2` (erratum E1: the counter drops 2 per µs, `watchdog.c:55-59`; ≤ `0xFFFFFF` ≈ 8.39 s; ≥ 2 × the worst block erase); clear the `PAUSE_DBG0/1` and `PAUSE_JTAG` bits (`WATCHDOG_CTRL` resets to `0x07000000`, `regs/watchdog.h:22`); set ENABLE.
 2. **Invalidate:** program page 0 to all `0x00`, then read it back through the NOCACHE alias. If it is not all zero, reset (the old image is still mostly intact; R1). Test halt point `N=-1` is here.
 3. Erase sector 0 (4 KiB), then the rest of block 0, then the other 64 KiB blocks up to `round_up(image_len, 64 KiB)`, clamped to MAX_IMAGE. The RAM range guard rejects any address outside `[0, MAX_IMAGE)`. Feed the watchdog after every ROM call by writing `WATCHDOG_LOAD = period_µs × 2`.
@@ -225,6 +225,7 @@ Your answers from the [decision page](https://claude.ai/artifact/WsV3uM75FY2iQ1p
 | D8 | Staging slot | `0x800000`, size `0x160000`. It lies inside the free region `0x260000`-`0xFFDFFF` (7e0af09 map); asserted against `WEAR_LEVELING_RP2040_FLASH_BASE + WEAR_LEVELING_BACKING_SIZE * WEAR_LEVELING_COPIES` and `IDENTITY_SECTOR_A` |
 | D9 | Watchdog during commit | On, fed after every flash operation. Arming sets `PSM_WDSEL` first, loads `period_µs × 2` and clears `PAUSE_DBG` (step 1) |
 | D10 | Reset | Watchdog-triggered reset from RAM, with `PSM_WDSEL` set. Not `mcu_reset` (AIRCR `SYSRESETREQ`, `platforms/chibios/bootloaders/rp2040.c:16-18`), which runs from flash and whose reset scope on RP2040 is UNVERIFIED |
+| D12 | Settings before commit | **Answered after rev 4:** no flush. Settings writes go straight through to flash (`sval_save()` is a no-op; eeconfig and dynamic-keymap write through), so there is nothing to flush. The one failure mode is a whole boot where the wear-leveling backing store failed to initialise and every write silently stayed in the RAM cache. [svalboard/qmk#12](https://github.com/svalboard/qmk/pull/12) latches that as `wear_leveling_write_failed()` (Sval `GET_INFO` byte 18 bit 1). The updater refuses `ARM` with `UNAVAILABLE`, and the commit refuses in step 0 with no erase, while that latch is set. **qmk#12 is a prerequisite for M1.** |
 | D14 | Relay model | Store and forward |
 | D15 | Pausing the split link | **Svalboard overrides the weak `matrix_scan()`** and skips the split exchange while paused. No QMK core change. Pause entry clears the slave rows once; resume calls `split_watchdog_update(false)` so a rebooted slave is re-pinged |
 | D17 | Version in presence | 4-byte version number plus short git hash in presence; full string through INFO |
@@ -244,7 +245,6 @@ Your answers from the [decision page](https://claude.ai/artifact/WsV3uM75FY2iQ1p
 | # | Decided when |
 |---|---|
 | D11 | USB chunk pacing: after the M1 #13 measurements |
-| D12 | Settings before commit: **open, waiting on the settings-persistence root cause.** Settings moved back to QMK wear leveling in `7e0af09`, and layout writes on that path have been seen to reach RAM but not flash. Candidate answers: refuse ARM while a wear-leveling write or consolidation is pending; or force a full save before the copy and abort on failure. The settings hold-off (M1 files) and commit step 0 follow whichever is chosen |
 | D13 | Split message size: after the M2b measurements. Size negotiation is no longer needed (V) |
 | D16 | Dropped (V). Replaced by P1 |
 
@@ -296,7 +296,7 @@ Your answers from the [decision page](https://claude.ai/artifact/WsV3uM75FY2iQ1p
 - **Builds:** Ubuntu WSL only. Do not run concurrent `make` on the same target (they share `.build`). CI: only the Svalboard release and lint workflows, plus the new updater host-test workflow.
 - **Hardware:** the test board only (D1), **never the daily-driver right half**. Recovery is BOOTSEL + `kb/tools/flash.sh`.
 - **Keybard (M4):** a worktree of `GitHub/keybard-fork` from `upstream/main`, a PR to `svalboard/keybard`, keybard-test first.
-- **Gates:** decisions are answered except D12 (Section 3). M0 hardware results come to you before M1 code starts; M1 #13 numbers come to you before M2.
+- **Gates:** all decisions are answered (Section 3). [svalboard/qmk#12](https://github.com/svalboard/qmk/pull/12) must be merged (or the branch rebased onto it) before M1 code. M0 hardware results come to you before M1 code starts; M1 #13 numbers come to you before M2.
 
 ---
 
@@ -307,7 +307,7 @@ Your answers from the [decision page](https://claude.ai/artifact/WsV3uM75FY2iQ1p
 - Storage layer replaced: flash map, asserts, dump ranges, ROM-call and JEDEC pattern (`kb/identity.c`, `wear_leveling_rp2040_flash.c`), dedicated 4 KiB sector buffer, settings hold-off, new test harness and CI workflow.
 - Commit safety: `PSM_WDSEL` set before arming, `LOAD = µs × 2`, `PAUSE_DBG` cleared; boot2 copy taken in step 0 and never refilled; commit only from housekeeping, refused with no erase if any DMA channel is busy; WS2812 left to finish; full 48-slot RAM vector table; image buffers zeroed before the trigger.
 - Design gaps: `REBIND` op (D3); main's stack 3 KiB for Ed25519; slave rows cleared on pause entry and split watchdog re-pinged on resume (D15); P1 compares sizes and offsets.
-- D12 reopened. Citations updated; UNVERIFIED markers resolved except AIRCR reset scope and peripheral state after a watchdog reset.
+- D12 reopened, then answered: refuse while `wear_leveling_write_failed()` is latched (qmk#12); no flush. Citations updated; UNVERIFIED markers resolved except AIRCR reset scope and peripheral state after a watchdog reset.
 
 All blockers and major points from both reviews were checked against the source and accepted. Spot-checked: `client_wrapper.c` has 182 lines; `sval.c:990-1003` lets unwrapped packets fall through to VIA; `identity.c:37-38,41` hold the identity sectors and the `0x18` check; RPC buffers are 32 B (`transport.h:28,32`); `usb.service.ts:17` renews every 50 s; `kb/config.h:155` enables double-tap unconditionally; `keytest.c:76,104` calls `action_exec`.
 
