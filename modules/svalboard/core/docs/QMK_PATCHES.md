@@ -12,6 +12,7 @@ The earlier five-file/~70-line inventory predates the storage and identity chang
 - `WEAR_LEVELING_COPIES`: mirrored copies of the backing store. Log entries go to every copy, consolidation rewrites one copy at a time, and loading prefers a copy that holds data and replays completely, repairing any copy that differs.
 - `wear_leveling_internal.h`: `backing_store_erase_range()`, required when there is more than one copy.
 - RP2040 backing store: ROM erase beyond `PICO_FLASH_SIZE_BYTES`; when the store extends beyond it, a JEDEC capacity check; uncached reads so retries reread the flash; erasing one 64 KB block (or 4 KB sector, for stores not 64 KB-aligned) at a time, skipping erased ones, with interrupts restored in between; and `backing_store_erase_range()`.
+- `quantum/keyboard.c`: a weak `keyboard_pre_eeprom_init_kb()` hook, run before the EEPROM driver initializes. Svalboard uses it to clear the previous firmware's stores before settings load.
 - Tests: upstream tests that seeded an invalid checksum beside a never-consolidated image now leave it erased, as QMK writes it, and also check nothing is reported lost; `wear_leveling_mirror` and `wear_leveling_mirror_large` are new.
 
 ## Merge/rebase checks

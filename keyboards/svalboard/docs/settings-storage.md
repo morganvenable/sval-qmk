@@ -1,6 +1,20 @@
 # Settings storage
 
-Svalboard keeps its settings (keymap, macros, Sval tables, pointing settings) in QMK's wear-leveling store: 128 KB of logical EEPROM, held in two identical 512 KB copies at flash offset `0x500000`. No earlier Svalboard firmware used that region, so the first boot after flashing this firmware starts from defaults; load your layout file to restore your setup. Later firmware updates keep settings, as long as the settings layout is compatible.
+Svalboard keeps its settings (keymap, macros, Sval tables, pointing settings) in QMK's wear-leveling store: 128 KB of logical EEPROM, held in two identical 512 KB copies directly after the firmware.
+
+| Flash | Contents |
+|---|---|
+| `0x000000`–`0x15FFFF` | Firmware (a linker check keeps it below `0x160000`) |
+| `0x160000`–`0x1DFFFF` | Settings, copy 0 |
+| `0x1E0000`–`0x25FFFF` | Settings, copy 1 |
+| `0x260000`–`0xFFDFFF` | Free |
+| `0xFFE000`–`0xFFFFFF` | Board identity: serial and name |
+
+Firmware updates keep settings, as long as the settings layout is compatible. To carry settings across a reflash that changes it, export the layout file in Keybard first and load it again afterwards.
+
+## Upgrading from the previous firmware
+
+The previous firmware kept a dual-bank store at `0x200000`–`0x40FFFF`, and at `0x160000` an older copy of the settings in today's format. On the first boot after the upgrade, before settings load, the firmware erases `0x160000`–`0x40FFFF` (`settings_upgrade.c`), so that old copy is never read as current. This takes a few seconds, once. The board starts from defaults: load your layout file to restore your setup. A board that never ran the dual-bank firmware keeps the settings it already has at `0x160000`.
 
 ## What it protects against
 
