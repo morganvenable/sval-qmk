@@ -67,8 +67,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #    define SVAL_UPDATE_SECURITY_EPOCH 0
 #endif
 #define SVAL_UPDATE_STORAGE_FORMAT 2
+// Confirmation chord (D4): Index South + Middle South, held, on the half with
+// USB. Local matrix rows (each half scans five): right [6,0]+[7,0], left
+// [1,0]+[2,0], which is local rows 1 and 2, column 0 on either side.
+#define SVAL_UPDATE_CHORD_ROW_A 1
+#define SVAL_UPDATE_CHORD_ROW_B 2
+#define SVAL_UPDATE_CHORD_COL 0
+#define SVAL_UPDATE_CHORD_HOLD_MS 1000
+#define SVAL_UPDATE_CONFIRM_WINDOW_MS 30000 // from ARM; NOT_CONFIRMED after it
+#define SVAL_UPDATE_SESSION_TIMEOUT_MS 30000 // no op from the session for this long: TIMEOUT
+#define SVAL_UPDATE_LED_VAL 96               // LED brightness while the updater shows its states (D24)
 #if defined(SVAL_UPDATER) && defined(SVAL_KEYTEST)
 #    error "SVAL_UPDATER and SVAL_KEYTEST cannot be combined: keytest injects key events (R11)"
+#endif
+// Updater builds drive rgblight through a custom driver (updater/update_led.c),
+// so drivers/led/ws2812.h no longer derives the WS2812 LED count from rgblight.
+#if defined(SVAL_UPDATER) && !defined(WS2812_LED_COUNT)
+#    define WS2812_LED_COUNT RGBLIGHT_LED_COUNT
 #endif
 
 // Identity (identity.c): the USB serial is "sval:" + the board's stored 8-byte

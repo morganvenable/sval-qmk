@@ -79,7 +79,7 @@ _Static_assert(sizeof(sval_update_manifest_t) == UPDATE_MANIFEST_BYTES, "manifes
 _Static_assert(__builtin_offsetof(sval_update_manifest_t, image_len) == 16, "manifest layout");
 _Static_assert(__builtin_offsetof(sval_update_manifest_t, sha512) == 44, "manifest layout");
 
-// ---- ops (request byte [0] of value_data) ---------------------------------------
+// ---- ops (the VIA value_id byte; see updater.c for the request layouts) ----------
 
 typedef enum {
     UPDATE_OP_INFO     = 0x00,

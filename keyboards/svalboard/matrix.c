@@ -24,6 +24,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "print.h"
 #include "svalboard.h"
 #include "scanlab.h"
+#ifdef SVAL_UPDATER
+#    include "updater/updater.h"
+#    include "updater/update_gesture.h"
+#    define sval_updater_busy() updater_active()
+#else
+#    define sval_updater_busy() false
+#endif
 
 #define ROWS_PER_HAND 5
 
@@ -263,9 +270,10 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     
     matrix_row_t curr_matrix[ROWS_PER_HAND] = {0};
 
-    // Pacing gate (sweeps run unpaced so they finish quickly).
+    // Pacing gate (sweeps run unpaced so they finish quickly). An update in
+    // progress gets the same treatment: full clock, no deep idle or long naps.
     uint32_t now = now_us();
-    if (!scanlab_active()) {
+    if (!scanlab_active() && !sval_updater_busy()) {
         uint32_t period  = sval_scan_period_now(&idle_stage);
         uint8_t  flags   = global_saved_values.idle_flags;
         // A config app mid-conversation needs the main loop running at its normal rate: the
@@ -315,6 +323,11 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         matrix_read_cols_on_row(curr_matrix, current_row);
     }
     ema16(&stat_led_us, led_on_acc_us);
+#ifdef SVAL_UPDATER
+    // The updater's confirmation chord is read here, and its keys removed,
+    // before debounce and key processing see this frame.
+    update_gesture_scan(curr_matrix);
+#endif
 
     // While a Scan Lab sweep runs, frames feed the engine and never become key events.
     if (scanlab_active()) {

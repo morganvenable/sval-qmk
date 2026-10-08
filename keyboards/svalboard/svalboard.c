@@ -14,6 +14,9 @@
 #include "sval.h"
 #include "identity.h"
 #include "nvm_via.h"
+#ifdef SVAL_UPDATER
+#    include "updater/updater.h"
+#endif
 
 // USB remote wakeup status bit (from USB spec, not exported by QMK headers)
 #ifndef USB_GETSTATUS_REMOTE_WAKEUP_ENABLED
@@ -507,9 +510,19 @@ void housekeeping_task_kb(void) {
 #ifdef SVAL_KEYTEST
     keytest_task();
 #endif
+#ifdef SVAL_UPDATER
+    // The updater owns the LEDs and the flash while active: no idle dimming,
+    // and no identity reboot.
+    updater_task();
+    if (!updater_active()) identity_task();
+#else
     identity_task();
+#endif
 
     if (is_keyboard_master()) {
+#ifdef SVAL_UPDATER
+        if (!updater_active())
+#endif
         sval_rgb_idle_task();
         static uint32_t last_ping = 0;
         if (timer_elapsed(last_ping) > 500) {
@@ -630,6 +643,12 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
         identity_via_command(data, length);
         return;
     }
+#ifdef SVAL_UPDATER
+    if (data[1] == UPDATE_CHANNEL) {
+        updater_via_command(data, length);
+        return;
+    }
+#endif
     uint8_t command = data[0];
     uint8_t *value_id = &data[2];
     uint8_t *value_data = &data[3];

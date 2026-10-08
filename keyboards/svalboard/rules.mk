@@ -60,7 +60,8 @@ ifeq ($(strip $(SVAL_UPDATER)), yes)
   ifeq ($(strip $(SVAL_KEYTEST)), yes)
     $(error SVAL_UPDATER and SVAL_KEYTEST cannot be combined: keytest injects key events (R11))
   endif
-  OPT_DEFS += -DSVAL_UPDATER
+  OPT_DEFS += -DSVAL_UPDATER -DCLIENT_WRAPPER_ID_GETTER
+  SRC += updater/updater.c updater/update_gesture.c updater/update_led.c updater/update_commit.c
   SRC += updater/update_flash.c updater/update_image.c updater/update_keys.c
   SRC += updater/vendor/monocypher.c updater/vendor/optional/monocypher-ed25519.c
   EXTRAINCDIRS += keyboards/svalboard/updater/vendor
@@ -70,6 +71,14 @@ ifeq ($(strip $(SVAL_UPDATER)), yes)
   # fits (the plan's 0xC00 overflows ram4 by 288 bytes). The link fails if
   # anything else lands in SRAM4.
   USE_PROCESS_STACKSIZE = 0xAE0
+  # LED takeover (D20): rgblight's driver becomes the gate in
+  # updater/update_led.c, which forwards to the WS2812 driver except while the
+  # updater shows its own colours. 'override' because svalboard/right/rules.mk
+  # sets RGBLIGHT_DRIVER again after this file. Only the ws2812 driver choice
+  # pulls in the WS2812 driver (builddefs/common_features.mk), so ask for it
+  # here; config.h supplies the LED count that choice would have set.
+  override RGBLIGHT_DRIVER = custom
+  WS2812_DRIVER_REQUIRED = yes
   ifeq ($(strip $(SVAL_UPDATE_TEST_HOOKS)), yes)
     ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
       $(error SVAL_UPDATE_TEST_HOOKS cannot be part of a release build)
