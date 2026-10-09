@@ -2,6 +2,24 @@ name: Release QMK Firmware
 
 # Builds and publishes firmware only when a v* tag is pushed. Branch pushes and
 # PRs do not build, so each release uses the runners once.
+#
+# Since M3 of the in-firmware updater (docs/updater.md, "Release signing"),
+# every release keymap is built as a release updater build (SVAL_UPDATER=yes
+# SVAL_UPDATE_RELEASE=yes), so the published .uf2 files carry the updater:
+#
+#   version  the tag and keyboards/svalboard/updater/fw_version.txt (D32):
+#            the number must go up; dry-run tags (vM3-dryrun1) are prereleases;
+#            a normal tag is refused while the release keys are DRY RUN
+#   build    12 release updater builds; each uploads its .uf2, raw image,
+#            unsigned manifest and ELF. No build job sees a signing key
+#   lint     the release ELFs: no test key, two release key slots, no test
+#            hooks, keytest or host bootloader; the split message table of
+#            every left/right pairing matches the committed golden table (P1)
+#   publish  the .uf2 files, to a release that is a prerelease for a dry run
+#   sign     in the release-signing environment, which needs approval for
+#            each run (D29): signs the release images with the key in its
+#            secret, refusing anything that is not a release image (D22), and
+#            publishes a .svup next to each .uf2
 on:
   push:
     tags:
@@ -11,12 +29,38 @@ on:
 permissions: write-all
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      fw_version: ${{ steps.check.outputs.fw_version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
+        fetch-depth: 0  # the previous release's tag
+
+    - name: Check the version (D32)
+      id: check
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python3 -I keyboards/svalboard/tools/release_version.py "$GITHUB_REF_NAME" \
+          --repo "$GITHUB_REPOSITORY" --github-output "$GITHUB_OUTPUT"
+
   build_sval:
+    needs: version
     uses: ./.github/workflows/build-firmware.yml
     with:
       keyboard: ${{ matrix.keyboard }}
       keymap: ${{ matrix.keymap }}
       side: ${{ matrix.side }}
+      updater: true
+      version_string: ${{ needs.version.outputs.version }}
+      prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
 
     strategy:
       matrix:
@@ -25,14 +69,116 @@ jobs:
         side: [ left, right ]
 
   build_blank:
+    needs: version
     uses: ./.github/workflows/build-firmware.yml
     with:
       keyboard: ${{ matrix.keyboard }}
       keymap: ${{ matrix.keymap }}
       side: ${{ matrix.side }}
+      updater: true
+      version_string: ${{ needs.version.outputs.version }}
+      prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
 
     strategy:
       matrix:
         keyboard: [ svalboard ]
         keymap: [ blank ]
         side: [ left, right ]
+
+  lint:
+    needs: [ build_sval, build_blank ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
+
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: release-*
+        path: release
+        merge-multiple: true
+
+    - name: Lint the release updater ELFs
+      run: |
+        ls -l release
+        test "$(find release -name "*.elf" | wc -l)" -eq 12
+        python3 -I keyboards/svalboard/tools/check_release_elf.py release/*.elf
+
+    - name: Split message table of every pairing, and the golden table (P1)
+      run: |
+        python3 -I keyboards/svalboard/tools/check_split_tables.py --dir release \
+          --golden keyboards/svalboard/tools/split_table_golden.json
+
+  publish:
+    needs: [ version, lint ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: release-*
+        path: release
+        merge-multiple: true
+
+    - name: Release
+      uses: ncipollo/release-action@v1.11.2
+      with:
+        allowUpdates: True
+        omitBodyDuringUpdate: True
+        omitNameDuringUpdate: True
+        prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
+        artifacts: "release/*.uf2"
+
+  sign:
+    needs: [ version, publish ]
+    runs-on: ubuntu-latest
+    # Holds SVAL_UPDATE_SIGNING_KEY and needs approval for each run (D29).
+    # Only this job can read the secret.
+    environment: release-signing
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
+
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: release-*
+        path: release
+        merge-multiple: true
+
+    - name: Sign the release images
+      env:
+        SVAL_UPDATE_SIGNING_KEY: ${{ secrets.SVAL_UPDATE_SIGNING_KEY }}
+        VERSION: ${{ needs.version.outputs.version }}
+        FW_VERSION: ${{ needs.version.outputs.fw_version }}
+      run: |
+        mkdir -p signed
+        test "$(find release -name "*.manifest" | wc -l)" -eq 12
+        for m in release/*.manifest; do
+          base="${m%.manifest}"
+          name="$(basename "$base")"
+          python3 -I keyboards/svalboard/tools/make_update.py sign \
+            --image "$base.img" --manifest "$m" -o "signed/${name}_${VERSION}.svup" \
+            --key-env SVAL_UPDATE_SIGNING_KEY --expect-version "$VERSION" --expect-fw-version "$FW_VERSION"
+        done
+
+    - name: Check each .svup as a release build would
+      run: |
+        for f in signed/*.svup; do
+          python3 -I keyboards/svalboard/tools/make_update.py verify "$f" --build release
+        done
+
+    - name: Publish the .svup files
+      uses: ncipollo/release-action@v1.11.2
+      with:
+        allowUpdates: True
+        omitBodyDuringUpdate: True
+        omitNameDuringUpdate: True
+        prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
+        artifacts: "signed/*.svup"
