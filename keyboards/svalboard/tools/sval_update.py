@@ -648,7 +648,13 @@ def pair(dev, args, paths, sessions):
         deadline = t0 + 10
         s = None
         while time.monotonic() < deadline:
-            s = decode_status(*dev2.op(STATUS, hand=board))
+            try:
+                s = decode_status(*dev2.op(STATUS, hand=board))
+            except (RuntimeError, OSError, IOError):
+                # Opened while the board was still resetting: open it again.
+                dev2.close()
+                dev2 = reopen(serial, max(1, deadline - time.monotonic()))
+                continue
             if s["other_half_id"] == PRESENCE_MATCH:
                 break
             time.sleep(0.5)
