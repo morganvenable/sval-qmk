@@ -157,6 +157,28 @@ typedef struct __attribute__((packed)) {
 
 **Exit:** every hardware row passes on the test board half; the host tests pass; `check_ram_funcs.py` is clean; you have reviewed the measurements in #13 and the answers to D11 and D13.
 
+**M1 hardware results (2026-10-08).** Right test board (`E465B0621725122B`) and, as a second unit, the left test board (`E464B4B293221323`), both RP2040 B2 with a 16 MiB Winbond flash (`ef4018`). Builds from `feat/fw-updater` with `SVAL_UPDATER=yes SVAL_UPDATE_TEST_KEY=yes` (and `SVAL_UPDATE_TEST_HOOKS=yes` for #8-#10), the host tool on Windows Python with hidapi, and picotool through usbipd for the dumps.
+
+| # | Result |
+|---|---|
+| 1 | Pass on both halves |
+| 3 | Pass four times: blue for 30 s, then red `NOT_CONFIRMED`; ABORT clears it |
+| 4 | Pass, A→B on the right; settings and identity identical byte for byte to the dumps before the test and to the M0 baseline; the slot holds exactly B. Typing and pointing come back without a power cycle (R24) |
+| 5 | Skipped (your call) |
+| 6 | Pass: the 26 protocol cases (`reject`) and the image cases `UNSUPPORTED` (hand), `WRONG_HW`, `STORAGE`, `BAD_SIG`, `BAD_HASH`, `BAD_IMAGE` (boot2, SP, reset vector). Not run: epoch below (needs a floor-1 build), too large and not whole pages (`make_update.py` refuses them; host-tested) |
+| 7 | Pass for an unplug while VERIFIED and while RECEIVING: the old image boots, the slot is ignored. ERASING not hit: the window is about 1.5 s; covered by the 102 staging cuts in the host tests |
+| 8 | Pass (short set): halt after invalidation and at the last sector, then unplug: BOOTSEL, page 0 all `0x00` and all `0xFF`; settings and identity unchanged |
+| 9 | Pass (short set): halt after page 0 with the watchdog unfed: B boots by itself about 13 s later |
+| 10 | Pass: `fault` and `fault-erased` both reset into BOOTSEL in about 1 s (the RAM vector table, not the 8 s watchdog) |
+| 11 | Pass |
+| 12 | Covered by the 30 s chord waits and 17 s transfers: no dimming or deep idle |
+| 13 | Transfer 118 KB in 16.7-17.7 s (about 6,600 round trips at 1.6-1.8 ms), signature 148-151 ms, image verify about 485 ms, sector erase 50-53 ms, about 1-2 s from COMMIT to reboot. Main stack: 780 B never used out of 2,784 after a full update. The commit ends with a "watchdog force" reset |
+| 14 | Pass both ways on the right (A→B→A) and on the left (2001→2002→2001); never BOOTSEL. Left settings and identity identical to its pre-test backup |
+| 15 | Not run separately: no SWD probe is attached, so #9 already ran with the debugger pause bits irrelevant |
+| 16 | Pass: 4 renewals mid-transfer, the old ID refused each time |
+
+Open: once, after a picotool reflash, the board sat in CONFIRM_WAIT (STATUS showed it) but the LEDs stayed on the normal colour instead of blinking blue. Not seen again in the next eight sessions. The first run of #3 also rebooted the board once mid-wait and was not reproduced; DIAG now records the reset reason and the updater state before a reset, to catch either if it recurs.
+
 ### M2: split relay and version handshake (M2a without the test board, M2b on the test board)
 
 **Scope:** store-and-forward relay (D14) over a new `KEYBOARD_UPDATE` split message, presence with version (mismatch detection only), a split pause done in the keyboard layer (D15), slave mailbox, inactivity timeout, LEDs on both halves.
