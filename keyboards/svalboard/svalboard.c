@@ -728,6 +728,9 @@ void sval_dev_command(uint8_t *data, uint8_t length) {
 }
 #endif
 
+#ifdef SVAL_POINT_CONTROLS
+#    include "pointing/point_control.h"
+#endif
 void housekeeping_task_kb(void) {
 #ifdef SVAL_PERF_STATS
     sval_perf_loop();
@@ -742,6 +745,9 @@ void housekeeping_task_kb(void) {
 #    endif
 #endif
     sval_pointer_probe_task();
+#ifdef SVAL_POINT_CONTROLS
+    sval_point_task();
+#endif
     sval_usb_wake_handler();
     scanlab_housekeeping();
 #ifdef SVAL_KEYTEST

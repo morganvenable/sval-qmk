@@ -13,6 +13,9 @@
 #include "layout_stamp.h"
 #include "send_string.h"
 #include "wait.h"
+#ifdef SVAL_POINT_CONTROLS
+#    include "pointing/point_config.h"
+#endif
 #ifdef EEPROM_WEAR_LEVELING
 #    include "wear_leveling.h"
 #endif
@@ -185,6 +188,9 @@ uint8_t sval_get_feature_flags2(void) {
 #endif
 #ifdef SVAL_NATIVE_PTP
     flags |= sval_flag2_pointing_contacts;
+#endif
+#ifdef SVAL_POINT_CONTROLS
+    flags |= (1 << 1);
 #endif
     return flags;
 }
@@ -441,6 +447,9 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
     // data[2...] = payload
 
     uint8_t command_id = data[1];
+#ifdef SVAL_POINT_CONTROLS
+    if (command_id >= 0x2C && command_id <= 0x2F) return sval_point_command(data, length);
+#endif
 
     if (command_id >= sval_cmd_context_layer_set && command_id <= sval_cmd_context_layer_clear) {
         return sval_context_layer_command(data, length);
