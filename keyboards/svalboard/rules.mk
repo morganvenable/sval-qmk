@@ -67,6 +67,8 @@ ifeq ($(strip $(SVAL_UPDATER)), yes)
   OPT_DEFS += -DSVAL_UPDATER -DCLIENT_WRAPPER_ID_GETTER
   SRC += updater/updater.c updater/update_gesture.c updater/update_led.c updater/update_commit.c
   SRC += updater/update_flash.c updater/update_image.c updater/update_keys.c
+  # M2: the split pause (D15, a matrix_scan() override) and the split relay.
+  SRC += split_pause.c updater/update_split.c updater/update_split_wire.c
   SRC += updater/vendor/monocypher.c updater/vendor/optional/monocypher-ed25519.c
   EXTRAINCDIRS += keyboards/svalboard/updater/vendor
   # The commit's RAM code must not branch into flash (R2): no jump tables, no

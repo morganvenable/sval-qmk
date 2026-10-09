@@ -48,6 +48,10 @@ void update_device_self(update_device_t *dev) {
 bool updater_port_scan_override(void) {
     return port_scan_override;
 }
+static uint8_t port_split_presence; // update_presence_status_t
+uint8_t updater_port_split_presence(void) {
+    return port_split_presence;
+}
 #define HOST_STACK_SIZE 0xAE0
 #define HOST_STACK_FREE 0x2A4
 uint16_t updater_port_stack_free(uint16_t *size) {
@@ -283,6 +287,7 @@ static void fresh(uint32_t len) {
     scan(false, false);
     port_failing       = false;
     port_scan_override = false;
+    port_split_presence = UPDATE_PRESENCE_NONE;
     commit_avail  = false;
     commit_runs   = 0;
     commit_result = UPDATE_UNSUPPORTED;
@@ -1051,6 +1056,40 @@ static void test_session_refusals(void) {
     CHECK_EQ(send_nonce(CLIENT_A, UPDATE_OP_BEGIN, first), UPDATE_INVALID); // once
 }
 
+// The other half's version by split presence (M2, V): INFO flags bit5,
+// STATUS byte 22, and the red error LED while the updater is idle.
+static void test_session_presence(void) {
+    static const struct {
+        uint8_t presence;
+        bool    mismatch;
+    } cases[] = {
+        {UPDATE_PRESENCE_NONE, false},     {UPDATE_PRESENCE_MATCH, false},   {UPDATE_PRESENCE_VERSION, true},
+        {UPDATE_PRESENCE_SAME_HAND, true}, {UPDATE_PRESENCE_INVALID, true},
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        fresh(0x3000);
+        port_split_presence = cases[i].presence;
+        CHECK_EQ(send(0, UPDATE_OP_INFO, NULL, 0), UPDATE_OK);
+        CHECK_EQ((rsp[21] & 0x20) != 0, cases[i].mismatch);
+        CHECK_EQ(send(CLIENT_A, UPDATE_OP_STATUS, NULL, 0), UPDATE_OK);
+        CHECK_EQ(rsp[22], cases[i].presence);
+        pass();
+        CHECK_EQ(led_now, cases[i].mismatch ? UPDATE_LED_ERROR : UPDATE_LED_NONE);
+        CHECK_EQ(updater_state(), UPDATE_STATE_IDLE); // a mismatch is not an updater error: nothing latched
+        // a session shows its own LEDs over it
+        CHECK(to_confirm_wait(CLIENT_A));
+        pass();
+        CHECK_EQ(led_now, UPDATE_LED_CONFIRM);
+        CHECK_EQ(send_nonce(CLIENT_A, UPDATE_OP_ABORT, session_nonce), UPDATE_OK);
+        pass();
+        CHECK_EQ(led_now, cases[i].mismatch ? UPDATE_LED_ERROR : UPDATE_LED_NONE);
+        // fixed: back to normal
+        port_split_presence = UPDATE_PRESENCE_MATCH;
+        pass();
+        CHECK_EQ(led_now, UPDATE_LED_NONE);
+    }
+}
+
 static void test_session(void) {
     uint8_t seed[32], pk[32];
     hex(test_seed_hex, seed, 32);
@@ -1066,5 +1105,6 @@ static void test_session(void) {
     test_session_chunks();
     test_session_timeouts();
     test_session_refusals();
+    test_session_presence();
     printf("session tests: %s\n", failures == before_failures ? "pass" : "FAIL");
 }

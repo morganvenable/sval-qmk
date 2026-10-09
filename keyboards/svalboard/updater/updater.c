@@ -19,7 +19,8 @@
 //                                                fw_version u32, storage format, security epoch u16,
 //                                                flags (bit0 die is 16 MiB, bit1 settings writes failing,
 //                                                bit2 release build, bit3 test hooks, bit4 the TEST-ONLY
-//                                                key is accepted), last error.
+//                                                key is accepted, bit5 the other half's version
+//                                                differs: see STATUS), last error.
 //                                                Status UNAVAILABLE when bit0 is clear or bit1 set.
 //  0x01 MANIFEST off u8, n 1..20, bytes          filled u8 (of 172: manifest, then signature)
 //  0x02 ARM      -                               nonce u32, first 4 bytes of sha512(108 B manifest)
@@ -31,7 +32,8 @@
 //                                                image verify ms u16, longest sector erase ms u16,
 //                                                image CRC low 16 bits (once VERIFIED), flags (bit0
 //                                                chord made, bit1 session bound, bit2 settings writes
-//                                                failing), 0
+//                                                failing), the other half by split presence
+//                                                (update_presence_status_t; M2, V)
 //  0x07 COMMIT   nonce u32, CRC low 16 bits      state
 //  0x08 ABORT    nonce u32                       state
 //  0x09 REBIND   nonce u32                       state
@@ -84,10 +86,6 @@
 enum { id_custom_set_value = 0x07, id_custom_get_value = 0x08 };
 #else
 #    include "via.h"
-#endif
-
-#ifndef SVAL_FW_VERSION
-#    define SVAL_FW_VERSION 0 // numeric release version: M3 sets it from the tag (D17)
 #endif
 
 #define VALUE_BYTES 23 // value_data that survives the client wrapper: 32 - 6 - 3
@@ -154,6 +152,12 @@ static uint16_t ms16(uint32_t ms) {
     return ms > 0xFFFF ? 0xFFFF : (uint16_t)ms;
 }
 
+// The other half answers presence and is not the same release (V).
+static bool split_mismatch(void) {
+    uint8_t p = updater_port_split_presence();
+    return p == UPDATE_PRESENCE_VERSION || p == UPDATE_PRESENCE_SAME_HAND || p == UPDATE_PRESENCE_INVALID;
+}
+
 static uint8_t self_hand(void) {
     update_device_t dev;
     update_device_self(&dev);
@@ -213,7 +217,7 @@ static update_status_t op_info(uint8_t *rsp) {
     put32(&rsp[14], SVAL_FW_VERSION);
     rsp[18] = dev.storage_format;
     put16(&rsp[19], dev.security_epoch);
-    rsp[21] = (die_ok ? 0x01 : 0) | (failing ? 0x02 : 0) | (dev.release_build ? 0x04 : 0) | (update_key(UPDATE_KEY_TEST) ? 0x10 : 0);
+    rsp[21] = (die_ok ? 0x01 : 0) | (failing ? 0x02 : 0) | (dev.release_build ? 0x04 : 0) | (update_key(UPDATE_KEY_TEST) ? 0x10 : 0) | (split_mismatch() ? 0x20 : 0);
 #ifdef SVAL_UPDATE_TEST_HOOKS
     rsp[21] |= 0x08;
 #endif
@@ -349,6 +353,7 @@ static update_status_t op_status(uint32_t client, uint8_t *rsp) {
     put16(&rsp[17], s.erase_ms_max);
     put16(&rsp[19], s.state == UPDATE_STATE_VERIFIED || s.state == UPDATE_STATE_COMMITTING ? s.crc_body & 0xFFFF : 0);
     rsp[21] = (update_gesture_done(NULL) && s.bound ? 0x01 : 0) | (s.bound ? 0x02 : 0) | (updater_port_settings_failing() ? 0x04 : 0);
+    rsp[22] = updater_port_split_presence();
     return UPDATE_OK;
 }
 
@@ -617,7 +622,9 @@ static update_led_mode_t led_mode(void) {
     switch (s.state) {
         case UPDATE_STATE_IDLE:
         case UPDATE_STATE_MANIFEST_LOADING:
-            return UPDATE_LED_NONE;
+            // A version mismatch with the other half shows the red error LED
+            // on the half with USB until it is fixed (V).
+            return split_mismatch() ? UPDATE_LED_ERROR : UPDATE_LED_NONE;
         case UPDATE_STATE_ERROR:
             return UPDATE_LED_ERROR;
         case UPDATE_STATE_COMMITTING:
@@ -705,6 +712,7 @@ void updater_host_reset(void) {
 #    include "wait.h"
 #    include "client_wrapper.h"
 #    include "scanlab.h"
+#    include "update_split.h"
 #    include "hardware/structs/rosc.h"
 #    ifdef EEPROM_WEAR_LEVELING
 #        include "wear_leveling.h"
@@ -739,6 +747,10 @@ uint32_t updater_port_random32(void) {
 
 bool updater_port_scan_override(void) {
     return scanlab_active();
+}
+
+uint8_t updater_port_split_presence(void) {
+    return update_split_presence();
 }
 
 // crt0 (ChibiOS crt0_v6m.S, CRT0_INIT_STACKS on by default) fills the process

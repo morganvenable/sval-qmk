@@ -50,6 +50,17 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     -o "$out/test_commit"
 "$out/test_commit"
 
+# M2: the split pause (kb/split_pause.c), the KEYBOARD_UPDATE wire format,
+# presence and the slave's request handler.
+${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
+    -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
+    -DSVAL_UPDATER_HOST_TEST -include "$kb/config.h" \
+    -I"$tests" -I"$kb" -I"$kb/updater" \
+    "$tests/test_split.c" "$kb/split_pause.c" \
+    "$kb/updater/update_split.c" "$kb/updater/update_split_wire.c" \
+    -o "$out/test_split"
+"$out/test_split"
+
 # The TEST-ONLY public key is compiled in only with SVAL_UPDATE_TEST_KEY (make
 # SVAL_UPDATE_TEST_KEY=yes, or SVAL_UPDATE_TEST_HOOKS=yes), and never together
 # with SVAL_UPDATE_RELEASE.

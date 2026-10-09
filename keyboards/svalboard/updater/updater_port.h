@@ -27,6 +27,10 @@ uint32_t updater_port_random32(void);
 // matrix).
 bool updater_port_scan_override(void);
 
+// The other half as split presence shows it: update_presence_status_t (M2,
+// V). Always UPDATE_PRESENCE_NONE on the half without USB.
+uint8_t updater_port_split_presence(void);
+
 // Main's stack (ChibiOS's process stack): its size, and the bytes at its
 // bottom never used since boot (still crt0's fill pattern). M1 #13, R5.
 uint16_t updater_port_stack_free(uint16_t *size);

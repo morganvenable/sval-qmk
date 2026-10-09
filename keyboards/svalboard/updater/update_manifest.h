@@ -136,3 +136,16 @@ typedef enum {
     UPDATE_STATE_COMMITTING         = 8,
     UPDATE_STATE_ERROR              = 9,
 } update_state_t;
+
+// ---- the other half, as split presence shows it (M2, D17, V) -------------------------
+// Reported by STATUS (byte 22) on the half with USB; INFO flags bit5 is set for
+// VERSION, SAME_HAND and INVALID, which also show the red error LED there
+// while the updater is idle. The half without USB always reports NONE.
+
+typedef enum {
+    UPDATE_PRESENCE_NONE      = 0, // no answer from the other half (or this half is not the master)
+    UPDATE_PRESENCE_MATCH     = 1, // same fw_version, git hash and updater protocol, other hand
+    UPDATE_PRESENCE_VERSION   = 2, // a different fw_version, git hash or updater protocol
+    UPDATE_PRESENCE_SAME_HAND = 3, // both halves are built for the same side
+    UPDATE_PRESENCE_INVALID   = 4, // the answer fails magic, version or CRC: firmware without presence
+} update_presence_status_t;

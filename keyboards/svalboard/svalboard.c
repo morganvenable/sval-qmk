@@ -16,6 +16,8 @@
 #include "nvm_via.h"
 #ifdef SVAL_UPDATER
 #    include "updater/updater.h"
+#    include "updater/update_split.h"
+#    include "split_pause.h"
 #endif
 
 // USB remote wakeup status bit (from USB spec, not exported by QMK headers)
@@ -453,6 +455,10 @@ void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen
         sval_pointer_rest_apply();
     }
     global_saved_values.scan_deep_clock_idx = in->scan_deep_clock_idx;
+#ifdef SVAL_UPDATER
+    // The response: this build's version, for the master's mismatch check (D17, V).
+    update_split_presence_fill(out_data, out_buflen);
+#endif
 }
 
 // Scan Lab requests from the master run here on the other half.
@@ -471,6 +477,9 @@ void keyboard_post_init_kb(void) {
     set_dpi_from_eeprom();
     keyboard_post_init_user();
     scanlab_init();
+#ifdef SVAL_UPDATER
+    update_split_init(); // before kb_sync_listener can answer a presence ping
+#endif
     transaction_register_rpc(KEYBOARD_SYNC_A, kb_sync_listener);
     transaction_register_rpc(KEYBOARD_SYNC_B, scanlab_rpc_listener);
     if (is_keyboard_master()) {
@@ -525,18 +534,31 @@ void housekeeping_task_kb(void) {
 #endif
         sval_rgb_idle_task();
         static uint32_t last_ping = 0;
+#ifdef SVAL_UPDATER
+        // No presence ping while the split link is paused (D15); the first
+        // pass after the resume pings.
+        if (timer_elapsed(last_ping) > 500 && !sval_split_paused()) {
+#else
         if (timer_elapsed(last_ping) > 500) {
+#endif
             presence_rpc_t rpcout = {global_saved_values.turbo_scan, global_saved_values.scan_prewait_us, global_saved_values.scan_postwait_us,
                                      global_saved_values.scan_period_us, global_saved_values.scan_idle_period_ms, global_saved_values.scan_idle_after_ms,
                                      global_saved_values.scan_deep_after_s, global_saved_values.scan_deep_period_ms, global_saved_values.idle_flags,
                                      global_saved_values.scan_deep_clock_idx};
             presence_rpc_t rpcin = {0};
             if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rpc_t), &rpcin)) {
+#ifdef SVAL_UPDATER
+                // The response is the other half's update_presence_t (same 17 bytes).
+                update_split_presence_result(true, &rpcin, sizeof(rpcin));
+#endif
                 if (!is_connected) {
                     is_connected = true;
                     sval_on_reconnect();
                 }
             } else {
+#ifdef SVAL_UPDATER
+                update_split_presence_result(false, NULL, 0);
+#endif
                 is_connected = false;
             }
             last_ping = timer_read32();

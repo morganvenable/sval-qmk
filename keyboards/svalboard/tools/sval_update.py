@@ -84,6 +84,14 @@ def status_name(code):
     return STATUS_NAMES[code] if code < len(STATUS_NAMES) else f"status {code}"
 
 
+# The other half by split presence (update_presence_status_t; M2, V).
+PRESENCE_NAMES = ["none", "match", "version differs", "same hand", "invalid answer"]
+
+
+def presence_name(code):
+    return PRESENCE_NAMES[code] if code < len(PRESENCE_NAMES) else f"presence {code}"
+
+
 def state_name(code):
     return STATE_NAMES[code] if code < len(STATE_NAMES) else f"state {code}"
 
@@ -175,7 +183,7 @@ def decode_info(st, r):
                 hand_id=r[12], pointing_id=r[11], fw_version=struct.unpack_from("<I", r, 13)[0], storage_format=r[17],
                 security_epoch=struct.unpack_from("<H", r, 18)[0], flash_16mib=bool(r[20] & 1),
                 settings_writes_failing=bool(r[20] & 2), release_build=bool(r[20] & 4), test_hooks=bool(r[20] & 8),
-                test_key=bool(r[20] & 16), last_error=status_name(r[21]))
+                test_key=bool(r[20] & 16), other_half_mismatch=bool(r[20] & 32), last_error=status_name(r[21]))
 
 
 def decode_diag(st, r):
@@ -213,7 +221,8 @@ def decode_status(st, r):
                 sectors_to_erase=struct.unpack_from("<H", r, 9)[0], last_error=status_name(r[11]), last_error_id=r[11],
                 signature_ms=struct.unpack_from("<H", r, 12)[0], verify_ms=struct.unpack_from("<H", r, 14)[0],
                 erase_ms_max=struct.unpack_from("<H", r, 16)[0], crc_lo16=struct.unpack_from("<H", r, 18)[0],
-                chord_made=bool(r[20] & 1), session_bound=bool(r[20] & 2), settings_writes_failing=bool(r[20] & 4))
+                chord_made=bool(r[20] & 1), session_bound=bool(r[20] & 2), settings_writes_failing=bool(r[20] & 4),
+                other_half=presence_name(r[21]), other_half_id=r[21])
 
 
 class Session:

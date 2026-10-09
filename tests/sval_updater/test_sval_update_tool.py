@@ -221,10 +221,12 @@ def main():
     check(info["slot_base"] == "0x800000" and info["slot_size"] == "0x160000" and info["max_image"] == "0x160000", f"info {info}")
     check(info["storage_format"] == 2 and info["flash_16mib"] and not info["settings_writes_failing"], f"info {info}")
     check(info["test_key"] and not info["release_build"], f"info {info}")
+    check(not info["other_half_mismatch"], f"info {info}")
     diag = su.decode_diag(*board.op(su.DIAG, b"\0", hand=1))
     check(diag["status"] == "OK" and diag["stack_size"] == 0xAE0 and diag["stack_unused"] == 0x2A4, f"diag {diag}")
     st = su.decode_status(*board.op(su.STATUS, hand=1))
     check(st["state"] == "IDLE" and st["status"] == "OK", f"status {st}")
+    check(st["other_half"] == "none" and st["other_half_id"] == 0, f"status {st}")
     st, r = board.op(su.ABORT, bytes(4), hand=1)
     check(st == su.OK, "ABORT in IDLE")
 

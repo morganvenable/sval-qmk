@@ -74,13 +74,13 @@ byte layouts are in the comment at the top of `kb/updater/updater.c`. In short:
 
 | Op | Request after `[hand]` | Reply after `[status]` / rule |
 |---|---|---|
-| `0x00 INFO` | - | state, protocol, slot base/size and max image (4 KiB units), JEDEC ID, pointing ID, hand, fw version, storage format, security epoch, flags (16 MiB die, settings writes failing, release build, test hooks, test key accepted), last error |
+| `0x00 INFO` | - | state, protocol, slot base/size and max image (4 KiB units), JEDEC ID, pointing ID, hand, fw version, storage format, security epoch, flags (16 MiB die, settings writes failing, release build, test hooks, test key accepted, the other half's version differs), last error |
 | `0x01 MANIFEST` | off, n ≤ 20, bytes | bytes filled, of 172 (108 B manifest then 64 B Ed25519 signature). In order; offset 0 restarts. Ties the load to this client |
 | `0x02 ARM` | - | nonce u32 and the first 4 bytes of SHA-512(manifest), which the host shows. Checks the manifest fields, binds the session to client ID + nonce, starts the 30 s chord window. BUSY, with nothing changed, while a Scan Lab sweep runs |
 | `0x03 BEGIN` | nonce | ACCEPTED once the chord is made: signature check, then the erase, one 4 KiB sector per main-loop pass |
 | `0x04 CHUNK` | off u24, n ≤ 18, bytes | next offset. Strictly in order; an earlier chunk is acknowledged and not written again |
 | `0x05 END` | nonce | ACCEPTED: SHA-512, structure checks and CRC of the staged image, 2 KiB per pass |
-| `0x06 STATUS` | - | state, bytes staged, erase progress, last error, timings, CRC low 16 bits once VERIFIED, flags |
+| `0x06 STATUS` | - | state, bytes staged, erase progress, last error, timings, CRC low 16 bits once VERIFIED, flags, the other half by split presence (see below) |
 | `0x07 COMMIT` | nonce, CRC low 16 | ACCEPTED; the commit runs from housekeeping 100 ms later. The CRC (CRC-32/MPEG-2 over image bytes `[0x100, len)`) must match the verified image |
 | `0x08 ABORT` | nonce | From the session, or from anyone while ERROR is latched. Never erases |
 | `0x09 REBIND` | nonce | Moves the session to the sender's client ID (Keybard renews its ID every 50 s); the old ID is refused after it |
@@ -265,6 +265,67 @@ LEDs turn magenta is a pass, and one after about 8 s is a failure.
   renewal may never fire during a fast transfer; `--min-rebinds` fails the run
   before COMMIT if fewer renewals happened, and the summary prints the count.
 
+## The split link (M2a, stage 1)
+
+M2 updates the half without USB through the half with USB. Stage 1 builds
+the link layer; the relay, the slave's mailbox and programming come in
+stage 2. All of it is in `SVAL_UPDATER` builds only: a default build is
+unchanged byte for byte.
+
+**One release on both halves (V).** An `SVAL_UPDATER` build adds the
+`KEYBOARD_UPDATE` split transaction, so its split table has one entry more
+than a default build's. Both halves fold the transaction count into every
+split handshake, so an `SVAL_UPDATER` half cannot talk to a default-build half
+at all: flash both halves with `SVAL_UPDATER` builds of the same commit.
+`kb/tools/check_split_tables.py` checks that every left/right pairing of a set
+of builds has the same table (P1):
+
+```
+python3 -I keyboards/svalboard/tools/check_split_tables.py --dir DIR_WITH_ELFS
+python3 -I keyboards/svalboard/tools/check_split_tables.py --dump BUILD.elf
+```
+
+**Presence with version (D17).** The half without USB answers the existing
+500 ms presence ping (`KEYBOARD_SYNC_A`) with 17 bytes: magic `PV`, struct
+version 1, `fw_version` u32 (`SVAL_FW_VERSION`, 0 until M3), the first 8 hex
+digits of the git hash (0 for `SKIP_GIT` builds), updater protocol, hand,
+pointing ID, flags (bit0 dirty tree, bit1 updater active), a reserved 0 and a
+CRC-8 (`kb/updater/update_split_wire.h`). The half with USB compares it with
+its own build and reports the result in STATUS byte 22 (`value_data[22]`):
+
+| Code | Other half |
+|---|---|
+| 0 | no answer (or this is the half without USB) |
+| 1 | same release: same `fw_version`, git hash and updater protocol, other hand |
+| 2 | version differs |
+| 3 | built for the same hand |
+| 4 | the answer fails magic, version or CRC |
+
+For 2-4, INFO flags bit5 is set and, while the updater is idle, the half with
+USB blinks the red error LED (1 Hz) until the halves match (V). The pointing
+device may differ between halves (D18).
+
+**The split pause (D15).** `kb/split_pause.c` overrides QMK's weak
+`matrix_scan()`. While the half with USB is paused, it skips the whole split
+exchange (keys, layers, RGB sync, pointing, the watchdog ping), the presence
+ping and the Scan Lab relay; only `KEYBOARD_UPDATE` RPCs cross the link. On
+entry the other half's keys are released once and its last pointer report is
+dropped; this half keeps typing. On resume the split watchdog is re-armed, so
+a half that rebooted meanwhile is pinged again. Only the half with USB can
+pause, and only while the link is up. Stage 1 adds the mechanism; nothing
+calls it yet.
+
+**`KEYBOARD_UPDATE`.** Frames of at most 32 bytes each way:
+`[op][seq][payload][crc16]` and `[status][op][seq][state][payload][crc16]`
+(CRC-16/CCITT-FALSE). Ops: `INFO 0, BEGIN 1` (the 172-byte signed manifest in
+fragments of up to 26 bytes), `PAGE 2` (image bytes, up to 24 per fragment,
+never across a 256-byte page), `STATUS 3, END 4, COMMIT 5` (CRC low 16),
+`ABORT 6`. The layouts are in `kb/updater/update_split_wire.h`. The slave
+answers a repeated frame (same seq and CRC) from its cache without running it
+again, and a PAGE fragment it already holds is acknowledged and not written
+again. In stage 1 the slave answers INFO, STATUS and ABORT; BEGIN, PAGE, END
+and COMMIT are checked and refused with UNSUPPORTED.
+
 ## Tools and tests
 
 - `kb/tools/make_update.py`: UF2 → `.svup` (manifest, signature, raw image). It
@@ -273,6 +334,8 @@ LEDs turn magenta is a pass, and one after about 8 s is a failure.
   `abort`, `update`, `reject`). Close Keybard first: raw HID replies reach every
   open handle.
 - `kb/tools/check_ram_funcs.py BUILD.elf`: the RAM-code check above.
+- `kb/tools/check_split_tables.py`: the split-table check across left/right
+  pairings (P1), above.
 - `util/updater_test/run.sh [UF2 ...]`: host tests under ASan and UBSan. They
   cover `make_update.py`, the manifest, image and crypto checks, the session state
   machine, `sval_update.py` against the C state machine, and the commit routine.
@@ -284,3 +347,9 @@ LEDs turn magenta is a pass, and one after about 8 s is a failure.
   `[0, round_up(len, 64 KiB))`, nothing else changed, every boot ROM call came in
   order (interrupts off, XIP exited; the mock die refuses any other call), and
   page 0 is either invalid or the whole new image is in place.
+  `test_split.c` covers the split link: the pause against mocks of QMK's
+  matrix and transport (a key held on the other half at pause entry is
+  released, the exchange stops, this half keeps typing, resume re-arms the
+  split watchdog), the `KEYBOARD_UPDATE` frames (every single-bit error is
+  caught), PAGE fragment assembly, presence and the mismatch rules, and the
+  slave's handler (retries answered from its cache, 20,000 random frames).

@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 #ifdef SVAL_UPDATER
 #    include "updater/updater.h"
+#    include "split_pause.h"
 #endif
 
 // Microsecond clock for the probe. The ChibiOS system timer on the RP2040
@@ -414,6 +415,13 @@ void scanlab_via_command(uint8_t *data, uint8_t length) {
     bool local = (hand == 0) == is_keyboard_left();
     if (local) {
         scanlab_handle(req, rsp);
+#ifdef SVAL_UPDATER
+    } else if (sval_split_paused()) {
+        // The split link is paused for an update (D15): no relay, answered as
+        // if the other half were silent.
+        memset(rsp, 0, sizeof(rsp));
+        rsp[0] = 0xFF;
+#endif
     } else if (!transaction_rpc_exec(KEYBOARD_SYNC_B, sizeof(req), req, sizeof(rsp), rsp)) {
         memset(rsp, 0, sizeof(rsp));
         rsp[0] = 0xFF;  // other half did not answer

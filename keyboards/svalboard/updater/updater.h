@@ -13,6 +13,10 @@
 #include <stdint.h>
 #include "update_manifest.h"
 
+#ifndef SVAL_FW_VERSION
+#    define SVAL_FW_VERSION 0 // numeric release version: M3 sets it from the tag (D17)
+#endif
+
 // From housekeeping, every pass. Runs the timeouts, one slice of slow work and
 // the LEDs.
 void updater_task(void);
