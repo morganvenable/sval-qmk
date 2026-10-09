@@ -202,6 +202,24 @@ Split ops: `INFO, BEGIN (async erase, paused), PAGE(off,seq,crc16,data), STATUS,
 **M2a stage 2 review fixes, 2026-10-08:** the slave's 5 s timeout reads its clock under the shared-memory lock and compares signed (a request landing between the read and the lock wrapped `now - rx_ms`); RPC lengths from the wire are clamped to 32 B; the slave's page program is refused with BUSY while a DMA channel is busy (R6, below); the slave erases a sector only after a request since its last erase (it cannot answer for about 50 ms per sector, so the master's 2 s link timeout raced the erase and a single ABORT was usually lost); a failed or aborted relay keeps the link paused and sends ABORT until the other half answers (`RELAY_ABORTING`, phase 13); a lost COMMIT answer or an IDLE answer to COMMIT leads to the hold, not a failure; a probe that finds the other half still COMMITTING probes again (bounded) instead of reporting done; DONE without any answer is flagged unconfirmed; after a relay the red LED stays until presence reads MATCH (also through NONE); `pair` checks both images against both halves before sending anything; P1 checks the order of the keyboard RPC IDs through `sval_split_kb_ids` (updater builds).
 **M2b (test board):** update the subside, then the main half; pull TRRS mid-relay (the slave aborts within 5 s, both halves stay on the old image, LEDs restore); cut subside power mid-commit (BOOTSEL, recovered over its own USB); a forced version mismatch (Keybard warning plus red LED on the half with USB); measure the RPC round trip and the subside transfer time (target < 30 s); type on the subside during the relay and check no keys are lost outside paused windows, and that a key held at pause entry is released.
 
+**M2b results, 2026-10-08** (images built at 875623fd5a; right test board on USB, the left test board powered and linked over the split cable only):
+
+| Step | Result |
+|---|---|
+| 1 Baseline (both halves at 2001 over their own USB) | Pass: presence MATCH, `info --other` reads the left half |
+| 2 Dry run (`--no-commit`) | Pass: VERIFIED on the right half, the left half untouched. An `abort` from a new tool process is refused (OTHER_CLIENT, M1 design); the session times out after 30 s and ABORT then clears it |
+| 3 Left half 2001 → 2002 | Pass. Relay 11.4 s for 125,696 B (target < 30 s), 71 retries, 31 sectors erased. LEDs as specified; the left half types and points after the update with no power cycle (R24). The held-key release at pause entry was not checked |
+| 4 Version mismatch | Pass: red 1 Hz on the half with USB, `version differs`; updating the right half to 2002 gives MATCH and clears it |
+| 5 `pair` back to 2001 | Pass on the firmware side (relay 11.1 s, 74 retries; both halves 2001, MATCH). The tool crashed reopening the right half while it was still re-enumerating: fixed in ebb16743c3. `pair` with two right-half images refuses and sends nothing |
+| 6 Split cable pulled mid-relay | Pass for the power cut: pulled at about 90% of the PAGE stream; the left half kept its old image and boots it. **Pulling the split cable also browns out the half with USB** (its reset reason is power-on/brown-out, twice), so link loss with the master still running (6a, 6c) cannot be produced on this hardware; it is covered by the host tests only. A relay afterwards succeeds (11.1 s, 64 retries) |
+| 7 Left half power cut in the commit window | Two cuts, both safe: one after the copy (boots the new image), one before it (boots the old image). The 1-2 s copy itself was not hit by hand; the same routine was cut mid-copy in M1 with test hooks. A deliberate mid-copy cut on the left half needs a TEST_HOOKS left build |
+
+Measurements: relay 11.1-11.4 s for 125,696 B over 6 runs, 64-78 retries each (most during the erase, about 2-3 per sector); USB to the half with USB 17-20 s (mean round trip 1.5-2.2 ms). D13 (split message size) needs no change at these numbers.
+
+Findings:
+- The post-COMMIT probe got no answer on every successful relay: the left half is still rebooting at 4.5 s, so DONE is always "unconfirmed" and the host's version check decides. The tool now says so and waits for presence other than NONE before reporting (it printed a false "different releases" note). Firmware unchanged; retiming or dropping the probe is open.
+- The split cable carries the left half's power, and pulling it resets the half with USB too: a cable pulled while the half with USB commits its own image interrupts that commit (the M1 BOOTSEL fallback applies).
+
 **Exit:** P1 passes; every M2b case passes; the measurements are reviewed.
 
 ### M3: signing, CI, release gating

@@ -96,7 +96,7 @@ ST_RELAYING, ST_RELAYED, ST_SUBSIDE_COMMITTING = 10, 11, 12
 # relay_phase_t (keyboards/svalboard/updater/update_split.h)
 RELAY_PHASES = ["idle", "start", "manifest", "checking and erasing", "sending", "end", "verifying", "verified",
                 "commit", "committing", "probe", "done", "failed", "aborting"]
-PRESENCE_MATCH, PRESENCE_VERSION = 1, 2
+PRESENCE_NONE, PRESENCE_MATCH, PRESENCE_VERSION = 0, 1, 2
 HANDS = {0: "left", 1: "right"}
 POINTING = {v: k for k, v in make_update.POINTING.items()}
 
@@ -542,7 +542,8 @@ class Session:
             time.sleep(0.2)
         rl = self.relay()
         if rl["unconfirmed"]:
-            print("the other half did not answer after COMMIT (unconfirmed): its version is checked next")
+            # Expected: the hold usually ends before the other half has rebooted.
+            print("the other half took COMMIT (not yet confirmed: it was still rebooting); checking its version")
         else:
             print("the other half took COMMIT")
         self.nonce = None
@@ -558,6 +559,10 @@ class Session:
             if r[0] != 0xFF:
                 seen = decode_info(st, r)["fw_version"]
                 s = decode_status(*self.dev.op(STATUS, hand=self.hand))
+                # Presence reads NONE until its first ping after the reboot.
+                while s["other_half_id"] == PRESENCE_NONE and time.monotonic() < deadline:
+                    time.sleep(0.25)
+                    s = decode_status(*self.dev.op(STATUS, hand=self.hand))
                 print(f"the other half answers again: fw {seen}, presence {s['other_half']}")
                 if fw_differs(seen, m):
                     raise UpdaterError(f"the other half reports fw {seen}, the image's manifest says fw "
