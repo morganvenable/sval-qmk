@@ -43,8 +43,8 @@ From this release on, Keybard can install new firmware for you over USB.
   match.
 - `<other changes in this release>`
 
-If an update is ever interrupted, the half starts in bootloader mode and you
-copy its `.uf2` again as above.
+If an update is interrupted, the half either keeps its old firmware or starts
+in bootloader mode; then copy its `.uf2` again as above.
 
 ### Files
 

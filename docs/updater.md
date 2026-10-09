@@ -28,13 +28,15 @@ leaves a half-written image that the boot ROM would run.
 | `SVAL_FW_VERSION=N` | The numeric version (D17), reported by INFO and presence. Default: `kb/updater/fw_version.txt` (D32). The older `EXTRAFLAGS=-DSVAL_FW_VERSION=N` still works |
 | `SVAL_FW_VERSION_STRING=S` | The version string, at most 16 of `A-Z a-z 0-9 . _ + -` (INFO page 1). Default empty; release CI passes the tag |
 
-Every updater build carries a 28-byte build-info record,
-`sval_update_build_info` (`kb/updater/update_keys.h`): magic `SVBI`, which of
-the flags above it was built with, the number of release key slots, the
-updater protocol, `SVAL_FW_VERSION` and `SVAL_FW_VERSION_STRING`.
-`make_update.py` takes the manifest's version from it, its signer refuses an
-image whose record is not a clean release build, and the release lint reads
-it.
+Every updater build carries a 32-byte build-info record,
+`sval_update_build_info` (`kb/updater/update_keys.h`, version 2): magic `SVBI`,
+which of the flags above it was built with, the number of release key slots,
+the updater protocol, `SVAL_FW_VERSION`, `SVAL_FW_VERSION_STRING`, and the
+build's side, pointing device and keymap (`sval` 1, `blank` 2, any other 0).
+`make_update.py` takes the manifest's version from it and refuses a `--kb` or
+`--keymap` that contradicts it; its signer refuses an image whose record is
+not a clean release build or does not match the manifest, and the release
+lint reads it.
 
 `SVAL_UPDATER` cannot be combined with `SVAL_KEYTEST` (keytest injects key
 events, so a host could fake the confirmation chord). Never ship a build with
@@ -471,10 +473,19 @@ secret:
    `SVAL_UPDATE_RELEASE_KEYS_DRY_RUN` to `0`, and remove the DRY RUN banner.
    `make_update.py --print-release-keys` reads them back.
 3. Put the seed line of the key CI signs with (normally key 1) in the
-   `SVAL_UPDATE_SIGNING_KEY` secret of the `release-signing` environment, and
+   `SVAL_UPDATE_SIGNING_KEY` secret of the `release-signing` environment
+   (`bash kb/tools/m3/set_signing_secret.sh prod-1.key svalboard/qmk`), and
    keep both private keys offline.
 
-Nothing else reads the keys from anywhere but the header. Boards on a release
+Nothing else reads the keys from anywhere but the header. The one guard
+outside it is `kb/tools/retired_release_keys.txt`, the public keys that must
+never be production keys: the two DRY RUN keys now, and any key retired later
+(add a line; never remove one). While the header says
+`SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 0`, every release tool refuses it if either
+slot holds a retired key (`make_update.py`'s `release_keys()`, which
+`release_version.py`, `check_release_elf.py`, `sign` and `verify` all use), so
+a half-done swap (the flag set to 0 with a DRY RUN key still in a slot) stops
+the release in its first job. Boards on a release
 with the DRY RUN keys accept only DRY-RUN-signed images, so the first release
 with the production keys has to be installed by UF2 on them; dry-run tags are
 prereleases, so no user board should run one.
@@ -496,10 +507,35 @@ release is always a prerelease.
 | Job | What it does |
 |---|---|
 | version | The check above. Outputs the version, the number and whether the release is a prerelease |
-| build | The 12 release keymap builds as **release updater builds** (`SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes SVAL_FW_VERSION_STRING=<tag>`), through `build-firmware.yml` with `updater: true`. Each runs `check_ram_funcs.py` and `make_update.py unsigned`, and uploads its `.uf2`, raw image, unsigned manifest and ELF. No build job can read the signing key |
-| lint | `check_release_elf.py` on the 12 ELFs: an updater build whose build-info record says RELEASE and nothing else, two release key slots holding the header's keys, no test key anywhere in the image, no test-hook, keytest or host-bootloader symbols. `check_split_tables.py --golden`: every left/right pairing has the same split message table, and every build's table equals `kb/tools/split_table_golden.json` |
-| publish | The `.uf2` files, to the tag's release (a prerelease for a dry run) |
-| sign | In the `release-signing` environment, which needs approval for each run (D29): `make_update.py sign` for each image, then `make_update.py verify --build release`; publishes `<build>_<tag>.svup` next to each `.uf2` |
+| build | The 12 release keymap builds as **release updater builds** (`SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes SVAL_FW_VERSION_STRING=<tag>`), through `build-firmware.yml` with `updater: true`, in the pinned image with the pinned toolchain (below). Each runs `check_ram_funcs.py` and `make_update.py unsigned`, and uploads its `.uf2`, raw image, unsigned manifest and ELF. No build job can read the signing key or write to the repository (`contents: read`, no Git credentials kept) |
+| lint | `check_tag_commit.sh`: the tag still names the run's commit. `check_release_artifacts.py`: exactly the 12 builds' files; each raw image is its ELF's flash contents (as `objcopy -O binary` writes them) and its `.uf2`'s image; each manifest's hash, version, side, pointing device and keymap, and each image's build-info record, match the build's name. Outputs the 12 images' SHA-512s. `check_release_elf.py` on the 12 ELFs: an updater build whose build-info record says RELEASE and nothing else, for a release keymap, two release key slots holding the header's keys, no test key anywhere in the image, no test-hook, keytest or host-bootloader symbols. `check_split_tables.py --golden`: every left/right pairing has the same split message table, and every build's table equals `kb/tools/split_table_golden.json` |
+| publish | A **draft** release for the tag with the `.uf2` files (marked prerelease for a dry run). Drafts are not public. Refuses if the tag already has a release |
+| sign | In the `release-signing` environment, which needs approval for each run (D29): `check_tag_commit.sh` again; `check_release_artifacts.py --expect` (the downloaded files are the 12 images the lint checked, byte for byte); the draft holds exactly those `.uf2` files; `make_update.py sign --expect-sha512` for each image (the secret is in this one step's environment only), then `make_update.py verify --build release`; uploads `<build>_<tag>.svup` next to each `.uf2`, checks the release has 24 files, and publishes it |
+
+Every job checks out the run's commit (`github.sha`), never the tag by name,
+so a tag moved while the run waits for approval changes nothing that runs.
+`check_tag_commit.sh` also stops the run from publishing under a tag that now
+names another commit, and the `release tags` ruleset (D31 step 1) stops
+anyone but an admin moving or deleting a `v*` tag at all.
+
+**Approving the signing job.** The approval page shows the run's commit. Approve
+only if it is the commit you meant to tag (`git rev-parse vTAG^{commit}`) and
+its code is code you trust: the signing job runs that commit's
+`make_update.py` with the key in its environment (R25). If the job is
+rejected, never approved or fails, the release stays a draft with only the
+`.uf2` files and nobody but the repository's writers sees it: delete it (and
+the tag) and tag again.
+
+**Toolchain.** Updater builds in release CI use a pinned image,
+`ghcr.io/qmk/qmk_cli@sha256:b7d7fa8f…` (`build-firmware.yml`), and download
+Arm GNU Toolchain 13.2.rel1 (`arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi`,
+SHA-256 `6cd1bbc1…5fdbb`, checked) and put it first on `PATH`; the build step
+fails unless `arm-none-eabi-gcc -dumpversion` is `13.2.1`. That is the
+toolchain every M1, M2b and M3 test used. The image's own GCC (15.2 in that
+digest) turns `commit_ram_main` into an IPA-SRA clone (`commit_ram_main.isra.0`),
+which `check_ram_funcs.py` refuses, and makes different images. Changing the
+toolchain means rerunning the hardware commit tests (R28). Builds without
+`updater: true` keep the unpinned image they always used.
 
 **This changes what release CI publishes:** every `.uf2` on a release is now an
 updater build, not a default build: images of 122-127 KB instead of 94-99 KB, far below the 1,408 KiB cap. A default
@@ -515,11 +551,14 @@ protocol or an older storage format; an image whose length or SHA-512 does
 not match the manifest or that fails the structure checks; an image without
 a build-info record, or whose record is not a release build, has the test
 key, test hooks, keytest or host bootloader, disagrees with the header on
-DRY RUN, or reports another version than the manifest; an image that does not
-contain each release key exactly once, or contains the test key; and a
-manifest whose version or number is not the tag's (`--expect-version`,
-`--expect-fw-version`). It then sets the manifest's `key_id` to the slot its
-key fills, signs, and checks the signature.
+DRY RUN, reports another version than the manifest, or names another side,
+pointing device or keymap than the manifest (or no release keymap); an image
+that does not contain each release key exactly once, or contains the test
+key; an image whose SHA-512 is not `--expect-sha512` (required: release CI
+passes the hash the lint computed); a manifest whose version or number is not
+the tag's (`--expect-version`, `--expect-fw-version`); and a header that says
+production keys but holds a retired key. It then sets the manifest's `key_id`
+to the slot its key fills, signs, and checks the signature.
 
 **The golden split table** (`kb/tools/split_table_golden.json`) is the table of
 the M3 release updater builds: 15 transactions (QMK's 12, plus the three keyboard
@@ -544,8 +583,9 @@ N=svalboard_trackball_pmw3389_right_sval
 MU=keyboards/svalboard/tools/make_update.py
 python3 -I $MU unsigned $N.uf2 --kb $T --keymap sval --release \
   --image-out $N.img --manifest-out $N.manifest
+H=$(sha512sum $N.img | cut -c1-128)
 python3 -I $MU sign --image $N.img --manifest $N.manifest \
-  -o $N.svup --key ~/m3-keys/dryrun-release-1.key
+  -o $N.svup --key ~/m3-keys/dryrun-release-1.key --expect-sha512 $H
 python3 -I $MU verify $N.svup --build release
 ```
 
@@ -557,61 +597,136 @@ the C code of a release build (`tests/sval_updater/test_release.c`).
 
 ### Fork setup and the dry run (D31)
 
-For whoever sets up `morganvenable/sval-qmk` (not done by any workflow). Run
-the steps in order in one WSL shell: later steps use `R` and `MU` from
-earlier ones.
+For whoever sets up `morganvenable/sval-qmk` (not done by any workflow). The
+scripts are in `kb/tools/m3/`. Run the WSL steps in one shell, in order:
+later steps use variables from earlier ones. Every line runs on its own.
 
-1. The environment, with Morgan as required reviewer, tags only:
-
-   ```
-   R=morganvenable/sval-qmk
-   ID=$(gh api users/morganvenable -q .id)
-   E=repos/$R/environments/release-signing
-   echo '{"reviewers":[{"type":"User","id":'$ID'}],' > /tmp/env.json
-   echo '"prevent_self_review":false,' >> /tmp/env.json
-   echo '"deployment_branch_policy":{"protected_branches":false,' >> /tmp/env.json
-   echo '"custom_branch_policies":true}}' >> /tmp/env.json
-   gh api -X PUT $E --input /tmp/env.json
-   gh api -X POST $E/deployment-branch-policies -f name='v*' -f type=tag
-   ```
-
-   `prevent_self_review` is false because Morgan pushes the tag and approves
-   the run himself.
-
-2. The secret: the seed line of DRY RUN key 1, never echoed:
+1. **Environment and tag ruleset** (WSL). `setup_fork.sh` creates or updates
+   the `release-signing` environment (Morgan as required reviewer, only `v*`
+   tags may deploy to it, self-review allowed because Morgan both tags and
+   approves) and the `release tags` ruleset (`v*` tags cannot be moved or
+   deleted except by an admin), then prints both back:
 
    ```
-   cd ~/m3-keys
-   grep -v '^#' dryrun-release-1.key | gh secret set \
-     SVAL_UPDATE_SIGNING_KEY --env release-signing -R $R
-   ```
-
-3. The dry-run tag, on a commit of `feat/fw-updater` that is pushed:
-
-   ```
-   git -C ~/GitHub/sval-qmk tag vM3-dryrun1 origin/feat/fw-updater
-   git -C ~/GitHub/sval-qmk push origin vM3-dryrun1
-   ```
-
-   Approve the `sign` job when it waits (Actions, the run, Review deployments).
-
-4. Check the result:
-
-   ```
-   gh release view vM3-dryrun1 -R $R --json isPrerelease,assets
-   gh release download vM3-dryrun1 -R $R -p '*.svup' -D /tmp/m3dry
    cd ~/GitHub/sval-qmk
-   MU=keyboards/svalboard/tools/make_update.py
-   for f in /tmp/m3dry/*.svup; do python3 -I $MU verify $f; done
+   R=morganvenable/sval-qmk
+   M3=keyboards/svalboard/tools/m3
+   bash $M3/setup_fork.sh $R morganvenable
    ```
 
-   `isPrerelease` must be true, with 12 `.uf2` and 12 `.svup` files. The exit
-   check on hardware (M3 exit): a test board running a release updater build
-   of the dry run accepts its `.svup` with `sval_update.py update`, and refuses
-   a test-key image with BAD_SIG.
+   Expect `reviewers: ["morganvenable"]`, `deploys from tag v*` and
+   `release tags (tag, active)`.
 
-A dry-run tag that fails part way can be deleted and pushed again under a new
-name (`vM3-dryrun2`); delete its prerelease too.
+2. **The secret** (WSL): the seed of DRY RUN key 1, never printed. The script
+   refuses a key that is not in a release slot of the header:
+
+   ```
+   bash $M3/set_signing_secret.sh ~/m3-keys/dryrun-release-1.key $R
+   ```
+
+   Key 2 stays offline: it is the spare slot, and CI never needs it.
+
+3. **The dry-run tag** (WSL), on the pushed head of `feat/fw-updater`:
+
+   ```
+   git fetch origin
+   git tag vM3-dryrun1 origin/feat/fw-updater
+   git rev-parse vM3-dryrun1
+   git push origin vM3-dryrun1
+   Q='.[0].databaseId'
+   ID=$(gh run list -R $R -w release.yml -L 1 --json databaseId -q "$Q")
+   gh run watch $ID -R $R
+   ```
+
+   Watch for: `version` prints `prerelease=true` and `fw 3`; the 12 builds
+   each pass `Pinned Arm toolchain` and `check_ram_funcs`; `lint` prints
+   `ok: 12 release builds`, `12 of 12 release ELFs pass`, `36 of 36
+   pairings match` and `12 of 12 builds match the golden table`; `publish`
+   makes a draft; then `sign` waits for review.
+
+4. **The approval** (Morgan, in the browser):
+   `https://github.com/morganvenable/sval-qmk/actions/runs/<ID>`, then
+   **Review deployments**, tick `release-signing`, **Approve and deploy**.
+   First check that the commit the run shows is the one step 3 printed.
+
+5. **Check the release** (WSL). Downloads the assets into
+   `~/m3dry/vM3-dryrun1` and checks: not a draft, a prerelease, 12 `.uf2` and
+   12 `.svup`, each `.svup` holds its `.uf2`'s image, and a release build
+   accepts each one:
+
+   ```
+   bash $M3/check_release.sh vM3-dryrun1 $R
+   ```
+
+6. **Hardware (M3 exit)**, on the right test board (pmw3389,
+   `sval:E465B0621725122B`) over its own USB, with the CI-built files. The
+   left test board can stay cabled and needs nothing: its build (M2b 2002) has
+   the same 15-transaction split table as the release, so the link works, and
+   the right half's LEDs blink red for the version difference until step f.
+   The update does not depend on the other half.
+
+   a. The test-key image (WSL):
+
+   ```
+   D=~/m3dry/vM3-dryrun1
+   N=svalboard_trackball_pmw3389_right_sval_vM3-dryrun1
+   K=svalboard/trackball/pmw3389/right
+   MU=keyboards/svalboard/tools/make_update.py
+   python3 -I $MU $D/$N.uf2 -o ~/m3dry/testkey-right.svup --kb $K
+   ```
+
+   b. Put the right half in BOOTSEL (hold BOOTSEL while plugging in its USB,
+   or tap reset twice within 500 ms), then copy the dry-run UF2 (WSL):
+
+   ```
+   bash keyboards/svalboard/tools/flash.sh $D/$N.uf2
+   ```
+
+   c. The host tool on Windows Python, as in M1 and M2b (PowerShell):
+
+   ```
+   cd \\wsl.localhost\Ubuntu\home\morga\GitHub\sval-qmk
+   $SU = "keyboards\svalboard\tools\sval_update.py"
+   $S = "sval:E465B0621725122B"
+   $D = "\\wsl.localhost\Ubuntu\home\morga\m3dry"
+   $N = "svalboard_trackball_pmw3389_right_sval_vM3-dryrun1"
+   python $SU --serial $S info
+   ```
+
+   `info` must show `release_build: true`, `test_key: false`,
+   `release_keys_dry_run: true`, `fw_version: 3`, `version: "vM3-dryrun1"`.
+
+   d. The release-signed update must be accepted (make the chord when asked;
+   the board commits and resets):
+
+   ```
+   python $SU --serial $S update "$D\vM3-dryrun1\$N.svup"
+   python $SU --serial $S info
+   ```
+
+   e. The test-key update must be refused with BAD_SIG at the manifest,
+   before any erase or chord; then clear the latched error:
+
+   ```
+   python $SU --serial $S update "$D\testkey-right.svup"
+   python $SU --serial $S abort
+   ```
+
+   f. Restore the M2b 2002 test-key build. The dry-run release accepts only
+   release-signed images, so this goes through BOOTSEL: BOOTSEL as in b,
+   then (WSL):
+
+   ```
+   bash keyboards/svalboard/tools/flash.sh ~/m2b/right-2002.uf2
+   ```
+
+   `info` then shows `fw_version: 2002`, `test_key: true`, and the red LEDs
+   stop (both halves on 2002 again). From Windows the same file is
+   `\\wsl$\Ubuntu\home\morga\m2b\right-2002.uf2` (drag it onto `RPI-RP2`).
+
+A dry-run run that fails part way leaves a draft (not public): delete the
+draft and the tag (an admin may: the ruleset lets admins delete), then tag
+again under a new name (`vM3-dryrun2`).
 
 ## Tools and tests
 
@@ -620,6 +735,15 @@ name (`vM3-dryrun2`); delete its prerelease too.
   `sign` and `verify` are the release steps (see "Release signing").
 - `kb/tools/release_version.py`: release CI's version check (D32).
 - `kb/tools/check_release_elf.py`: release CI's lint of the release ELFs.
+- `kb/tools/check_release_artifacts.py`: release CI's check that each image
+  is its ELF's and its `.uf2`'s, with matching manifests; its SHA-512s go to
+  the signer.
+- `kb/tools/check_tag_commit.sh`: release CI's check that the tag still names
+  the run's commit.
+- `kb/tools/retired_release_keys.txt`: keys that must never be production
+  release keys.
+- `kb/tools/m3/`: the D31 setup and check scripts (`setup_fork.sh`,
+  `set_signing_secret.sh`, `check_release.sh`).
 - `kb/tools/sval_update.py`: the host tool (`list`, `info [--other]`, `status`,
   `relay`, `diag`, `abort`, `update`, `pair`, `reject`). Close Keybard first: raw
   HID replies reach every open handle.

@@ -239,7 +239,7 @@ Findings:
 | Piece | As built |
 |---|---|
 | Keys (D30) | Two DRY RUN Ed25519 keypairs; private halves outside the repository (`~/m3-keys/` in WSL, mode 600). Public halves in `kb/updater/update_release_keys.h` (`SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 1`), the only file to change for the production keys. **Every** updater build accepts `key_id 1` and `2`, including `SVAL_UPDATE_TEST_KEY` builds (so a test board can take a signed release image); release builds have no test key. INFO flags bit6 says DRY RUN |
-| Build-info record | `sval_update_build_info` (28 B, `kb/updater/update_keys.h`) in every updater build: RELEASE, TEST_KEY, TEST_HOOKS, KEYTEST, HOST_BOOTLOADER and DRY RUN bits, release key slots, updater protocol, `SVAL_FW_VERSION`, the version string. `update_keys.c` also `#error`s on a release build with `SVAL_KEYTEST` or `SVAL_HOST_BOOTLOADER` |
+| Build-info record | `sval_update_build_info` (32 B since the review fixes, `kb/updater/update_keys.h`) in every updater build: RELEASE, TEST_KEY, TEST_HOOKS, KEYTEST, HOST_BOOTLOADER and DRY RUN bits, release key slots, updater protocol, `SVAL_FW_VERSION`, the version string, and the build's side, pointing device and keymap. `update_keys.c` also `#error`s on a release build with `SVAL_KEYTEST` or `SVAL_HOST_BOOTLOADER` |
 | `make_update.py` | `unsigned` (build job: raw image + unsigned manifest, no key), `sign` (signing job: key from a file or an environment variable; the refusals listed in `docs/updater.md`; sets `key_id` to the slot its key fills; checks its own signature), `verify` (offline check as a release, test or plain build). The manifest's version comes from the image's build-info record. A pure-Python Ed25519 verifier joins the signer |
 | Release CI | `release.yml`: version → 12 release updater builds (`build-firmware.yml` with `updater: true`) → lint → publish `.uf2` → sign (environment `release-signing`) and publish `.svup`. Dry-run tags are prereleases. Details in `docs/updater.md` |
 | Lint | `kb/tools/check_release_elf.py` (build-info record, the two key slots, no test key bytes, no test-hook, keytest or host-bootloader symbols) and `check_split_tables.py --golden kb/tools/split_table_golden.json` |
@@ -261,6 +261,32 @@ Findings:
 | Workflows | actionlint 1.7.7 with shellcheck: only info-level findings in steps that predate M3; yamllint clean apart from the existing indentation style |
 
 Not done here (the main session's outward steps, D31): the `release-signing` environment and secret, the dry-run tag and its run on GitHub, and the exit check on hardware (a test board on a release updater build takes the dry run's `.svup` with `sval_update.py` and refuses a test-key image).
+
+**M3 review fixes, 2026-10-09.** A review of the M3 build found eight problems; all eight were real and are fixed:
+
+| Finding | Fix |
+|---|---|
+| Blocker: in CI's container (GCC 15.2) `check_ram_funcs.py` fails on all 12 release builds (`commit_ram_main` becomes the clone `commit_ram_main.isra.0`), so every release run would fail | `build-firmware.yml`, for updater builds only: the image pinned by digest, and Arm GNU 13.2.rel1 downloaded, checked by SHA-256 and put first on `PATH`; the build fails unless `arm-none-eabi-gcc -dumpversion` is 13.2.1. `update_commit.c` and `check_ram_funcs.py` unchanged |
+| The release image was unpinned, so published images were not the tested ones (R28) | As above. The 12 builds in that image with that toolchain are byte-identical to the local ones (`SKIP_GIT=yes`) |
+| Checkouts used `ref: github.ref`, so a tag moved during the approval wait would change what the signing job runs | Every release checkout uses `github.sha`; `kb/tools/check_tag_commit.sh` (lint and sign) fails if the tag no longer names the run's commit; the `release tags` ruleset (D31 step 1) blocks moving or deleting `v*` tags except by admins; the runbook tells the approver to check the commit |
+| The DRY RUN guard was one flag: a half-done swap (flag 0, a DRY RUN key left) would pass every gate | `kb/tools/retired_release_keys.txt` lists the DRY RUN public keys outside the header; `make_update.py release_keys()` refuses a production header (flag 0) holding any of them, so `release_version.py`, `check_release_elf.py`, `sign` and `verify` all stop it. Host tests cover the flag-only and one-slot swaps |
+| The signer could not tell whether the image was the one the lint checked, and the image carried no side, pointing device or keymap | `kb/tools/check_release_artifacts.py` (lint): each `.img` is its ELF's flash contents and its `.uf2`'s image, the manifests and build-info records match the build names, the file set is exactly the 12 builds; the 12 SHA-512s go to the signing job as a job output, and `sign` requires `--expect-sha512`. Build-info record version 2 adds side, pointing device and keymap, cross-checked by `unsigned` and `sign` |
+| The build jobs had `write-all` and kept Git credentials | `release.yml` defaults to `contents: read`; only `publish` and `sign` get `contents: write`; every checkout uses `persist-credentials: false` |
+| The release notes draft said an interrupted update always ends in bootloader mode | Now: it keeps its old firmware or starts in bootloader mode |
+| `.uf2` files went public before signing; a rejected signing run left a public UF2-only release | `publish` makes a draft (not public); `sign` checks the draft holds exactly the linted `.uf2` files, uploads the `.svup` files, checks there are 24, and only then publishes it |
+
+Results after the fixes (WSL, Arm GNU 13.2.1, `SOURCE_DATE_EPOCH` pinned as before):
+
+| Check | Result |
+|---|---|
+| 12 default builds | Byte-identical to `~/m1-baseline-bins` |
+| 12 release updater builds | All build (121,600-126,208 B); `check_ram_funcs.py` 12 of 12; `update_commit.c` unchanged since 594f5e7118 |
+| The same 12 in the pinned CI image with the pinned toolchain | `check_ram_funcs.py` 12 of 12; images byte-identical to the local builds |
+| Lint | `check_release_artifacts.py` 12 of 12, and it refuses: a flipped image byte, a left image as right, a blank image as sval, an extra file, a missing `.uf2`, a `.uf2` or ELF that is not the image. `check_release_elf.py` 12 of 12. P1 36 of 36 pairings, golden 12 of 12. The M2b left builds (2001, 2002) pair with the release right (15 transactions) |
+| Signing | The sign loop with DRY RUN key 1 from an environment variable and the lint's hashes: 12 signed, `verify --build release` 12 of 12. Refused: an image that is not the linted one, a left image as right, a blank image as sval, a header with DRY_RUN 0 and the DRY RUN keys (also refused by `check_release_elf.py`) |
+| End to end | The 12 release `.svup` files accepted, and a test-key `.svup` of the pmw3389 right image refused, by a release build's C code (`test_release.c`, 46 checks); `verify --build test` accepts the test-key file |
+| `check_tag_commit.sh` | Against the fork's annotated tag vRC2: accepts its own commit, refuses another (read-only `gh api`) |
+| Host tests | `run.sh` passes under ASan and UBSan |
 
 ### M4: Keybard UI (fork `morganvenable/keybard`, PR to `svalboard/keybard`)
 
@@ -373,9 +399,11 @@ Your answers from the [decision page](https://claude.ai/artifact/WsV3uM75FY2iQ1p
 | R22 | Estimates wrong (HID and RPC round trips, erase time, verify ms) | Measured in M1 #13 and M2b. Plan revisited before M2 and M4 |
 | R23 | Stale double-tap magic: after the watchdog reset the new image finds `0xCAFEB0BA` in noinit RAM (old image bytes) and enters BOOTSEL. Deterministic for a given image pair | Zero the image buffers before the trigger (step 7). M1 #14 |
 | R24 | Peripherals keep state across the watchdog reset: external sensors stay powered (UNVERIFIED, datasheet only) | The new image initialises them as at power-up. M1 #4 and M2b check typing and pointing after an update with no power cycle |
-| R25 | The signing key leaks from CI | The key is only in the `release-signing` environment's secret; only the signing job runs in that environment, and each run needs approval (D29). The signing job runs the tag's own `make_update.py`, so approve only tags whose code you trust. A leaked key is retired by a release signed with the other slot that replaces it |
-| R26 | A normal release goes out signed with the DRY RUN keys, or a dry run becomes a normal release | Release CI refuses every non-dry-run tag while `SVAL_UPDATE_RELEASE_KEYS_DRY_RUN` is 1; dry-run tags are always published as prereleases (`release_version.py`, host-tested) |
+| R25 | The signing key leaks from CI | The key is only in the `release-signing` environment's secret, and only the signing step's environment holds it; only the signing job runs in that environment, and each run needs approval (D29). The signing job runs the run's own commit (`github.sha`, never the tag by name), checks the tag still names it, and a ruleset stops `v*` tags moving, so the approved commit is the one that runs; approve only commits whose code you trust. The build jobs cannot write to the repository. A leaked key is retired by a release signed with the other slot that replaces it, and added to `retired_release_keys.txt` |
+| R26 | A normal release goes out signed with the DRY RUN keys, or a dry run becomes a normal release | Release CI refuses every non-dry-run tag while `SVAL_UPDATE_RELEASE_KEYS_DRY_RUN` is 1; dry-run tags are always published as prereleases (`release_version.py`, host-tested). A half-done swap (flag 0 with a DRY RUN key in either slot) is refused by every release tool through `retired_release_keys.txt` |
 | R27 | A release ships a split table its other half cannot talk to | `check_split_tables.py` on every pairing of the release ELFs plus the committed golden table, in release CI before publishing |
+| R28 | Release images built with another toolchain than the tested one (the RAM commit code changes with the compiler) | Release updater builds use a pinned image and Arm GNU 13.2.rel1, checked by SHA-256 and version; changing either means rerunning `check_ram_funcs.py` and the hardware commit tests. The M3 exit check runs the CI-built files |
+| R29 | The signed image is not the linted one (a compromised build job, an extra artifact) | `check_release_artifacts.py`: image = ELF flash contents = `.uf2` image, exact file set, manifests and build-info records match the names; the signer takes the lint's SHA-512s from a job output (`--expect-sha512`) and cross-checks side, pointing device and keymap against the image |
 
 ---
 
