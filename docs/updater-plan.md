@@ -269,6 +269,7 @@ Your answers from the [decision page](https://claude.ai/artifact/WsV3uM75FY2iQ1p
 | M1-a | Main stack is 0xAE0 (2,784 B), not 0xC00: SRAM4 cannot hold 3 KiB | Accept. Measure the high-water mark with the `DIAG` op on the test board (M1 #13); move the stack only if the margin is short |
 | M1-b | The Ed25519 check and commit step 0's slot hash each block the main loop for longer than 50 ms (estimated 0.1-0.3 s and about 0.25 s per 100 KB) | Accept: once per update, under Keybard's 1000 ms, at moments nothing needs the keyboard. Measure in M1 #13. Signatures stay: they stop host software from installing its own firmware |
 | M1-c | Conservative commit changes: per-sector erase in block 0, per-sector compare and retry in step 5, page 0 zeroed when step 6's read-back fails, 8 s watchdog, full SRAM0-3 magic sweep | Accept |
+| D28 | Where the copy runs: in the running app from RAM (as built), after a reboot into an early-boot copier, or a permanent stage-1 bootloader that resumes after a power cut (outside review) | **Keep as built**, answered after the M1 hardware results |
 | M1-d | Storage-format floor after `kb/storage/` was removed | `SVAL_UPDATE_STORAGE_FORMAT = 2`, a plain number raised by hand when a release changes saved settings incompatibly; not tied to `EECONFIG_MAGIC_NUMBER` |
 
 ### Still open, by design
