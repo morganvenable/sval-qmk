@@ -45,8 +45,13 @@ Exit 1 on any mismatch or unreadable table. The size of the shared-memory
 block is printed and compared too, but a difference there is only a warning:
 it does not travel on the wire.
 
-M3 CI: build the release ELFs, then run
-    python3 -I keyboards/svalboard/tools/check_split_tables.py --dir .build
+Golden table (M3): --golden FILE also compares every table read with a
+committed golden copy (keyboards/svalboard/tools/split_table_golden.json),
+so a release cannot change the split message table, its buffer sizes or its
+shared-memory offsets without the golden file changing in the same commit.
+--write-golden FILE ELF writes one from a build. Release CI runs
+
+    check_split_tables.py --dir ELF_DIR --golden keyboards/svalboard/tools/split_table_golden.json
 """
 import argparse
 import glob
@@ -66,8 +71,9 @@ class ElfError(Exception):
     pass
 
 
-def read_elf(path):
-    """Symbols {name: (value, size)} and a reader for initialised bytes at a virtual address."""
+def read_elf(path, kinds=(1,)):
+    """Symbols {name: [(value, size)]} of the given STT_ kinds (1 object, 2 function) and a
+    reader for initialised bytes at a virtual address."""
     data = open(path, "rb").read()
     if data[:4] != b"\x7fELF" or data[4] != 1 or data[5] != 1:
         raise ElfError(f"{path}: not a 32-bit little-endian ELF")
@@ -92,7 +98,7 @@ def read_elf(path):
         strtab = sections[s["link"]]
         for i in range(s["size"] // 16):
             name, value, size, info, other, shndx = struct.unpack_from("<IIIBBH", data, s["offset"] + i * 16)
-            if name and (info & 0xF) == 1:  # STT_OBJECT
+            if name and (info & 0xF) in kinds:  # STT_OBJECT by default
                 symbols.setdefault(cstr(strtab, name), []).append((value, size))
 
     def read(addr, n):
@@ -156,6 +162,11 @@ def read_table(path):
 FIELDS = ("i2t_size", "i2t_offset", "t2i_size", "t2i_offset", "callback")
 
 
+def golden_of(t):
+    """What the golden file holds: the wire-relevant part of a table (no path, no shared-memory size)."""
+    return dict(count=t["count"], entries=t["entries"], kb_ids=t.get("kb_ids"))
+
+
 def compare(a, b):
     """Differences between two tables, as strings (empty: they match)."""
     diffs = []
@@ -188,13 +199,22 @@ def main():
     ap.add_argument("--right", nargs="+", default=[], metavar="ELF")
     ap.add_argument("--dir", action="append", default=[], help="pair every *left*.elf with every *right*.elf here")
     ap.add_argument("--dump", metavar="ELF", help="print one ELF's table")
-    ap.add_argument("--json", action="store_true", help="with --dump: as JSON (a golden file for M3)")
+    ap.add_argument("--json", action="store_true", help="with --dump: as JSON")
+    ap.add_argument("--golden", metavar="FILE", help="also compare every table with this golden file (M3)")
+    ap.add_argument("--write-golden", nargs=2, metavar=("FILE", "ELF"), help="write a golden file from one build")
     args = ap.parse_args()
 
     try:
         if args.dump:
             t = read_table(args.dump)
             print(json.dumps(t, indent=1) if args.json else fmt(t))
+            return 0
+        if args.write_golden:
+            out, elf = args.write_golden
+            with open(out, "w") as f:
+                json.dump(golden_of(read_table(elf)), f, indent=1)
+                f.write(chr(10))
+            print(f"wrote {out} from {elf}")
             return 0
         left, right = list(args.left), list(args.right)
         for d in args.dir:
@@ -226,6 +246,24 @@ def main():
             if tables[l]["shmem_size"] != tables[r]["shmem_size"]:
                 print(f"     warning: shared memory {tables[l]['shmem_size']} B vs {tables[r]['shmem_size']} B")
     print(f"{len(left) * len(right) - failed} of {len(left) * len(right)} pairings match")
+    if args.golden:
+        try:
+            with open(args.golden) as f:
+                golden = json.load(f)
+        except (OSError, ValueError) as e:
+            print(f"FAIL: golden file {args.golden}: {e}")
+            return 1
+        golden["elf"] = os.path.basename(args.golden)
+        bad = 0
+        for p in left + right:
+            diffs = compare(tables[p], golden)
+            if diffs:
+                bad += 1
+                print(f"FAIL {os.path.basename(p)} differs from the golden table")
+                for d in diffs:
+                    print(f"    {d}")
+        print(f"{len(left) + len(right) - bad} of {len(left) + len(right)} builds match the golden table")
+        failed += bad
     return 1 if failed else 0
 
 

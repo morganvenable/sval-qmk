@@ -1,0 +1,139 @@
+{
+ "count": 15,
+ "entries": [
+  {
+   "id": 0,
+   "i2t_size": 0,
+   "i2t_offset": 0,
+   "t2i_size": 1,
+   "t2i_offset": 0,
+   "callback": false
+  },
+  {
+   "id": 1,
+   "i2t_size": 0,
+   "i2t_offset": 0,
+   "t2i_size": 5,
+   "t2i_offset": 1,
+   "callback": false
+  },
+  {
+   "id": 2,
+   "i2t_size": 4,
+   "i2t_offset": 8,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": false
+  },
+  {
+   "id": 3,
+   "i2t_size": 16,
+   "i2t_offset": 16,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": false
+  },
+  {
+   "id": 4,
+   "i2t_size": 0,
+   "i2t_offset": 0,
+   "t2i_size": 1,
+   "t2i_offset": 32,
+   "callback": false
+  },
+  {
+   "id": 5,
+   "i2t_size": 0,
+   "i2t_offset": 0,
+   "t2i_size": 12,
+   "t2i_offset": 33,
+   "callback": false
+  },
+  {
+   "id": 6,
+   "i2t_size": 2,
+   "i2t_offset": 46,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": false
+  },
+  {
+   "id": 7,
+   "i2t_size": 1,
+   "i2t_offset": 48,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": false
+  },
+  {
+   "id": 8,
+   "i2t_size": 4,
+   "i2t_offset": 49,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": true
+  },
+  {
+   "id": 9,
+   "i2t_size": 32,
+   "i2t_offset": 53,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": false
+  },
+  {
+   "id": 10,
+   "i2t_size": 1,
+   "i2t_offset": 50,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": true
+  },
+  {
+   "id": 11,
+   "i2t_size": 0,
+   "i2t_offset": 0,
+   "t2i_size": 32,
+   "t2i_offset": 85,
+   "callback": false
+  },
+  {
+   "id": 12,
+   "i2t_size": 0,
+   "i2t_offset": 0,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": false
+  },
+  {
+   "id": 13,
+   "i2t_size": 0,
+   "i2t_offset": 0,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": false
+  },
+  {
+   "id": 14,
+   "i2t_size": 0,
+   "i2t_offset": 0,
+   "t2i_size": 0,
+   "t2i_offset": 0,
+   "callback": false
+  }
+ ],
+ "kb_ids": [
+  {
+   "id": 12,
+   "tag": "SA"
+  },
+  {
+   "id": 13,
+   "tag": "SB"
+  },
+  {
+   "id": 14,
+   "tag": "UP"
+  }
+ ]
+}
