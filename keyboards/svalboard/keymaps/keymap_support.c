@@ -23,6 +23,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "caps_word.h"
 #include "pointing_motion.h"
 #include <string.h>
+#include "pointing/scroll_policy.h"
+#ifdef SVAL_POINT_CONTROLS
+#    include "pointing/point_control.h"
+#endif
 
 // in keymap.c:
 #ifdef POINTING_DEVICE_AUTO_MOUSE_ENABLE
@@ -129,89 +133,15 @@ static bool scroll_hold    = false,
             scroll_toggle  = false;
 
 
-#define AXIS_LOCK_BREAKAWAY_THRESHOLD 18750
-#define AXIS_LOCK_ENGAGE_THRESHOLD 6250
-#define AXIS_LOCK_TIMEOUT_MS 500
-
-#define AXIS_DOMINANCE_NUMERATOR 3
-#define AXIS_DOMINANCE_DENOMINATOR 2
-
-
-static enum scroll_mode {
-    SV_AXIS_FREE,
-    SV_AXIS_LOCKED_V,
-    SV_AXIS_LOCKED_H
-} axis_scroll_mode = SV_AXIS_FREE;
-static int32_t axis_lock_accum_h = 0;
-static int32_t axis_lock_accum_v = 0;
-static uint16_t axis_lock_timer = 0;
-
+static sval_scroll_policy_t scroll_policy;
 
 void update_axis_scroll_mode(int32_t h, int32_t v) {
-    if (h != 0 || v != 0) {
-        axis_lock_timer = timer_read();
-    } else {
-        if (timer_elapsed(axis_lock_timer) > AXIS_LOCK_TIMEOUT_MS) {
-            if (axis_scroll_mode != SV_AXIS_FREE) {
-                axis_scroll_mode = SV_AXIS_FREE;
-                axis_lock_accum_h = 0;
-                axis_lock_accum_v = 0;
-		scroll_accumulator_h = 0;
-                scroll_accumulator_v = 0;
-		m_scroll_accumulator_h = 0;
-		m_scroll_accumulator_v = 0;
-            }
-        }
-        return;
-    }
-
-    switch (axis_scroll_mode) {
-        case SV_AXIS_FREE:
-            axis_lock_accum_h += h;
-            axis_lock_accum_v += v;
-
-            if (abs(axis_lock_accum_v) * AXIS_DOMINANCE_NUMERATOR >= abs(axis_lock_accum_h) * AXIS_DOMINANCE_DENOMINATOR) {
-	        axis_scroll_mode = SV_AXIS_LOCKED_V;
-                axis_lock_accum_h = 0;
-            } else if (abs(axis_lock_accum_h) >= AXIS_LOCK_ENGAGE_THRESHOLD) {
-                axis_scroll_mode = SV_AXIS_LOCKED_H;
-                axis_lock_accum_v = 0;
-            }
-            break;
-
-        case SV_AXIS_LOCKED_V:
-            if ((int32_t)abs(v) * AXIS_DOMINANCE_NUMERATOR >= (int32_t)abs(h) * AXIS_DOMINANCE_DENOMINATOR) {
-                axis_lock_accum_h = 0;
-            }
-
-	    axis_lock_accum_h += h;
-
-            if (abs(axis_lock_accum_h) >= AXIS_LOCK_BREAKAWAY_THRESHOLD) {
-	        axis_scroll_mode     = SV_AXIS_LOCKED_H;
-                axis_lock_accum_v    = 0;
-                scroll_accumulator_h = 0;
-                scroll_accumulator_v = 0;
-		m_scroll_accumulator_h = 0;
-		m_scroll_accumulator_v = 0;
-            }
-        break;
-
-        case SV_AXIS_LOCKED_H:
-            if ((int32_t)abs(h) * AXIS_DOMINANCE_NUMERATOR >= (int32_t)abs(v) * AXIS_DOMINANCE_DENOMINATOR) {
-                axis_lock_accum_v = 0;
-            }
-
-            axis_lock_accum_v += v;
-
-            if (abs(axis_lock_accum_v) >= AXIS_LOCK_BREAKAWAY_THRESHOLD) {
-                axis_scroll_mode     = SV_AXIS_LOCKED_V;
-                axis_lock_accum_h    = 0;
-                scroll_accumulator_h = 0;
-                scroll_accumulator_v = 0;
-		m_scroll_accumulator_h = 0;
-		m_scroll_accumulator_v = 0;
-            }
-            break;
+    if (sval_scroll_policy_update(&scroll_policy, h, v, timer_read())) {
+        scroll_accumulator_h = scroll_accumulator_v = 0;
+        m_scroll_accumulator_h = m_scroll_accumulator_v = 0;
+#ifdef SVAL_POINT_CONTROLS
+        sval_point_discard_interval();
+#endif
     }
 }
 
@@ -241,6 +171,14 @@ void update_boost_multiplier(void) {
 
 report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, report_mouse_t reportMouse2) {
     report_mouse_t ret_mouse;
+#ifdef SVAL_POINT_CONTROLS
+    if (sval_point_blocked(0)) reportMouse1.x = reportMouse1.y = reportMouse1.h = reportMouse1.v = 0;
+    if (sval_point_blocked(1)) reportMouse2.x = reportMouse2.y = reportMouse2.h = reportMouse2.v = 0;
+    bool control_left = sval_point_active(0), control_right = sval_point_active(1);
+    sval_point_policy_changed(global_saved_values.axis_scroll_lock && !is_mac);
+    sval_point_buffer(0, reportMouse1.x, reportMouse1.y, get_left_dpi(), sniper_x.div);
+    sval_point_buffer(1, reportMouse2.x, reportMouse2.y, get_right_dpi(), sniper_x.div);
+#endif
 
     if (any_sniper_active()) {
         reportMouse1.x = add_to_axis(&sniper_x, reportMouse1.x);
@@ -267,12 +205,36 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
         reportMouse2.v = add_to_axis(&boost_v, reportMouse2.v);
     }
 
-    if (reportMouse1.x == 0 && reportMouse1.y == 0 && reportMouse2.x == 0 && reportMouse2.y == 0)
-        return pointing_device_combine_reports(reportMouse1, reportMouse2);
+#ifdef SVAL_POINT_CONTROLS
+    // Keep the ONE shared lock alive while relative-position scrolling is engaged.
+    if(sval_point_scroll_engaged())scroll_policy.last_motion=timer_read();
+#endif
+    if (reportMouse1.x == 0 && reportMouse1.y == 0 && reportMouse2.x == 0 && reportMouse2.y == 0
+#ifdef SVAL_POINT_CONTROLS
+        && !scroll_timer_running
+#endif
+    ) {
+#ifdef SVAL_POINT_CONTROLS
+        if (global_saved_values.axis_scroll_lock && !is_mac) {
+            update_axis_scroll_mode(0, 0);
+            sval_point_finish_interval(sval_scroll_policy_axes(&scroll_policy, true));
+        }
+#endif
+        ret_mouse = pointing_device_combine_reports(reportMouse1, reportMouse2);
+#ifdef SVAL_POINT_CONTROLS
+        sval_point_scroll(&ret_mouse,sval_scroll_policy_axes(&scroll_policy,global_saved_values.axis_scroll_lock && !is_mac),global_saved_values.natural_scroll,is_mac?MAC_DIVISOR:1);
+        sval_point_mouse(&ret_mouse);
+#endif
+        return ret_mouse;
+    }
 
     // Track scroll input BEFORE division (h/v after division may be 0 due to accumulation)
     bool left_scrolling = (global_saved_values.left_scroll != scroll_hold) != scroll_toggle;
     bool right_scrolling = (global_saved_values.right_scroll != scroll_hold) != scroll_toggle;
+#ifdef SVAL_POINT_CONTROLS
+    left_scrolling |= control_left;
+    right_scrolling |= control_right;
+#endif
     bool has_scroll_input = (left_scrolling && (reportMouse1.x != 0 || reportMouse1.y != 0)) ||
                             (right_scrolling && (reportMouse2.x != 0 || reportMouse2.y != 0));
 
@@ -280,6 +242,10 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
     // Use only the greater of left/right to prevent both sides shaking from triggering
     int32_t left_movement = abs(reportMouse1.x) + abs(reportMouse1.y);
     int32_t right_movement = abs(reportMouse2.x) + abs(reportMouse2.y);
+#ifdef SVAL_POINT_CONTROLS
+    if (control_left) left_movement = 0;
+    if (control_right) right_movement = 0;
+#endif
     // Per-pointer gate: a side with auto mouse disabled never activates (or refreshes) the layer.
     if (!global_saved_values.left_automouse) left_movement = 0;
     if (!global_saved_values.right_automouse) right_movement = 0;
@@ -326,8 +292,13 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
 	m_scroll_accumulator_h += ((int32_t)reportMouse2.h * 100000) / get_right_dpi();
 	m_scroll_accumulator_v += ((int32_t)reportMouse2.v * 100000) / get_right_dpi();
 
+#ifdef SVAL_POINT_CONTROLS
+        scroll_accumulator_h += (control_left ? 0 : reportMouse1.h) + (control_right ? 0 : reportMouse2.h);
+        scroll_accumulator_v += (control_left ? 0 : reportMouse1.v) + (control_right ? 0 : reportMouse2.v);
+#else
         scroll_accumulator_h += reportMouse1.h + reportMouse2.h;
         scroll_accumulator_v += reportMouse1.v + reportMouse2.v;
+#endif
         reportMouse1.h = reportMouse2.h = 0;
         reportMouse1.v = reportMouse2.v = 0;
     }
@@ -335,7 +306,7 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
     if (scroll_timer_running && timer_elapsed(scroll_timer) > SCROLL_FREQUENCY_MS) {
         if (global_saved_values.axis_scroll_lock && !is_mac) {
 	    update_axis_scroll_mode(m_scroll_accumulator_h, m_scroll_accumulator_v);
-            if (axis_scroll_mode == SV_AXIS_LOCKED_V) {
+            if (scroll_policy.mode == SV_AXIS_LOCKED_V) {
                 reportMouse1.v = scroll_accumulator_v;
                 reportMouse1.h = 0;
             } else {
@@ -347,6 +318,9 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
             reportMouse1.v = scroll_accumulator_v;
         }
 
+#ifdef SVAL_POINT_CONTROLS
+        sval_point_finish_interval(sval_scroll_policy_axes(&scroll_policy, global_saved_values.axis_scroll_lock && !is_mac));
+#endif
         scroll_timer_running = false;
         scroll_accumulator_h = 0;
         scroll_accumulator_v = 0;
@@ -360,6 +334,13 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
         ret_mouse.v = -ret_mouse.v;
     }
 
+#ifdef SVAL_POINT_CONTROLS
+    // In locked mode, wait for the existing scroll batch to choose/admit its axis.
+    // Otherwise a first diagonal movement could emit H while FREE, before V wins.
+    if(!global_saved_values.axis_scroll_lock || is_mac || !scroll_timer_running)
+        sval_point_scroll(&ret_mouse,sval_scroll_policy_axes(&scroll_policy,global_saved_values.axis_scroll_lock && !is_mac),global_saved_values.natural_scroll,is_mac?MAC_DIVISOR:1);
+    sval_point_mouse(&ret_mouse);
+#endif
     return pointing_device_task_user(ret_mouse);
 }
 
@@ -373,7 +354,7 @@ void sval_pointing_modes(sval_pointing_modes_t *m) {
     if (axis_lock) m->global_bits |= SVAL_MOTION_AXIS_LOCK;
     if (global_saved_values.natural_scroll) m->global_bits |= SVAL_MOTION_NATURAL_SCROLL;
     if (scroll_hold || scroll_toggle) m->global_bits |= SVAL_MOTION_SCROLL_KEY;
-    m->axis_state      = axis_lock ? (uint8_t)axis_scroll_mode : 0; // FREE 0, LOCKED_V 1, LOCKED_H 2
+    m->axis_state      = axis_lock ? (uint8_t)scroll_policy.mode : 0; // FREE 0, LOCKED_V 1, LOCKED_H 2
     m->left_scroll     = (global_saved_values.left_scroll != scroll_hold) != scroll_toggle;
     m->right_scroll    = (global_saved_values.right_scroll != scroll_hold) != scroll_toggle;
     m->left_automouse  = global_saved_values.left_automouse;
@@ -712,3 +693,9 @@ void mouse_mode(bool on) {
         }
     }
 }
+
+#ifdef SVAL_POINT_CONTROLS
+bool pre_process_record_kb(uint16_t keycode, keyrecord_t *record) {
+    return sval_point_process(keycode, record) && pre_process_record_user(keycode, record);
+}
+#endif

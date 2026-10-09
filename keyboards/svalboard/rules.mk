@@ -11,6 +11,7 @@ WS2812_DRIVER   = vendor
 CUSTOM_MATRIX = lite
 
 SRC += axis_scale.c matrix.c scanlab.c power.c identity.c pointing_detect.c build_reset.c
+SRC += pointing/scroll_policy.c
 
 # Settings start at 0x160000; keep firmware below them.
 LDFLAGS += -Wl,-T,keyboards/svalboard/flash_reservation.ld
@@ -123,4 +124,10 @@ else
   ifneq ($(filter yes,$(strip $(SVAL_UPDATE_TEST_HOOKS)) $(strip $(SVAL_UPDATE_RELEASE))),)
     $(error SVAL_UPDATE_TEST_HOOKS and SVAL_UPDATE_RELEASE need SVAL_UPDATER=yes)
   endif
+endif
+
+# Experimental motion controls, fixed RAM presets; no settings migration.
+ifeq ($(strip $(SVAL_POINT_CONTROLS)), yes)
+  OPT_DEFS += -DSVAL_POINT_CONTROLS
+  SRC += pointing/point_motion.c pointing/point_proportional.c pointing/point_control.c pointing/point_output.c pointing/point_config.c
 endif

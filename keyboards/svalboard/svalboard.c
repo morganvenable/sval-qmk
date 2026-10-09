@@ -650,8 +650,14 @@ static void sval_usb_wake_handler(void) {
     }
 }
 
+#ifdef SVAL_POINT_CONTROLS
+#    include "pointing/point_control.h"
+#endif
 void housekeeping_task_kb(void) {
     sval_pointer_probe_task();
+#ifdef SVAL_POINT_CONTROLS
+    sval_point_task();
+#endif
     sval_usb_wake_handler();
     scanlab_housekeeping();
 #ifdef SVAL_KEYTEST
