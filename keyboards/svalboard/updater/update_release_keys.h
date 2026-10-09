@@ -24,7 +24,10 @@
 //   3. set SVAL_UPDATE_RELEASE_KEYS_DRY_RUN to 0 and drop the DRY RUN banner;
 //   4. put the seed of the key CI signs with in the release-signing secret.
 // make_update.py and tools/check_release_elf.py read the keys from here, so
-// nothing else changes.
+// nothing else changes. Both DRY RUN keys are also listed in
+// tools/retired_release_keys.txt (leave them there): once step 3 sets the
+// flag to 0, every release tool refuses this file if either slot still holds
+// one of them, so a half-done swap cannot be released.
 
 #define SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 1
 

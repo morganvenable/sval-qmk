@@ -4,34 +4,11 @@
 // Structure checks for the updater (see update_image.h).
 
 #include "update_image.h"
+#include "update_self.h"
 
 // ---- this build ------------------------------------------------------------------
 
 #ifndef SVAL_UPDATER_HOST_TEST
-// The image check is "side and pointing device equal this build's" (D18, R8):
-// it compares builds, it does not detect hardware.
-#    if defined(INIT_EE_HANDS_LEFT) && !defined(INIT_EE_HANDS_RIGHT)
-#        define UPDATE_SELF_HAND UPDATE_HAND_LEFT
-#    elif defined(INIT_EE_HANDS_RIGHT) && !defined(INIT_EE_HANDS_LEFT)
-#        define UPDATE_SELF_HAND UPDATE_HAND_RIGHT
-#    else
-#        error "updater: the build must set exactly one of INIT_EE_HANDS_LEFT / INIT_EE_HANDS_RIGHT"
-#    endif
-
-#    if defined(POINTING_DEVICE_IS_PMW3389) + defined(POINTING_DEVICE_IS_PMW3360) + defined(PS2_ENABLE) + defined(AZOTEQ_IQS5XX_TPS43) > 1
-#        error "updater: more than one pointing device in this build"
-#    elif defined(POINTING_DEVICE_IS_PMW3389)
-#        define UPDATE_SELF_POINTING UPDATE_POINTING_PMW3389
-#    elif defined(POINTING_DEVICE_IS_PMW3360)
-#        define UPDATE_SELF_POINTING UPDATE_POINTING_PMW3360
-#    elif defined(PS2_ENABLE)
-#        define UPDATE_SELF_POINTING UPDATE_POINTING_TRACKPOINT
-#    elif defined(AZOTEQ_IQS5XX_TPS43)
-#        define UPDATE_SELF_POINTING UPDATE_POINTING_AZOTEQ
-#    else
-#        define UPDATE_SELF_POINTING UPDATE_POINTING_NONE
-#    endif
-
 void update_device_self(update_device_t *dev) {
     dev->hand           = UPDATE_SELF_HAND;
     dev->pointing_id    = UPDATE_SELF_POINTING;

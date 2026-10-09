@@ -74,9 +74,14 @@ def check(path, keys, dry_run, test_pub):
     if len(info) != 1 or info[0][1] != mu.BUILD_INFO_BYTES:
         errors.append(f"expected one {mu.BUILD_INFO_BYTES}-byte sval_update_build_info, found {info}")
     else:
-        magic, ver, flags, nkeys, proto, fw, version = struct.unpack(mu.BUILD_INFO_FMT, read(info[0][0], mu.BUILD_INFO_BYTES))
-        if magic != b"SVBI" or ver != 1:
+        (magic, ver, flags, nkeys, proto, fw, version, hand, pointing_id, keymap_id,
+         reserved) = struct.unpack(mu.BUILD_INFO_FMT, read(info[0][0], mu.BUILD_INFO_BYTES))
+        if magic + bytes([ver]) != mu.BUILD_INFO_MAGIC:
             errors.append(f"sval_update_build_info has magic {magic!r} version {ver}")
+        if hand not in mu.HAND.values() or pointing_id not in mu.POINTING.values() or reserved:
+            errors.append(f"the build-info record has hand {hand}, pointing_id {pointing_id}, reserved {reserved}")
+        if keymap_id not in mu.KEYMAP.values():
+            errors.append(f"the build-info record has keymap_id {keymap_id}: not a release keymap (sval, blank)")
         if not flags & mu.BI_RELEASE:
             errors.append("not a release updater build (SVAL_UPDATE_RELEASE)")
         for bit, what in mu.BI_NOT_IN_RELEASE.items():
@@ -109,7 +114,11 @@ def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__)
         return 0 if argv else 2
-    keys, dry_run = mu.release_keys()
+    try:
+        keys, dry_run = mu.release_keys()  # refuses retired keys in a production header
+    except mu.Refused as e:
+        print(f"FAIL: {e}")
+        return 1
     test_pub = mu.test_public_key()
     failed = 0
     for path in argv:

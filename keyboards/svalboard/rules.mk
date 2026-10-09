@@ -82,6 +82,10 @@ ifeq ($(strip $(SVAL_UPDATER)), yes)
     $(error SVAL_FW_VERSION_STRING '$(SVAL_FW_VERSION_STRING)' must be at most 16 of A-Z a-z 0-9 . _ + -)
   endif
   OPT_DEFS += -DSVAL_FW_VERSION_STRING=\"$(SVAL_FW_VERSION_STRING)\"
+  # The keymap in the build-info record (M3), so the release signer can check
+  # the manifest's keymap against the image: 1 sval, 2 blank (D22), 0 other.
+  SVAL_UPDATE_KEYMAP_ID := $(if $(filter sval,$(KEYMAP)),1,$(if $(filter blank,$(KEYMAP)),2,0))
+  OPT_DEFS += -DSVAL_UPDATE_KEYMAP_ID=$(SVAL_UPDATE_KEYMAP_ID)
   SRC += updater/updater.c updater/update_gesture.c updater/update_led.c updater/update_commit.c
   SRC += updater/update_flash.c updater/update_image.c updater/update_keys.c
   # M2: the split pause (D15, a matrix_scan() override) and the split relay.

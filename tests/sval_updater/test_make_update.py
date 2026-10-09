@@ -244,9 +244,11 @@ def main():
     write_header(True)
     check(mu.release_keys(header) == (pubs, True), "release_keys() reads a header")
 
-    def release_img(flags=mu.BI_RELEASE | mu.BI_KEYS_DRY_RUN, fw=3, version=b"vM3-test", keys=None, extra=b""):
+    def release_img(flags=mu.BI_RELEASE | mu.BI_KEYS_DRY_RUN, fw=3, version=b"vM3-test", keys=None, extra=b"",
+                    hand=1, pointing_id=0, keymap_id=1):
         body = bytearray(image(0x1800))
-        rec = struct.pack(mu.BUILD_INFO_FMT, b"SVBI", 1, flags, 2, 1, fw, version.ljust(16, b"\0"))
+        rec = struct.pack(mu.BUILD_INFO_FMT, b"SVBI", 2, flags, 2, 1, fw, version.ljust(16, b"\0"),
+                          hand, pointing_id, keymap_id, 0)
         body[0x800:0x800 + len(rec)] = rec
         for i, k in enumerate(sorted(pubs) if keys is None else keys):
             body[0x900 + 32 * i:0x920 + 32 * i] = pubs[k]
@@ -272,12 +274,13 @@ def main():
           f"unsigned manifest fields {f}")
     check(mu.manifest_version(f) == "vM3-test" and im.read_bytes() == release_img(), "unsigned: version from the record, raw image")
 
-    def sign(name, *args, im=im, mf=mf, env=None):
+    def sign(name, *args, im=im, mf=mf, env=None, sha=None, hdr=None):
         target = tmp / f"{name}.svup"
         if target.exists():
             target.unlink()
+        sha = hashlib.sha512(Path(im).read_bytes()).hexdigest() if sha is None else sha
         cmd = [sys.executable, "-I", str(TOOL), "sign", "--image", str(im), "--manifest", str(mf), "-o", str(target),
-               "--keys-header", str(header), *map(str, args)]
+               "--keys-header", str(hdr or header), "--expect-sha512", sha, *map(str, args)]
         p = subprocess.run(cmd, capture_output=True, text=True, env=env)
         return p.returncode, p.stdout + p.stderr, target
 
@@ -317,10 +320,10 @@ def main():
     rc, text = verify(out / "badsig_sigbyte.svup", "test")
     check(rc == 2 and "BAD_SIG" in text, f"verify of a flipped signature: {text.strip()}")
 
-    def refuse_sign(what, needle, *args, img=None, manifest_edit=None, image_edit=None, key=1):
+    def refuse_sign(what, needle, *args, img=None, manifest_edit=None, image_edit=None, key=1, sha=None, hdr=None, uargs=()):
         nonlocal_im, nonlocal_mf = im, mf
         if img is not None:
-            rc0, text0, nonlocal_im, nonlocal_mf = unsigned("case", img)
+            rc0, text0, nonlocal_im, nonlocal_mf = unsigned("case", img, *uargs)
             check(rc0 == 0, f"{what}: unsigned built ({text0.strip()})")
         if manifest_edit or image_edit:
             m2, i2 = bytearray(nonlocal_mf.read_bytes()), bytearray(nonlocal_im.read_bytes())
@@ -332,7 +335,7 @@ def main():
             nonlocal_mf.write_bytes(m2)
             nonlocal_im.write_bytes(i2)
         keyarg = key_files[key] if isinstance(key, int) else key
-        rc, text, target = sign("refused", "--key", keyarg, *args, im=nonlocal_im, mf=nonlocal_mf)
+        rc, text, target = sign("refused", "--key", keyarg, *args, im=nonlocal_im, mf=nonlocal_mf, sha=sha, hdr=hdr)
         check(rc == 2 and needle.lower() in text.lower() and not target.exists(), f"sign refuses {what}: rc {rc}: {text.strip()}")
 
     def set_flags(v):
@@ -363,13 +366,68 @@ def main():
     refuse_sign("DRY RUN keys in the image, production keys in the header", "DRY RUN")
     write_header(True)
 
+    # The signed image must be the one the lint checked (--expect-sha512).
+    refuse_sign("an image that is not the linted one", "not the linted image's", sha="00" * 64)
+    refuse_sign("a malformed --expect-sha512", "128 hex digits", sha="xyz")
+    rc, text = run("sign", "--image", im, "--manifest", mf, "-o", tmp / "nosha.svup", "--key", key_files[1],
+                   "--keys-header", header)
+    check(rc == 2 and "--expect-sha512" in text, f"sign requires --expect-sha512: {text.strip()[-120:]}")
+    # The image's own build-info record names its side, pointing device and keymap.
+    left_args = ("--kb", "svalboard/left", "--keymap", "sval", "--release")
+    refuse_sign("a left image labelled right", "the manifest says hand 1, the image was built with 0",
+                img=release_img(hand=0), uargs=left_args, manifest_edit=lambda m: m.__setitem__(7, 1))
+    refuse_sign("a manifest whose hand is not the image's", "the manifest says hand 0",
+                manifest_edit=lambda m: m.__setitem__(7, 0))
+    refuse_sign("a manifest whose pointing device is not the image's", "pointing_id 3",
+                manifest_edit=lambda m: m.__setitem__(8, 3))
+    refuse_sign("a blank-keymap image labelled sval", "keymap_id 1, the image was built with 2",
+                img=release_img(keymap_id=2), uargs=("--kb", "svalboard/right", "--keymap", "blank", "--release"),
+                manifest_edit=lambda m: m.__setitem__(9, 1))
+    refuse_sign("an image built from another keymap", "not a release keymap build", img=release_img(keymap_id=0),
+                uargs=("--kb", "svalboard/right", "--keymap", "scanlab", "--keymap-id", "0"),
+                manifest_edit=lambda m: (m.__setitem__(9, 1), set_flags(1)(m)))
+    refuse_sign("a host-test record", "not a release keymap build", img=release_img(hand=0xFF, pointing_id=0xFF))
+    rc, text, *_ = unsigned("wronghand", release_img(), "--kb", "svalboard/left", "--keymap", "sval", "--release")
+    check(rc == 2 and "--kb or --keymap" in text, f"unsigned refuses --kb for the other side: {text.strip()}")
+    rc, text, *_ = unsigned("wrongkm", release_img(), "--kb", "svalboard/right", "--keymap", "blank", "--release")
+    check(rc == 2 and "keymap_id 2" in text, f"unsigned refuses another keymap: {text.strip()}")
+    rc, text, *_ = unsigned("v1rec", image(0x1800)[:0x800] + b"SVBI\x01" + bytes(0x1800 - 0x805))
+    check(rc == 2 and "version-1 build-info" in text, f"unsigned refuses a version-1 record: {text.strip()}")
+
+    # Retired keys (retired_release_keys.txt): a header that says production
+    # keys (DRY_RUN 0) must hold none of them, so a half-done swap is refused.
+    real_keys, real_dry = mu.release_keys()
+    retired = mu.retired_keys()
+    if real_dry:
+        check(all(v in retired for v in real_keys.values()),
+              "every DRY RUN key in update_release_keys.h is in retired_release_keys.txt")
+    dry_pubs = [k for k in retired]
+    check(len(dry_pubs) >= 2, "retired_release_keys.txt lists the two M3 DRY RUN keys")
+    swap = tmp / "swap.h"
+    for what, pair in (("flag flipped, both DRY RUN keys left", (dry_pubs[0], dry_pubs[1])),
+                       ("key 1 swapped, DRY RUN key 2 left", (pubs[1], dry_pubs[1])),
+                       ("key 2 swapped, DRY RUN key 1 left", (dry_pubs[0], pubs[2]))):
+        swap.write_text("#define SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 0\n" + "".join(
+            f"#define SVAL_UPDATE_RELEASE_KEY_{k} \\\n    {{ {', '.join(f'0x{b:02x}' for b in pair[k - 1])}, }}\n"
+            for k in (1, 2)))
+        try:
+            mu.release_keys(swap)
+            check(False, f"release_keys() refuses a half-done swap ({what})")
+        except mu.Refused as e:
+            check("retired key" in str(e), f"release_keys() refuses a half-done swap ({what}): {e}")
+        refuse_sign(f"a half-done swap ({what})", "retired key", hdr=swap)
+        rc, text = run("verify", out / "ok_diagnostic.svup", "--build", "test", "--keys-header", swap)
+        check(rc == 2 and "retired key" in text, f"verify refuses a half-done swap ({what}): {text.strip()}")
+    swap.write_text(header.read_text().replace("DRY_RUN 1", "DRY_RUN 0"))
+    check(mu.release_keys(swap) == (pubs, False), "release_keys() takes production keys that are not retired")
+
     rc, text, *_ = unsigned("fwmismatch", release_img(), *rel_common, "--fw-version", "9")
     check(rc == 2 and "reports 3" in text, f"unsigned refuses a --fw-version the image contradicts: {text.strip()}")
     rc, text, *_ = unsigned("vmismatch", release_img(), *rel_common, "--version-string", "vOther")
     check(rc == 2 and "reports 'vM3-test'" in text, f"unsigned refuses a --version-string the image contradicts: {text.strip()}")
     rc, text, *_ = unsigned("diag", release_img(), *rel_common, "--diagnostic")
     check(rc == 2 and "DIAGNOSTIC" in text, f"unsigned refuses RELEASE + DIAGNOSTIC: {text.strip()}")
-    rc, text, *_ = unsigned("twoinfo", release_img(extra=b"SVBI\x01" + bytes(23)))
+    rc, text, *_ = unsigned("twoinfo", release_img(extra=b"SVBI\x02" + bytes(27)))
     check(rc == 2 and "build-info records" in text, f"unsigned refuses two build-info records: {text.strip()}")
     # the one-step path takes the record's version too
     rec_uf2 = tmp / "rec.uf2"

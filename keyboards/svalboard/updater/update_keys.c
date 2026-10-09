@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include "update_keys.h"
 #include "update_release_keys.h"
+#include "update_self.h"
 #include "updater.h" // SVAL_FW_VERSION
 #include "optional/monocypher-ed25519.h"
 
@@ -43,7 +44,17 @@ static const uint8_t release_keys[2][UPDATE_PUBKEY_BYTES] = {SVAL_UPDATE_RELEASE
 #    define SVAL_FW_VERSION_STRING ""
 #endif
 _Static_assert(sizeof(SVAL_FW_VERSION_STRING) <= UPDATE_VERSION_CHARS + 1, "SVAL_FW_VERSION_STRING is longer than 16 characters");
-_Static_assert(sizeof(update_build_info_t) == 28, "update_build_info_t is 28 bytes");
+_Static_assert(sizeof(update_build_info_t) == 32, "update_build_info_t is 32 bytes");
+#ifndef SVAL_UPDATE_KEYMAP_ID
+#    define SVAL_UPDATE_KEYMAP_ID 0
+#endif
+#ifdef SVAL_UPDATER_HOST_TEST
+#    define BI_HAND 0xFF
+#    define BI_POINTING 0xFF
+#else
+#    define BI_HAND UPDATE_SELF_HAND
+#    define BI_POINTING UPDATE_SELF_POINTING
+#endif
 
 #if defined(SVAL_HOST_BOOTLOADER)
 #    if SVAL_HOST_BOOTLOADER
@@ -79,6 +90,10 @@ const update_build_info_t sval_update_build_info = {
     .updater_proto = UPDATE_PROTOCOL_VERSION,
     .fw_version = SVAL_FW_VERSION,
     .version = SVAL_FW_VERSION_STRING,
+    .hand = BI_HAND,
+    .pointing_id = BI_POINTING,
+    .keymap_id = SVAL_UPDATE_KEYMAP_ID,
+    .reserved = 0,
 };
 
 // ---- keys ----------------------------------------------------------------------------

@@ -19,6 +19,7 @@ rv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rv)
 
 checks = failures = 0
+REAL_RELEASE_KEYS = rv.mu.release_keys
 
 
 def check(cond, what):
@@ -29,7 +30,7 @@ def check(cond, what):
         print(f"FAIL: {what}", file=sys.stderr)
 
 
-def run(out, tag, rels, committed, keys_dry_run):
+def run(out, tag, rels, committed, keys_dry_run, header=None):
     """main() with stubs: rels as (tag, draft, prerelease, published) tuples, committed {tag: n}."""
     lst = out / "releases.tsv"
     lst.write_text("".join(f"{t}\t{str(d).lower()}\t{str(p).lower()}\t{when}\n" for t, d, p, when in rels))
@@ -37,10 +38,14 @@ def run(out, tag, rels, committed, keys_dry_run):
     if gh_out.exists():
         gh_out.unlink()
     rv.committed_at = lambda t: committed.get(t, 0)
-    rv.mu.release_keys = lambda: ({1: b"1" * 32, 2: b"2" * 32}, keys_dry_run)
+    if header is None:
+        rv.mu.release_keys = lambda *a, **k: ({1: b"1" * 32, 2: b"2" * 32}, keys_dry_run)
+    else:
+        rv.mu.release_keys = REAL_RELEASE_KEYS
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        rc = rv.main([tag, "--repo", "x/y", "--releases", str(lst), "--github-output", str(gh_out)])
+        rc = rv.main([tag, "--repo", "x/y", "--releases", str(lst), "--github-output", str(gh_out),
+                      *(["--keys-header", str(header)] if header else [])])
     outputs = dict(line.split("=", 1) for line in gh_out.read_text().splitlines()) if gh_out.exists() else {}
     return rc, buf.getvalue(), outputs
 
@@ -81,6 +86,18 @@ def main():
     check(rc == 0, "a prerelease's number is not compared")
     rc, _, o = run(out, "vM3-dryrun1", [], {}, True)
     check(rc == 0 and o.get("previous") == "", "no previous release")
+
+    # a half-done key swap: DRY_RUN set to 0 while a retired (DRY RUN) key is
+    # still in a slot. Refused for every tag, so no normal release is signed.
+    real = (ROOT / "keyboards/svalboard/updater/update_release_keys.h").read_text()
+    if "SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 1" in real:
+        half = out / "half_swap.h"
+        half.write_text(real.replace("SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 1", "SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 0"))
+        for tag in ("vLaunch3", "vM3-dryrun9"):
+            rc, text, o = run(out, tag, history, {"vLaunch2": fw - 1}, False, header=half)
+            check(rc == 1 and "retired key" in text and not o, f"{tag} with a half-done key swap refused: {text}")
+        rc, text, o = run(out, "vM3-dryrun9", history, {}, True, header=ROOT / "keyboards/svalboard/updater/update_release_keys.h")
+        check(rc == 0 and o.get("prerelease") == "true", f"the real DRY RUN header passes a dry run: {text}")
 
     # tag names that cannot be a version string
     for tag in ("vLaunch2-with-a-long-name", "v Launch", "v/1"):

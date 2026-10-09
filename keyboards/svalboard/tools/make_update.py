@@ -18,13 +18,16 @@ writes the raw image and an unsigned manifest; the signing job signs them.
     make_update.py unsigned IN.uf2 --image-out X.img --manifest-out X.manifest \\
         --kb svalboard/right --keymap sval --release
     make_update.py sign --image X.img --manifest X.manifest -o X.svup \\
-        --key-env SVAL_UPDATE_SIGNING_KEY [--expect-version vLaunch3]
+        --key-env SVAL_UPDATE_SIGNING_KEY --expect-sha512 HEX \\
+        [--expect-version vLaunch3]
 
-'sign' signs release images only and checks everything first: the image hash
-and structure, RELEASE set and DIAGNOSTIC clear, a release keymap (sval,
-blank), and the image's own build-info record (a release updater build with
-no test key, test hooks, keytest or host bootloader, and the same version as
-the manifest). Its key must be one of the two release keys in
+'sign' signs release images only and checks everything first: the image is
+the one the release lint checked (--expect-sha512, from
+check_release_artifacts.py), its hash and structure, RELEASE set and
+DIAGNOSTIC clear, a release keymap (sval, blank), and the image's own
+build-info record (a release updater build with no test key, test hooks,
+keytest or host bootloader, with the manifest's version, side, pointing
+device and keymap). Its key must be one of the two release keys in
 updater/update_release_keys.h, and it sets the manifest's key_id to that slot.
 
     make_update.py verify FILE.svup [--build release|test|plain]
@@ -53,6 +56,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TEST_KEY_FILE = HERE / "sval_update_TEST_ONLY.key"
 RELEASE_KEYS_H = HERE.parent / "updater" / "update_release_keys.h"
+# Public keys that must never be production release keys: the M3 DRY RUN keys,
+# and any key retired later. Kept outside the header, so a key swap cannot
+# drop them by accident (release_keys()).
+RETIRED_KEYS = HERE / "retired_release_keys.txt"
 
 # ---- format (update_manifest.h) ----------------------------------------------------
 
@@ -74,9 +81,10 @@ STORAGE_FORMAT = 2  # SVAL_UPDATE_STORAGE_FORMAT in keyboards/svalboard/config.h
 
 # ---- build info (update_keys.h) ---------------------------------------------------
 
-BUILD_INFO_MAGIC = b"SVBI\x01"  # magic, then info_ver 1
-BUILD_INFO_FMT = "<4sBBBBI16s"
-BUILD_INFO_BYTES = 28
+BUILD_INFO_MAGIC = b"SVBI\x02"  # magic, then info_ver 2
+BUILD_INFO_FMT = "<4sBBBBI16sBBBB"  # ..., version, hand, pointing_id, keymap_id, reserved
+BUILD_INFO_BYTES = 32
+BI_HOST_TEST = 0xFF  # hand and pointing_id of a host-test build
 assert struct.calcsize(BUILD_INFO_FMT) == BUILD_INFO_BYTES
 BI_RELEASE, BI_TEST_KEY, BI_TEST_HOOKS, BI_KEYTEST, BI_HOST_BOOTLOADER, BI_KEYS_DRY_RUN = 0x01, 0x02, 0x04, 0x08, 0x10, 0x20
 BI_NOT_IN_RELEASE = {BI_TEST_KEY: "the TEST-ONLY key", BI_TEST_HOOKS: "test hooks", BI_KEYTEST: "SVAL_KEYTEST",
@@ -170,17 +178,31 @@ def build_info(image):
         hits.append(at)
         at = image.find(BUILD_INFO_MAGIC, at + 1)
     if not hits:
+        if image.find(b"SVBI\x01") >= 0:
+            raise Refused("the image has a version-1 build-info record (an M3 build from before 2026-10-09): rebuild it")
         return None
     if len(hits) > 1:
         raise Refused(f"the image has {len(hits)} build-info records (SVBI), expected one")
     if hits[0] + BUILD_INFO_BYTES > len(image):
         raise Refused("the build-info record runs past the end of the image")
-    _, ver, flags, release_keys, proto, fw, version = struct.unpack_from(BUILD_INFO_FMT, image, hits[0])
+    _, ver, flags, release_keys, proto, fw, version, hand, pointing_id, keymap_id, reserved = struct.unpack_from(
+        BUILD_INFO_FMT, image, hits[0])
     text = version.rstrip(b"\0")
     if b"\0" in text or not VERSION_RE.match(text.decode("latin-1")):
         raise Refused(f"the build-info record's version string {version!r} is malformed")
     return dict(offset=hits[0], flags=flags, release_keys=release_keys, updater_proto=proto, fw_version=fw,
-                version=text.decode("ascii"))
+                version=text.decode("ascii"), hand=hand, pointing_id=pointing_id, keymap_id=keymap_id,
+                reserved=reserved)
+
+
+def build_info_identity_problems(info, m):
+    """Where the manifest's hand, pointing device and keymap disagree with the image's
+    build-info record (a record from a host-test build, 0xFF, says nothing)."""
+    problems = []
+    for field in ("hand", "pointing_id", "keymap_id"):
+        if info[field] != BI_HOST_TEST and info[field] != m[field]:
+            problems.append(f"the manifest says {field} {m[field]}, the image was built with {info[field]}")
+    return problems
 
 
 # ---- Ed25519 ---------------------------------------------------------------------------
@@ -354,8 +376,28 @@ def test_public_key():
     return pure_public(read_key(TEST_KEY_FILE))
 
 
-def release_keys(path=RELEASE_KEYS_H):
-    """({1: pub, 2: pub}, dry_run) from updater/update_release_keys.h."""
+def retired_keys(path=RETIRED_KEYS):
+    """{public key: label} from retired_release_keys.txt: one key per line, 64 hex
+    digits, then the rest of the line as its label; # starts a comment."""
+    out = {}
+    for n, line in enumerate(Path(path).read_text().splitlines(), 1):
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        hexkey, _, label = line.partition(" ")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", hexkey):
+            raise Refused(f"{path}:{n}: expected 64 hex digits, then a label")
+        out[bytes.fromhex(hexkey)] = label.strip() or hexkey
+    return out
+
+
+def release_keys(path=RELEASE_KEYS_H, retired=RETIRED_KEYS):
+    """({1: pub, 2: pub}, dry_run) from updater/update_release_keys.h.
+
+    Refuses a header that says it holds production keys (DRY_RUN 0) while either
+    slot holds a retired key, such as a DRY RUN key a half-done swap left
+    behind. Every release tool reads the keys through here, so release CI's
+    version check, the ELF lint and the signer all refuse it."""
     text = Path(path).read_text()
     keys = {}
     for key_id in RELEASE_KEY_IDS:
@@ -369,7 +411,14 @@ def release_keys(path=RELEASE_KEYS_H):
         raise Refused(f"{path}: no SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 0 or 1")
     if keys[1] == keys[2]:
         raise Refused(f"{path}: the two release keys are the same")
-    return keys, dry.group(1) == "1"
+    dry_run = dry.group(1) == "1"
+    if not dry_run:
+        old = retired_keys(retired)
+        bad = [f"key_id {k} is the retired key {old[v]}" for k, v in keys.items() if v in old]
+        if bad:
+            raise Refused(f"{path}: SVAL_UPDATE_RELEASE_KEYS_DRY_RUN is 0 but " + "; ".join(bad) +
+                          f" ({Path(retired).name}): replace both keys (docs/updater.md, 'Release signing')")
+    return keys, dry_run
 
 
 # ---- manifest ---------------------------------------------------------------------------
@@ -521,6 +570,11 @@ def make_unsigned(args):
     image = read_image(args)
     manifest = manifest_from_args(image, args, args.key_id)
     check_structure(image, False)
+    info = build_info(image)
+    if info:
+        problems = build_info_identity_problems(info, parse_manifest(manifest))
+        if problems:
+            raise Refused("; ".join(problems) + " (--kb or --keymap is not this image's)")
     Path(args.image_out).write_bytes(image)
     Path(args.manifest_out).write_bytes(manifest)
     print(describe(args.manifest_out, manifest, image) + " (unsigned)")
@@ -564,6 +618,10 @@ def release_image_problems(manifest, image, keys, dry_run):
         if info["fw_version"] != m["fw_version"] or info["version"] != manifest_version(m):
             problems.append(f"the manifest says {manifest_version(m)!r} ({m['fw_version']}), the image reports "
                             f"{info['version']!r} ({info['fw_version']})")
+        if BI_HOST_TEST in (info["hand"], info["pointing_id"]) or info["keymap_id"] not in KEYMAP.values():
+            problems.append(f"the image's build-info record has hand {info['hand']}, pointing_id {info['pointing_id']}, "
+                            f"keymap_id {info['keymap_id']}: not a release keymap build for one half")
+        problems += build_info_identity_problems(info, m)
     for key_id, pub in keys.items():
         if image.count(pub) != 1:
             problems.append(f"release key {key_id} appears {image.count(pub)} times in the image, expected once")
@@ -594,6 +652,14 @@ def sign_release(args):
         raise Refused(f"{args.manifest}: {len(manifest)} B, a manifest is {MANIFEST_BYTES}")
     problems = release_image_problems(bytes(manifest), image, keys, dry_run)
     m = parse_manifest(bytes(manifest))
+    # The image the lint checked (release CI passes the SHA-512 the lint job
+    # computed from the ELF, the .uf2 and the .img as a job output).
+    want = args.expect_sha512.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{128}", want):
+        problems.append("--expect-sha512 is not 128 hex digits")
+    elif hashlib.sha512(image).hexdigest() != want:
+        problems.append(f"the image's SHA-512 is {hashlib.sha512(image).hexdigest()[:16]}..., "
+                        f"not the linted image's {want[:16]}...")
     if args.expect_version is not None and manifest_version(m) != args.expect_version:
         problems.append(f"version {manifest_version(m)!r}, expected {args.expect_version!r}")
     if args.expect_fw_version is not None and m["fw_version"] != args.expect_fw_version:
@@ -687,6 +753,9 @@ def main(argv=None):
             key.add_argument("--key-env", metavar="VAR", help="environment variable holding the seed (64 hex digits)")
             ap.add_argument("--expect-version", help="refuse unless the manifest's version string is this (the tag)")
             ap.add_argument("--expect-fw-version", type=int, help="refuse unless the manifest's fw_version is this")
+            ap.add_argument("--expect-sha512", required=True, metavar="HEX",
+                            help="refuse unless the image's SHA-512 is this: the image the release lint checked "
+                                 "(check_release_artifacts.py prints it)")
             ap.add_argument("--signer", choices=("auto", "openssl", "pure"), default="auto", help=signer_help)
             ap.add_argument("--keys-header", default=str(RELEASE_KEYS_H), help="release keys header (tests only)")
             sign_release(ap.parse_args(argv[1:]))

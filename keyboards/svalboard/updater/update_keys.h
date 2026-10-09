@@ -25,10 +25,12 @@ update_status_t update_manifest_signature(const uint8_t signed_manifest[UPDATE_S
 // One record in .rodata of every updater build, so the image itself says what
 // kind of build it is. make_update.py takes fw_version and the version string
 // for the manifest from it (they cannot disagree with what the firmware
-// reports), its signer refuses an image whose record is not a release build,
-// and tools/check_release_elf.py lints it. INFO page 1 returns the version.
+// reports), its signer refuses an image whose record is not a release build
+// or whose side, pointing device or keymap is not the manifest's, and
+// tools/check_release_elf.py lints it. INFO page 1 returns the version.
+// Version 2 added hand, pointing_id and keymap_id.
 
-#define UPDATE_BUILD_INFO_VERSION 1
+#define UPDATE_BUILD_INFO_VERSION 2
 
 #define UPDATE_BUILD_RELEASE 0x01         // SVAL_UPDATE_RELEASE
 #define UPDATE_BUILD_TEST_KEY 0x02        // SVAL_UPDATE_TEST_KEY: the TEST-ONLY key is accepted
@@ -45,6 +47,10 @@ typedef struct __attribute__((packed)) {
     uint8_t  updater_proto;  // UPDATE_PROTOCOL_VERSION
     uint32_t fw_version;     // SVAL_FW_VERSION (D17, D32)
     char     version[UPDATE_VERSION_CHARS]; // SVAL_FW_VERSION_STRING, NUL-padded (the release tag)
-} update_build_info_t;       // 28 B
+    uint8_t  hand;           // UPDATE_HAND_* of this build (update_self.h); 0xFF in host tests
+    uint8_t  pointing_id;    // UPDATE_POINTING_* of this build; 0xFF in host tests
+    uint8_t  keymap_id;      // SVAL_UPDATE_KEYMAP_ID (rules.mk): 1 sval, 2 blank, 0 any other keymap
+    uint8_t  reserved;       // 0
+} update_build_info_t;       // 32 B
 
 extern const update_build_info_t sval_update_build_info;

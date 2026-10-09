@@ -1,0 +1,10 @@
+# Ed25519 public keys that must never again be production release keys
+# (docs/updater.md, "Release signing"). One per line: 64 hex digits, then a
+# label. Never remove a line: add one when a key is retired.
+#
+# make_update.py's release_keys() refuses update_release_keys.h when
+# SVAL_UPDATE_RELEASE_KEYS_DRY_RUN is 0 and either slot holds a key listed
+# here, so release CI (release_version.py, check_release_elf.py and the
+# signer) stops a half-done swap that left a DRY RUN key in place.
+188601ebe4b28c7c0dc43feccdb55267fce01989f8e7bab9c8fe1620fac3901f M3-DRY-RUN-1 (private half on a development machine)
+fb34f6553ba68c6b5d1adae9aa7ca33d0a7d9dc37229df99258d20dc0001f76b M3-DRY-RUN-2 (private half on a development machine)

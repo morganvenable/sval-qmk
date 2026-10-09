@@ -16,7 +16,9 @@ fw_version.txt and the version string is the tag name. This checks, and exits
     counts as 0. Dry-run prereleases are not compared against, so a dry run
     never uses up a number;
   - a tag that is not a dry run is refused while update_release_keys.h holds
-    the DRY RUN keys, so no normal release is ever signed with them.
+    the DRY RUN keys, so no normal release is ever signed with them; and a
+    header that claims production keys (DRY_RUN 0) but still holds a key from
+    tools/retired_release_keys.txt is refused for every tag.
 
 A dry-run tag is one whose name contains "dryrun" or "dry-run" (any case),
 such as vM3-dryrun1. Its release is always a prerelease.
@@ -88,6 +90,7 @@ def main(argv=None):
     ap.add_argument("--repo", required=True)
     ap.add_argument("--releases", help="tab-separated release list instead of gh api (tests)")
     ap.add_argument("--github-output", help="append the outputs here ($GITHUB_OUTPUT)")
+    ap.add_argument("--keys-header", default=str(mu.RELEASE_KEYS_H), help="release keys header (tests only)")
     args = ap.parse_args(argv)
     errors = []
 
@@ -100,7 +103,11 @@ def main(argv=None):
     except (OSError, ValueError) as e:
         print(f"FAIL: {e}")
         return 1
-    _, keys_dry_run = mu.release_keys()
+    try:
+        _, keys_dry_run = mu.release_keys(args.keys_header)  # refuses retired keys in a production header
+    except mu.Refused as e:
+        print(f"FAIL: {e}")
+        return 1
     if keys_dry_run and not dry_run:
         errors.append(f"{tag} is not a dry-run tag, but update_release_keys.h holds the DRY RUN keys: "
                       "swap in the production keys first (docs/updater.md, 'Release signing')")

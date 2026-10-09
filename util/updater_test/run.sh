@@ -14,6 +14,7 @@ trap 'rm -rf "$out"' EXIT
 
 python3 -I "$tests/test_make_update.py" "$out/cross" "$@"
 python3 -I "$tests/test_release_version.py" "$out/release_version"
+python3 -I "$tests/test_release_artifacts.py" "$out/release_artifacts"
 
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
@@ -71,7 +72,7 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
 key_hex="$(python3 -I "$kb/tools/make_update.py" --print-public --signer pure)"
 release_hex="$(python3 -I "$kb/tools/make_update.py" --print-release-keys)"
 for flags in "" "-DSVAL_UPDATE_TEST_KEY" "-DSVAL_UPDATE_RELEASE"; do
-    ${CC:-cc} -std=c11 -O1 $flags -include "$kb/config.h" -I"$kb/updater" -I"$kb/updater/vendor" \
+    ${CC:-cc} -std=c11 -O1 $flags -DINIT_EE_HANDS_LEFT -include "$kb/config.h" -I"$kb/updater" -I"$kb/updater/vendor" \
         -c "$kb/updater/update_keys.c" -o "$out/keys.o"
     found=no
     od -An -v -tx1 "$out/keys.o" | tr -d ' \n' | grep -q "$key_hex" && found=yes
@@ -84,7 +85,7 @@ for flags in "" "-DSVAL_UPDATE_TEST_KEY" "-DSVAL_UPDATE_RELEASE"; do
         fi
     done
 done
-if ${CC:-cc} -std=c11 -O1 -DSVAL_UPDATE_TEST_KEY -DSVAL_UPDATE_RELEASE -include "$kb/config.h" -I"$kb/updater" -I"$kb/updater/vendor" \
+if ${CC:-cc} -std=c11 -O1 -DINIT_EE_HANDS_LEFT -DSVAL_UPDATE_TEST_KEY -DSVAL_UPDATE_RELEASE -include "$kb/config.h" -I"$kb/updater" -I"$kb/updater/vendor" \
     -c "$kb/updater/update_keys.c" -o "$out/keys.o" 2>/dev/null; then
     echo "FAIL: a release build compiled with the test key"; exit 1
 fi
