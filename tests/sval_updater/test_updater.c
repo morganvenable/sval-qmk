@@ -16,6 +16,7 @@
 #include "update_manifest.h"
 #include "update_image.h"
 #include "update_keys.h"
+#include "update_release_keys.h"
 #include "optional/monocypher-ed25519.h"
 #include "boot2_page0.h"
 
@@ -314,14 +315,22 @@ static void test_ed25519(void) {
 }
 
 static void test_keys(void) {
+    // The two release keys (update_release_keys.h) are in every updater build;
+    // this one (SVAL_UPDATE_TEST_KEY) also has the test key.
+    static const uint8_t release_pub[2][UPDATE_PUBKEY_BYTES] = {SVAL_UPDATE_RELEASE_KEY_1, SVAL_UPDATE_RELEASE_KEY_2};
     CHECK(update_key(UPDATE_KEY_TEST) != NULL);
-    CHECK(update_key(UPDATE_KEY_RELEASE_1) == NULL);
-    CHECK(update_key(UPDATE_KEY_RELEASE_2) == NULL);
+    CHECK(update_key(UPDATE_KEY_RELEASE_1) != NULL && memcmp(update_key(UPDATE_KEY_RELEASE_1), release_pub[0], 32) == 0);
+    CHECK(update_key(UPDATE_KEY_RELEASE_2) != NULL && memcmp(update_key(UPDATE_KEY_RELEASE_2), release_pub[1], 32) == 0);
+    CHECK(memcmp(release_pub[0], release_pub[1], 32) != 0);
+    CHECK(memcmp(release_pub[0], update_key(UPDATE_KEY_TEST), 32) != 0 && memcmp(release_pub[1], update_key(UPDATE_KEY_TEST), 32) != 0);
     CHECK(update_key(3) == NULL);
     CHECK(update_key(255) == NULL);
+    CHECK(memcmp(sval_update_build_info.magic, "SVBI", 4) == 0);
+    CHECK_EQ(sval_update_build_info.flags & (UPDATE_BUILD_TEST_KEY | UPDATE_BUILD_RELEASE), UPDATE_BUILD_TEST_KEY);
+    CHECK_EQ(sval_update_build_info.release_keys, 2);
     uint8_t blob[UPDATE_SIGNED_MANIFEST_BYTES];
     memset(blob, 0, sizeof(blob));
-    blob[6] = 1; // key_id 1: no such key in this build
+    blob[6] = 1; // key_id 1, but a zero signature
     CHECK_EQ(update_manifest_signature(blob), UPDATE_BAD_SIG);
     blob[6] = 0; // the test key, but a zero signature
     CHECK_EQ(update_manifest_signature(blob), UPDATE_BAD_SIG);
@@ -360,6 +369,21 @@ static void test_cross(const char *dir) {
         CHECK(memcmp(pub, update_key(UPDATE_KEY_TEST), 32) == 0); // firmware key == the TEST-ONLY key file
         free(pubhex);
     }
+    // make_update.py reads update_release_keys.h itself: it must see the same keys.
+    snprintf(path, sizeof(path), "%s/release_pubkeys.hex", dir);
+    uint8_t *relhex = read_file(path, &len);
+    CHECK(relhex != NULL && len >= 129);
+    if (relhex && len >= 129) {
+        for (int k = 0; k < 2; k++) {
+            char    s[65];
+            uint8_t pub[32];
+            memcpy(s, relhex + 65 * k, 64);
+            s[64] = 0;
+            hex(s, pub, 32);
+            CHECK(memcmp(pub, update_key((uint8_t)(UPDATE_KEY_RELEASE_1 + k)), 32) == 0);
+        }
+    }
+    free(relhex);
 
     snprintf(path, sizeof(path), "%s/index.txt", dir);
     FILE *idx = fopen(path, "r");

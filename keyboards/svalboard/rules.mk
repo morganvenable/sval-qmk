@@ -54,8 +54,9 @@ endif
 # is in the repository: test boards only. SVAL_UPDATE_TEST_HOOKS adds the
 # commit halt points for hardware tests and implies the test key.
 # SVAL_UPDATE_RELEASE makes a release updater build: images signed with the
-# test key or flagged DIAGNOSTIC are refused. Until M3 adds release keys, an
-# updater build without the test key accepts no image at all.
+# test key or flagged DIAGNOSTIC are refused. Every updater build accepts the
+# two release keys (updater/update_release_keys.h); release CI builds with
+# SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes (docs/updater.md, "Release signing").
 SVAL_UPDATER ?= no
 SVAL_UPDATE_TEST_KEY ?= no
 SVAL_UPDATE_TEST_HOOKS ?= no
@@ -65,6 +66,22 @@ ifeq ($(strip $(SVAL_UPDATER)), yes)
     $(error SVAL_UPDATER and SVAL_KEYTEST cannot be combined: keytest injects key events (R11))
   endif
   OPT_DEFS += -DSVAL_UPDATER -DCLIENT_WRAPPER_ID_GETTER
+  # Version (D17, proposed D32). SVAL_FW_VERSION, the number, comes from
+  # updater/fw_version.txt unless given (make ... SVAL_FW_VERSION=N; the older
+  # EXTRAFLAGS=-DSVAL_FW_VERSION=N still works). SVAL_FW_VERSION_STRING, the
+  # display string (release CI: the tag name), is empty unless given.
+  SVAL_FW_VERSION ?= $(shell sed -n '/^[0-9][0-9]*$$/p' keyboards/svalboard/updater/fw_version.txt)
+  ifneq ($(shell echo '$(SVAL_FW_VERSION)' | grep -Ex '[0-9]{1,9}' >/dev/null && echo ok),ok)
+    $(error SVAL_FW_VERSION '$(SVAL_FW_VERSION)' is not a number of at most 9 digits (keyboards/svalboard/updater/fw_version.txt))
+  endif
+  ifeq ($(findstring -DSVAL_FW_VERSION=,$(EXTRAFLAGS)),)
+    OPT_DEFS += -DSVAL_FW_VERSION=$(SVAL_FW_VERSION)u
+  endif
+  SVAL_FW_VERSION_STRING ?=
+  ifneq ($(shell echo '$(SVAL_FW_VERSION_STRING)' | grep -Ex '[A-Za-z0-9._+-]{0,16}' >/dev/null && echo ok),ok)
+    $(error SVAL_FW_VERSION_STRING '$(SVAL_FW_VERSION_STRING)' must be at most 16 of A-Z a-z 0-9 . _ + -)
+  endif
+  OPT_DEFS += -DSVAL_FW_VERSION_STRING=\"$(SVAL_FW_VERSION_STRING)\"
   SRC += updater/updater.c updater/update_gesture.c updater/update_led.c updater/update_commit.c
   SRC += updater/update_flash.c updater/update_image.c updater/update_keys.c
   # M2: the split pause (D15, a matrix_scan() override) and the split relay.

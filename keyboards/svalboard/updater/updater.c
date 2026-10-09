@@ -15,14 +15,17 @@
 // fields are little-endian.
 //
 //  op           request after [hand]             reply after [status]
-//  0x00 INFO     -                               state, protocol, slot base/4K u16, slot size/4K u16,
+//  0x00 INFO     [page u8: 0, the default]       state, protocol, slot base/4K u16, slot size/4K u16,
 //                                                max image/4K u16, JEDEC[3], pointing_id, hand,
 //                                                fw_version u32, storage format, security epoch u16,
 //                                                flags (bit0 die is 16 MiB, bit1 settings writes failing,
 //                                                bit2 release build, bit3 test hooks, bit4 the TEST-ONLY
 //                                                key is accepted, bit5 the other half's version
-//                                                differs: see STATUS), last error.
+//                                                differs: see STATUS, bit6 the release keys are the
+//                                                M3 DRY RUN keys), last error.
 //                                                Status UNAVAILABLE when bit0 is clear or bit1 set.
+//                page 1 (M3; this half only)     1, fw_version u32, version string (16 chars, NUL-padded:
+//                                                the release tag). Other pages: INVALID.
 //  0x01 MANIFEST off u8, n 1..20, bytes          filled u8 (of 172: manifest, then signature)
 //  0x02 ARM      -                               nonce u32, first 4 bytes of sha512(108 B manifest)
 //  0x03 BEGIN    nonce u32                       state
@@ -259,7 +262,19 @@ static bool slot_copy(uint32_t off, uint8_t *dst, uint32_t n) {
 
 // ---- ops ------------------------------------------------------------------------------
 
-static update_status_t op_info(uint8_t *rsp) {
+// INFO page 1 (M3, D17): [status][1][fw_version u32][version 16 chars], from
+// the build-info record (update_keys.h), the same record make_update.py takes
+// this image's manifest fields from.
+static update_status_t op_info_version(uint8_t *rsp) {
+    rsp[1] = 1;
+    put32(&rsp[2], sval_update_build_info.fw_version);
+    memcpy(&rsp[6], sval_update_build_info.version, UPDATE_VERSION_CHARS);
+    return UPDATE_OK;
+}
+
+static update_status_t op_info(const uint8_t *req, uint8_t *rsp) {
+    if (req[1] == 1) return op_info_version(rsp);
+    if (req[1] != 0) return UPDATE_INVALID;
     update_device_t dev;
     uint8_t         jedec[UPDATE_JEDEC_BYTES];
     update_device_self(&dev);
@@ -285,6 +300,7 @@ static update_status_t op_info(uint8_t *rsp) {
 #ifdef SVAL_UPDATE_TEST_HOOKS
     rsp[21] |= 0x08;
 #endif
+    if (sval_update_build_info.flags & UPDATE_BUILD_KEYS_DRY_RUN) rsp[21] |= 0x40;
     rsp[22] = s.last_error;
     return die_ok && !failing ? UPDATE_OK : UPDATE_UNAVAILABLE;
 }
@@ -643,12 +659,12 @@ void updater_via_command(uint8_t *data, uint8_t length) {
     } else if (s.state != UPDATE_STATE_IDLE && session_op(op) && to_other != s.relay) {
         st = UPDATE_BUSY; // a session for the other hand is running
     } else if (op == UPDATE_OP_INFO && to_other) {
-        st = op_info_other(rsp); // M2: the other half answers
+        st = req[1] == 0 ? op_info_other(rsp) : UPDATE_INVALID; // M2: the other half answers; page 1 is this half's only
     } else {
         crumb_op(op, 0xFF); // 0xFF: inside the op
         switch (op) {
             case UPDATE_OP_INFO:
-                st = op_info(rsp);
+                st = op_info(req, rsp);
                 break;
             case UPDATE_OP_MANIFEST:
                 st = op_manifest(client, req, rsp, to_other);

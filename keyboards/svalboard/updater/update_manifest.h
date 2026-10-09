@@ -26,7 +26,7 @@
 
 // key_id: which public key verifies the signature.
 #define UPDATE_KEY_TEST 0      // TEST ONLY; refused by release builds
-#define UPDATE_KEY_RELEASE_1 1 // release keys arrive in M3
+#define UPDATE_KEY_RELEASE_1 1 // release keys: update_release_keys.h (M3)
 #define UPDATE_KEY_RELEASE_2 2
 #define UPDATE_KEY_COUNT 3
 

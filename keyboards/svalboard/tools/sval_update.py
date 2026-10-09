@@ -204,7 +204,8 @@ def decode_info(st, r):
                 hand_id=r[12], pointing_id=r[11], fw_version=struct.unpack_from("<I", r, 13)[0], storage_format=r[17],
                 security_epoch=struct.unpack_from("<H", r, 18)[0], flash_16mib=bool(r[20] & 1),
                 settings_writes_failing=bool(r[20] & 2), release_build=bool(r[20] & 4), test_hooks=bool(r[20] & 8),
-                test_key=bool(r[20] & 16), other_half_mismatch=bool(r[20] & 32), last_error=status_name(r[21]))
+                test_key=bool(r[20] & 16), other_half_mismatch=bool(r[20] & 32),
+                release_keys_dry_run=bool(r[20] & 64), last_error=status_name(r[21]))
 
 
 def image_refusal(m, info):
@@ -228,13 +229,13 @@ def image_refusal(m, info):
 
 
 def fw_differs(seen, m):
-    """A half reports another fw than the manifest it was given (both set: a build with
-    EXTRAFLAGS=-DSVAL_FW_VERSION=N and an image made with --fw-version N)."""
+    """A half reports another fw than the manifest it was given (both nonzero: updater builds
+    take SVAL_FW_VERSION from updater/fw_version.txt, and make_update.py copies it into the manifest)."""
     return seen != m["fw_version"] and seen != 0 and m["fw_version"] != 0
 
 
-FW_NOTE = ("(until M3 a build reports the SVAL_FW_VERSION it was compiled with, which make_update.py does not set: "
-           "build with EXTRAFLAGS=-DSVAL_FW_VERSION=N and make the image with --fw-version N)")
+FW_NOTE = ("(a build reports the SVAL_FW_VERSION it was compiled with, from updater/fw_version.txt or "
+           "make SVAL_FW_VERSION=N; make_update.py copies it from the image unless --fw-version says otherwise)")
 
 
 def relay_phase_name(code):
@@ -848,7 +849,13 @@ def main():
     dev = Device(args.serial)
     try:
         if args.command == "info" and not args.other:
-            print(json.dumps(decode_info(*dev.op(INFO)), indent=2))
+            info = decode_info(*dev.op(INFO))
+            # INFO page 1 (M3): the version string. Firmware from before M3
+            # ignores the page and answers page 0, whose first byte is the state.
+            st1, r1 = dev.op(INFO, bytes([1]))
+            if st1 == OK and r1[0] == 1 and struct.unpack_from("<I", r1, 1)[0] == info["fw_version"]:
+                info["version"] = r1[5:21].rstrip(bytes(1)).decode("ascii", "replace")
+            print(json.dumps(info, indent=2))
             return 0
         hand = decode_info(*dev.op(INFO))["hand_id"]
         if args.command == "info":

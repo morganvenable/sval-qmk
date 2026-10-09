@@ -1,0 +1,7 @@
+# SVAL_FW_VERSION: the numeric firmware version (D17, proposed D32).
+# Launch tags are names (vLaunch2), so the number lives here. Raise it by one in
+# the commit you tag for a release: release CI fails if it is not greater than
+# the number committed at the previous published release (docs/updater.md,
+# "Versions"). Updater builds report it in INFO and split presence, and
+# make_update.py copies it into each image's manifest. One line, one integer.
+3

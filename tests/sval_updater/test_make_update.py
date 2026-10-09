@@ -11,6 +11,7 @@ QMK builds named like svalboard_trackball_pmw3389_right_sval.uf2.
 """
 import hashlib
 import importlib.util
+import os
 import re
 import struct
 import subprocess
@@ -99,6 +100,27 @@ def main():
     else:
         print("note: 'cryptography' not installed; the pure signer is checked against RFC 8032 only")
     (out / "test_pubkey.hex").write_text(mu.test_public_key().hex() + "\n")
+    # The release keys as make_update.py reads them from update_release_keys.h;
+    # test_updater checks the compiler saw the same bytes.
+    rel_keys, _ = mu.release_keys()
+    (out / "release_pubkeys.hex").write_text("".join(rel_keys[k].hex() + "\n" for k in mu.RELEASE_KEY_IDS))
+    check(mu.test_public_key() not in rel_keys.values(), "the test key is not a release key")
+
+    # Verification (the pure verifier, and 'cryptography' when installed).
+    for seed, pub, msg, sig in rfc8032:
+        seed, pub, msg, sig = map(bytes.fromhex, (seed, pub, msg, sig))
+        check(mu.pure_verify(pub, msg, sig), "pure verifier: RFC 8032 signature")
+        bad = bytearray(sig)
+        bad[0] ^= 1
+        check(not mu.pure_verify(pub, msg, bytes(bad)), "pure verifier: flipped R")
+        bad = bytearray(sig)
+        bad[40] ^= 1
+        check(not mu.pure_verify(pub, msg, bytes(bad)), "pure verifier: flipped S")
+        check(not mu.pure_verify(pub, msg + b"x", sig), "pure verifier: another message")
+        s_plus_l = (int.from_bytes(sig[32:], "little") + mu._L).to_bytes(32, "little")
+        check(not mu.pure_verify(pub, msg, sig[:32] + s_plus_l), "pure verifier: S >= L")
+        if have_openssl:
+            check(mu.verify(pub, msg, sig, "openssl") and not mu.verify(pub, msg + b"x", sig, "openssl"), "cryptography verify")
 
     # ---- a good build --------------------------------------------------------------------
     img = image(0x1800)
@@ -203,6 +225,158 @@ def main():
     make("badimage_boot2.svup", *common, "--unsafe-allow-bad-image", expect="badimage", src=bad)
     # A release key may sign (structure checks pass); the firmware has no key 1 yet.
     make("badsig_releasekey.svup", *common, "--key", other, "--key-id", "1", "--release", expect="badsig")
+
+    # ---- M3: unsigned, sign, verify ------------------------------------------------------
+    # Release keys of our own in a header of our own (--keys-header), since the
+    # real ones' private halves are not in the repository.
+    seeds = {k: os.urandom(32) for k in mu.RELEASE_KEY_IDS}
+    pubs = {k: mu.pure_public(s) for k, s in seeds.items()}
+    key_files = {}
+    for k, s in seeds.items():
+        key_files[k] = tmp / f"release{k}.key"
+        key_files[k].write_text("# test release key\n" + s.hex() + "\n")
+    header = tmp / "keys.h"
+
+    def write_header(dry):
+        header.write_text(f"#define SVAL_UPDATE_RELEASE_KEYS_DRY_RUN {int(dry)}\n" + "".join(
+            f"#define SVAL_UPDATE_RELEASE_KEY_{k} \\\n    {{ {', '.join(f'0x{b:02x}' for b in pubs[k])}, }}\n" for k in pubs))
+
+    write_header(True)
+    check(mu.release_keys(header) == (pubs, True), "release_keys() reads a header")
+
+    def release_img(flags=mu.BI_RELEASE | mu.BI_KEYS_DRY_RUN, fw=3, version=b"vM3-test", keys=None, extra=b""):
+        body = bytearray(image(0x1800))
+        rec = struct.pack(mu.BUILD_INFO_FMT, b"SVBI", 1, flags, 2, 1, fw, version.ljust(16, b"\0"))
+        body[0x800:0x800 + len(rec)] = rec
+        for i, k in enumerate(sorted(pubs) if keys is None else keys):
+            body[0x900 + 32 * i:0x920 + 32 * i] = pubs[k]
+        body[0xA00:0xA00 + len(extra)] = extra
+        return bytes(body)
+
+    rel_common = ["--kb", "svalboard/right", "--keymap", "sval", "--release"]
+
+    def unsigned(name, img, *args):
+        src = tmp / f"{name}.uf2"
+        src.write_bytes(uf2(img))
+        im, mf = tmp / f"{name}.img", tmp / f"{name}.manifest"
+        for p in (im, mf):
+            if p.exists():
+                p.unlink()
+        rc, text = run("unsigned", src, "--image-out", im, "--manifest-out", mf, *(args or rel_common))
+        return rc, text, im, mf
+
+    rc, text, im, mf = unsigned("rel", release_img())
+    check(rc == 0, f"unsigned: built ({text.strip()})")
+    f = mu.parse_manifest(mf.read_bytes())
+    check((f["key_id"], f["flags"], f["fw_version"], f["keymap_id"], f["hand"], f["pointing_id"]) == (1, 1, 3, 1, 1, 0),
+          f"unsigned manifest fields {f}")
+    check(mu.manifest_version(f) == "vM3-test" and im.read_bytes() == release_img(), "unsigned: version from the record, raw image")
+
+    def sign(name, *args, im=im, mf=mf, env=None):
+        target = tmp / f"{name}.svup"
+        if target.exists():
+            target.unlink()
+        cmd = [sys.executable, "-I", str(TOOL), "sign", "--image", str(im), "--manifest", str(mf), "-o", str(target),
+               "--keys-header", str(header), *map(str, args)]
+        p = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        return p.returncode, p.stdout + p.stderr, target
+
+    def verify(svup, build="release", hdr=header):
+        return run("verify", svup, "--build", build, "--keys-header", hdr)
+
+    for k in mu.RELEASE_KEY_IDS:
+        rc, text, signed = sign(f"signed{k}", "--key", key_files[k], "--expect-version", "vM3-test", "--expect-fw-version", "3")
+        check(rc == 0 and "DRY RUN" in text, f"sign with release key {k}: {text.strip()}")
+        if rc:
+            continue
+        manifest, sig, body = mu.parse_svup(signed.read_bytes())
+        g = mu.parse_manifest(manifest)
+        check(g["key_id"] == k and body == release_img(), f"signed with key {k}: key_id {g['key_id']}")
+        check(mu.pure_verify(pubs[k], manifest, sig), f"key {k} signature verifies")
+        check(manifest[:6] + manifest[7:] == mf.read_bytes()[:6] + mf.read_bytes()[7:], "the signer changes only key_id")
+        for build, want in (("release", 0), ("plain", 0), ("test", 0)):
+            rc, text = verify(signed, build)
+            check(rc == want, f"verify --build {build} of a key {k} image: rc {rc}: {text.strip()}")
+        rc, text = run("verify", signed)  # the committed (DRY RUN) keys: not ours
+        check(rc == 2 and "BAD_SIG" in text, f"verify against the committed keys refuses: {text.strip()}")
+        index.append((signed.name, "badsig"))
+        (out / signed.name).write_bytes(signed.read_bytes())
+
+    env = dict(os.environ, SVAL_TEST_SIGNING_KEY=seeds[2].hex())
+    rc, text, signed = sign("signed_env", "--key-env", "SVAL_TEST_SIGNING_KEY", env=env)
+    check(rc == 0 and mu.parse_manifest(signed.read_bytes())["key_id"] == 2, f"sign --key-env: {text.strip()}")
+    rc, text, _ = sign("signed_env_empty", "--key-env", "SVAL_NO_SUCH_VARIABLE")
+    check(rc == 2 and "empty" in text, f"sign --key-env with an empty variable: {text.strip()}")
+
+    # test-key images: accepted by a test build, refused by release and plain builds
+    for build, want in (("test", 0), ("release", 2), ("plain", 2)):
+        rc, text = verify(p, build)
+        check(rc == want, f"verify --build {build} of a test-key image: rc {rc}: {text.strip()}")
+    rc, text = verify(out / "ok_diagnostic.svup", "test")
+    check(rc == 0, f"verify --build test of a DIAGNOSTIC test image: {text.strip()}")
+    rc, text = verify(out / "badsig_sigbyte.svup", "test")
+    check(rc == 2 and "BAD_SIG" in text, f"verify of a flipped signature: {text.strip()}")
+
+    def refuse_sign(what, needle, *args, img=None, manifest_edit=None, image_edit=None, key=1):
+        nonlocal_im, nonlocal_mf = im, mf
+        if img is not None:
+            rc0, text0, nonlocal_im, nonlocal_mf = unsigned("case", img)
+            check(rc0 == 0, f"{what}: unsigned built ({text0.strip()})")
+        if manifest_edit or image_edit:
+            m2, i2 = bytearray(nonlocal_mf.read_bytes()), bytearray(nonlocal_im.read_bytes())
+            if manifest_edit:
+                manifest_edit(m2)
+            if image_edit:
+                image_edit(i2)
+            nonlocal_mf, nonlocal_im = tmp / "edit.manifest", tmp / "edit.img"
+            nonlocal_mf.write_bytes(m2)
+            nonlocal_im.write_bytes(i2)
+        keyarg = key_files[key] if isinstance(key, int) else key
+        rc, text, target = sign("refused", "--key", keyarg, *args, im=nonlocal_im, mf=nonlocal_mf)
+        check(rc == 2 and needle.lower() in text.lower() and not target.exists(), f"sign refuses {what}: rc {rc}: {text.strip()}")
+
+    def set_flags(v):
+        return lambda m: m.__setitem__(slice(10, 12), struct.pack("<H", v))
+
+    refuse_sign("the test key", "TEST-ONLY", key=mu.TEST_KEY_FILE)
+    refuse_sign("a key in neither slot", "neither release key", key=other)
+    refuse_sign("a DIAGNOSTIC manifest", "DIAGNOSTIC", manifest_edit=set_flags(3))
+    refuse_sign("a manifest without RELEASE", "RELEASE", manifest_edit=set_flags(0))
+    refuse_sign("a scanlab keymap", "release keymap", manifest_edit=lambda m: m.__setitem__(9, 0))
+    refuse_sign("an image that does not match its hash", "SHA-512", image_edit=lambda i: i.__setitem__(0x1000, i[0x1000] ^ 1))
+    refuse_sign("a bad SP", "SP", image_edit=lambda i: i.__setitem__(slice(0x100, 0x104), b"\0\0\0\0"),
+                manifest_edit=None)
+    refuse_sign("an image without a build-info record", "no build-info", img=image(0x1800))
+    refuse_sign("a test-key build", "TEST-ONLY key", img=release_img(flags=mu.BI_RELEASE | mu.BI_KEYS_DRY_RUN | mu.BI_TEST_KEY))
+    refuse_sign("a test-hooks build", "test hooks", img=release_img(flags=mu.BI_RELEASE | mu.BI_KEYS_DRY_RUN | mu.BI_TEST_HOOKS))
+    refuse_sign("a host-bootloader build", "HOST_BOOTLOADER", img=release_img(flags=mu.BI_RELEASE | mu.BI_KEYS_DRY_RUN | mu.BI_HOST_BOOTLOADER))
+    refuse_sign("a keytest build", "KEYTEST", img=release_img(flags=mu.BI_RELEASE | mu.BI_KEYS_DRY_RUN | mu.BI_KEYTEST))
+    refuse_sign("a non-release updater build", "not a release updater build", img=release_img(flags=mu.BI_KEYS_DRY_RUN))
+    refuse_sign("a build with other keys (DRY RUN flag)", "DRY RUN", img=release_img(flags=mu.BI_RELEASE))
+    refuse_sign("a build missing release key 2", "release key 2", img=release_img(keys=[1]))
+    refuse_sign("a build with the test public key in it", "TEST-ONLY public key", img=release_img(extra=mu.test_public_key()))
+    refuse_sign("the wrong tag", "expected 'vLaunch9'", "--expect-version", "vLaunch9")
+    refuse_sign("the wrong number", "expected 4", "--expect-fw-version", "4")
+    refuse_sign("a manifest version that is not the image's", "the image reports",
+                manifest_edit=lambda m: m.__setitem__(slice(28, 44), b"vOther".ljust(16, b"\0")))
+    write_header(False)
+    refuse_sign("DRY RUN keys in the image, production keys in the header", "DRY RUN")
+    write_header(True)
+
+    rc, text, *_ = unsigned("fwmismatch", release_img(), *rel_common, "--fw-version", "9")
+    check(rc == 2 and "reports 3" in text, f"unsigned refuses a --fw-version the image contradicts: {text.strip()}")
+    rc, text, *_ = unsigned("vmismatch", release_img(), *rel_common, "--version-string", "vOther")
+    check(rc == 2 and "reports 'vM3-test'" in text, f"unsigned refuses a --version-string the image contradicts: {text.strip()}")
+    rc, text, *_ = unsigned("diag", release_img(), *rel_common, "--diagnostic")
+    check(rc == 2 and "DIAGNOSTIC" in text, f"unsigned refuses RELEASE + DIAGNOSTIC: {text.strip()}")
+    rc, text, *_ = unsigned("twoinfo", release_img(extra=b"SVBI\x01" + bytes(23)))
+    check(rc == 2 and "build-info records" in text, f"unsigned refuses two build-info records: {text.strip()}")
+    # the one-step path takes the record's version too
+    rec_uf2 = tmp / "rec.uf2"
+    rec_uf2.write_bytes(uf2(release_img(flags=mu.BI_TEST_KEY, fw=2002, version=b"m3-B")))
+    q = make("ok_record_version.svup", "--kb", "svalboard/left", src=rec_uf2)
+    g = mu.parse_manifest(q.read_bytes()[:mu.MANIFEST_BYTES])
+    check((g["fw_version"], mu.manifest_version(g)) == (2002, "m3-B"), f"one step: version from the record {g}")
 
     # ---- real builds ----------------------------------------------------------------------
     for real in reals:

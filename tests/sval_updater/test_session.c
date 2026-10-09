@@ -595,7 +595,19 @@ static void test_session_info_and_wrapper(void) {
     CHECK_EQ(rsp[18], SVAL_UPDATE_STORAGE_FORMAT);
     CHECK_EQ(rsp[21] & 0x07, 0x01);
     CHECK_EQ((rsp[21] & 0x10) != 0, update_key(UPDATE_KEY_TEST) != NULL); // the TEST-ONLY key is accepted
+    CHECK_EQ((rsp[21] & 0x40) != 0, (sval_update_build_info.flags & UPDATE_BUILD_KEYS_DRY_RUN) != 0); // DRY RUN keys
+    // INFO page 1 (M3): the version from the build-info record; no wrapper needed
+    const uint8_t page1 = 1, page2 = 2;
+    CHECK_EQ(send(0, UPDATE_OP_INFO, &page1, 1), UPDATE_OK);
+    CHECK_EQ(rsp[1], 1);
+    CHECK_EQ(get32le(rsp + 2), sval_update_build_info.fw_version);
+    CHECK(memcmp(rsp + 6, sval_update_build_info.version, UPDATE_VERSION_CHARS) == 0);
+    CHECK_EQ(send(0, UPDATE_OP_INFO, &page2, 1), UPDATE_INVALID);
+    req_hand = UPDATE_HAND_LEFT; // the other half: page 1 is this half's only
+    CHECK_EQ(send(0, UPDATE_OP_INFO, &page1, 1), UPDATE_INVALID);
     req_hand = 0xFF;
+    CHECK_EQ(send(0, UPDATE_OP_INFO, &page1, 1), UPDATE_OK);
+    CHECK_EQ(rsp[1], 1);
     CHECK_EQ(send(0, UPDATE_OP_INFO, NULL, 0), UPDATE_OK);
     CHECK_EQ(rsp[13], UPDATE_HAND_RIGHT);
     // 0xFF for anything but INFO, or a hand that is neither half: UNSUPPORTED
