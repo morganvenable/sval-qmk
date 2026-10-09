@@ -89,6 +89,7 @@ typedef enum {
     RELAY_PROBE,       // one STATUS after the hold: an answer from a half that did not reset is a failure
     RELAY_DONE,
     RELAY_FAILED,
+    RELAY_ABORTING, // stopping: ABORT until the other half answers (or the link timeout), the link still paused
 } relay_phase_t;
 
 // Starts relaying the image staged and verified in this half's slot.
@@ -103,11 +104,18 @@ void update_relay_task(void);
 // if the link cannot be paused.
 bool update_relay_commit(void);
 
-// Stops a relay before its COMMIT: one ABORT attempt to the other half (it
-// times out by itself if that is lost) and the link resumed. Once COMMIT was
-// sent it does nothing: the other half may be writing, and the relay ends by
-// itself after the hold. A finished relay (DONE, FAILED) keeps its record.
+// Stops a relay before its COMMIT: RELAY_ABORTING, which sends ABORT once per
+// pass until the other half answers (or for the link timeout; it times out by
+// itself if they are all lost), with the link still paused if it was (the
+// other half may be erasing), then RELAY_IDLE and the link resumed. A relay
+// that fails ends the same way, in RELAY_FAILED. Once COMMIT was sent it does
+// nothing: the other half may be writing, and the relay ends by itself after
+// the hold. A finished relay (DONE, FAILED) keeps its record.
 void update_relay_abort(void);
+
+// A relay ended DONE and presence has not read MATCH since: the red error LED
+// and INFO flags bit5, as for a version mismatch (V).
+bool update_split_awaiting_match(void);
 
 typedef struct {
     uint8_t         phase;        // relay_phase_t
@@ -121,10 +129,11 @@ typedef struct {
     uint16_t        retries;      // requests sent again for want of a valid answer
     uint32_t        elapsed_ms;   // since the start (frozen once it ends)
     bool            paused;       // the link is paused by the relay now
+    bool            unconfirmed;  // DONE, but the other half never answered after COMMIT
 } update_relay_info_t;
 
 void update_relay_info(update_relay_info_t *info);
-bool update_relay_busy(void); // between START and DONE/FAILED
+bool update_relay_busy(void); // between START and DONE/FAILED (ABORTING is busy)
 
 // The other half's INFO through KEYBOARD_UPDATE (at most two tries; refused
 // while a relay runs). UPDATE_OK with its 15 payload bytes and state, else
@@ -133,6 +142,7 @@ update_status_t update_split_other_info(uint8_t payload[USPLIT_INFO_PAYLOAD], ui
 
 #ifdef SVAL_UPDATER_HOST_TEST
 void update_split_host_reset(void);
+void update_split_host_master_reset(void); // this half's RAM after its reset: relay, presence, latch
 #else
 // keyboard_post_init (main thread): probes the flash die once, so the
 // SlaveThread never does, and registers the KEYBOARD_UPDATE callback.
@@ -149,6 +159,11 @@ uint32_t update_split_port_now_ms(void);
 // mailbox copies (the callback already holds it).
 void update_split_port_lock(void);
 void update_split_port_unlock(void);
+// Slave, in the SlaveThread: update_flash_program_page(), unless a DMA channel
+// is busy (UPDATE_BUSY, nothing written), checked with interrupts off in the
+// same section as the program (R6: the PMW SPI's DMA reads its TX source
+// from XIP, and this thread can preempt the main thread mid-transfer).
+update_status_t update_split_port_program_page(uint32_t off, const uint8_t *page);
 // Master: one KEYBOARD_UPDATE RPC (transaction_rpc_exec); the split pause (D15).
 bool update_split_port_rpc(const uint8_t *req, uint8_t req_len, uint8_t *rsp, uint8_t rsp_len);
 bool update_split_port_pause(bool on);

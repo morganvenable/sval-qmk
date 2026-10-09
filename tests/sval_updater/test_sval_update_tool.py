@@ -335,9 +335,44 @@ def main():
     check(lib.host_slave_fw() == 9 and lib.host_master_fw() == 9, f"pair: fw {lib.host_slave_fw()} / {lib.host_master_fw()}")
     check(text.index("1/2: the other (left) half") < text.index("2/2: this (right) half"), "pair: the other half first")
     check("pair: presence match" in text, f"pair:\n{text}")
-    # this half reports its build's SVAL_FW_VERSION (0 on the host), not the manifest's: a warning, not a failure
-    check("this half fw 0, the other half fw 9" in text and "EXTRAFLAGS=-DSVAL_FW_VERSION=N" in text, f"pair:\n{text}")
+    # INFO and presence both report the build's fw_version (the sim's reboot sets it from the manifest)
+    check("this half fw 9, the other half fw 9" in text and "EXTRAFLAGS=-DSVAL_FW_VERSION=N" not in text, f"pair:\n{text}")
+    check("the chord is made twice" in text and text.index("the chord is made twice") < text.index("1/2"), f"pair:\n{text}")
     check(len(sessions) == 2, "pair: two sessions")
+    # pair checks both images against both halves before anything is sent: an
+    # image either half would refuse (here a wrong pointing device) stops it
+    # before the left half is touched
+    right_wrong_m = mu.build_manifest(img, key_id=0, hand=1, pointing_id=1, keymap_id=1, flags=0, epoch=0,
+                                      storage_format=2, fw_version=9, version="right-tp")
+    right_wrong = out / "right_tp.svup"
+    right_wrong.write_bytes(right_wrong_m + mu.sign(seed, right_wrong_m, "pure") + img)
+    for imgs in ([right_wrong, left], [right, wrong]):
+        lib.host_lib_reset(1)
+        lib.host_lib_split(1)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                su.pair(FakeBoard(), Args(), imgs, [])
+            check(False, f"pair with {imgs[0].name} + {imgs[1].name} accepted")
+        except su.UpdaterError as exc:
+            check("WRONG_HW" in str(exc) and "nothing was sent" in str(exc), f"pair precheck: {exc}")
+        check(lib.host_state() == 0 and lib.host_slave_state() == 0 and lib.host_slave_commits() == 0,
+              "pair precheck: nothing started on either half")
+    # the board's view of an image: the checks update_manifest_check() makes
+    base_info = dict(hand_id=1, hand="right", pointing_id=3, pointing="pmw3389", release_build=False, test_key=True,
+                     security_epoch=1, storage_format=2, max_image="0x160000")
+    base_m = dict(key_id=0, flags=0, hand=1, pointing_id=3, security_epoch=1, storage_format=2, image_len=0x1000,
+                  fw_version=5)
+    check(su.image_refusal(base_m, base_info) is None, "image_refusal: a fitting image")
+    for change, info_change, want in ((dict(hand=0), {}, "UNSUPPORTED"), (dict(pointing_id=2), {}, "WRONG_HW"),
+                                      ({}, dict(test_key=False), "BAD_SIG"), (dict(flags=1), {}, "BAD_SIG"),
+                                      ({}, dict(release_build=True), "BAD_SIG"),
+                                      (dict(key_id=1, flags=2), dict(release_build=True), "BAD_IMAGE"),
+                                      (dict(security_epoch=0), {}, "EPOCH"), (dict(storage_format=1), {}, "STORAGE"),
+                                      (dict(image_len=0x161000), {}, "TOO_LARGE")):
+        got = su.image_refusal({**base_m, **change}, {**base_info, **info_change})
+        check(got is not None and got.startswith(want), f"image_refusal {change} {info_change}: {got}")
+    check(not su.fw_differs(5, dict(fw_version=5)) and su.fw_differs(4, dict(fw_version=5)), "fw_differs")
+    check(not su.fw_differs(0, dict(fw_version=5)) and not su.fw_differs(5, dict(fw_version=0)), "fw_differs: 0 is unset")
     # pair refuses two images for the same half, before any op
     lib.host_lib_reset(1)
     lib.host_lib_split(1)

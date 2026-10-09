@@ -86,6 +86,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // M2, the relay to the other half (updater/update_split.c). The half without
 // USB drops a session after this long with no KEYBOARD_UPDATE traffic.
 #define SVAL_UPDATE_SPLIT_SLAVE_TIMEOUT_MS 5000
+// It erases a sector (interrupts off for about 50 ms) only after a request
+// from the master since the last one, and this long after it: the master
+// gets an answer between every two sectors.
+#define SVAL_UPDATE_SPLIT_ERASE_GAP_MS 5
 // The half with USB: relay work per main-loop pass while the link runs (its
 // own keys keep scanning between passes), how long it retries a request with
 // no valid answer before the relay fails, how often it polls the other half
@@ -100,6 +104,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // (R18: the 500 ms double-tap window and the 2 s USB detect).
 #define SVAL_UPDATE_SPLIT_COMMIT_MS 2000
 #define SVAL_UPDATE_SPLIT_REBOOT_MS 2500
+// A probe after the hold that finds the other half still COMMITTING probes
+// again this much later (still paused).
+#define SVAL_UPDATE_RELAY_PROBE_MS 500
 #if defined(SVAL_UPDATER) && defined(SVAL_KEYTEST)
 #    error "SVAL_UPDATER and SVAL_KEYTEST cannot be combined: keytest injects key events (R11)"
 #endif

@@ -49,6 +49,7 @@ static bool slot_copy(uint32_t off, uint8_t *dst, uint32_t n) {
 
 static uint8_t           presence; // update_presence_status_t, master only
 static update_presence_t presence_last;
+static bool              awaiting_match; // see update_split_awaiting_match()
 
 void update_split_presence_fill(void *out, uint8_t out_len) {
     if (out_len < UPDATE_PRESENCE_BYTES) return;
@@ -67,6 +68,7 @@ void update_split_presence_result(bool answered, const void *rsp, uint8_t len) {
     update_build_id_t id;
     update_split_port_build_id(&id);
     presence = usplit_presence_compare(rsp, len, &id, &presence_last);
+    if (presence == UPDATE_PRESENCE_MATCH) awaiting_match = false;
 }
 
 uint8_t update_split_presence(void) {
@@ -74,7 +76,7 @@ uint8_t update_split_presence(void) {
 }
 
 bool update_split_mismatch(void) {
-    return presence == UPDATE_PRESENCE_VERSION || presence == UPDATE_PRESENCE_SAME_HAND || presence == UPDATE_PRESENCE_INVALID;
+    return presence == UPDATE_PRESENCE_VERSION || presence == UPDATE_PRESENCE_SAME_HAND || presence == UPDATE_PRESENCE_INVALID || awaiting_match;
 }
 
 uint8_t update_split_other(update_presence_t *p) {
@@ -103,6 +105,7 @@ static struct {
     uint8_t        last_error; // update_status_t
     uint32_t       mseq;       // mailbox sequence number: moves with every new session and every cancel
     uint32_t       rx_ms;      // the last well-formed KEYBOARD_UPDATE request
+    bool           polled;     // a well-formed request since the last sector erase (ERASING)
     uint8_t        filled;     // signed manifest bytes received
     uint32_t       image_len;  // from the checked manifest (ERASING on)
     uint32_t       erase_off, erase_end;
@@ -194,8 +197,18 @@ static update_status_t slave_page(const usplit_req_t *r, uint8_t *payload) {
     if (st != UPDATE_OK) return st; // OUT_OF_ORDER or INVALID: refused, nothing changes
     if (done != UINT32_MAX) {
         // One page, here in the SlaveThread while the master waits for the
-        // answer (R16): no interrupts-off window races the link.
-        update_status_t f = update_flash_program_page(done, sl.pages.page);
+        // answer (R16): no interrupts-off window races the link. This thread
+        // can preempt the main thread in the middle of a DMA transfer (the PMW
+        // SPI's TX source is in XIP, R6), so the port refuses with BUSY while
+        // any DMA channel is busy, checked in the same interrupts-off section
+        // as the program. Then the fragment is given back (nothing was
+        // written) and the master sends it again in a new request.
+        update_status_t f = update_split_port_program_page(done, sl.pages.page);
+        if (f == UPDATE_BUSY) {
+            sl.pages.next = r->off;
+            put24(payload, sl.pages.next);
+            return UPDATE_BUSY;
+        }
         if (f != UPDATE_OK) return slave_fail(f == UPDATE_UNAVAILABLE ? UPDATE_UNAVAILABLE : UPDATE_FLASH_ERR);
     }
     return UPDATE_OK;
@@ -260,11 +273,18 @@ static update_status_t run(const usplit_req_t *r, uint8_t *payload) {
 }
 
 void update_split_slave_rpc(const uint8_t *in, uint8_t in_len, uint8_t *out, uint8_t out_len) {
+    // The lengths come from the wire (rpc_info, behind only a CRC-8): never
+    // past the 32-byte RPC buffers.
+    if (out_len > USPLIT_MSG_MAX) out_len = USPLIT_MSG_MAX;
+    if (in_len > USPLIT_MSG_MAX) in_len = USPLIT_MSG_MAX;
     memset(out, 0, out_len);
     if (in_len < USPLIT_REQ_HDR) return; // no op and seq to answer to
     usplit_req_t    r;
     update_status_t st = usplit_req_parse(in, in_len, &r);
-    if (st == UPDATE_OK) sl.rx_ms = update_split_port_now_ms(); // traffic: the session's timeout restarts
+    if (st == UPDATE_OK) {
+        sl.rx_ms  = update_split_port_now_ms(); // traffic: the session's timeout restarts
+        sl.polled = true;                       // and the next sector may be erased (ERASING)
+    }
     if (st == UPDATE_OK && sl.cached && r.seq == sl.seq && r.crc == sl.crc) {
         // A retry of the last request (its answer was lost): the same answer,
         // and the request is not run again.
@@ -320,9 +340,18 @@ static void slave_check_manifest(uint32_t mseq) {
 }
 
 // One sector per pass, as the M1 path; sectors already erased are skipped.
-static void slave_erase(uint32_t mseq, uint32_t off) {
+// A sector erase keeps this half's interrupts off for about 50 ms, longer
+// than the master's 20 ms serial timeout, so this half cannot answer while it
+// erases. So a sector that needs erasing waits for a request from the master
+// since the last erase (gate: polled, and SVAL_UPDATE_SPLIT_ERASE_GAP_MS
+// since it, for the rest of that RPC's transactions): the master gets an
+// answer between every two sectors, its link timeout never races the erase,
+// and an ABORT always lands within a sector.
+static void slave_erase(uint32_t mseq, uint32_t off, bool gate) {
+    if (!gate && !update_flash_sector_erased(off)) return;
     update_status_t st = update_flash_erase_sector(off);
     if (!post_begin(mseq, UPDATE_STATE_ERASING)) return;
+    sl.polled = false;
     if (sl.erase_off == off) {
         if (st != UPDATE_OK) {
             slave_fail(st == UPDATE_UNAVAILABLE ? UPDATE_UNAVAILABLE : UPDATE_FLASH_ERR);
@@ -398,8 +427,11 @@ static void slave_commit(uint32_t mseq) {
 
 void update_split_slave_task(void) {
     if (sl.state == UPDATE_STATE_IDLE) return; // a byte read: the common case takes no lock
-    uint32_t now = update_split_port_now_ms();
     update_split_port_lock();
+    // The clock is read under the lock: read before it, the SlaveThread could
+    // set rx_ms to a later millisecond in between, and now - rx_ms would wrap.
+    // Compared signed as well, as due() does.
+    uint32_t now   = update_split_port_now_ms();
     uint8_t  state = sl.state;
     uint32_t mseq  = sl.mseq;
     if (state == UPDATE_STATE_IDLE) {
@@ -409,7 +441,7 @@ void update_split_slave_task(void) {
     // No KEYBOARD_UPDATE traffic for 5 s: the master is gone (link pulled, or
     // it failed and its ABORT was lost). Drop the session, keeping any error
     // as the reason; the LEDs go back to normal. Not once COMMIT was accepted.
-    if (state != UPDATE_STATE_COMMITTING && now - sl.rx_ms >= SVAL_UPDATE_SPLIT_SLAVE_TIMEOUT_MS) {
+    if (state != UPDATE_STATE_COMMITTING && (int32_t)(now - sl.rx_ms) >= SVAL_UPDATE_SPLIT_SLAVE_TIMEOUT_MS) {
         slave_cancel(state == UPDATE_STATE_ERROR ? sl.last_error : UPDATE_TIMEOUT);
         update_split_port_unlock();
         return;
@@ -424,6 +456,7 @@ void update_split_slave_task(void) {
     }
     bool     mine       = hk.have && hk.mseq == mseq;
     uint32_t erase_off  = sl.erase_off;
+    bool     erase_gate = sl.polled && (int32_t)(now - sl.rx_ms) >= SVAL_UPDATE_SPLIT_ERASE_GAP_MS;
     bool     commit_now = state == UPDATE_STATE_COMMITTING && due(now, sl.commit_due_ms);
     bool     lost       = !mine && (state == UPDATE_STATE_ERASING || state == UPDATE_STATE_RECEIVING || state == UPDATE_STATE_VERIFYING_IMAGE || state == UPDATE_STATE_VERIFIED || state == UPDATE_STATE_COMMITTING);
     if (lost) slave_fail(UPDATE_INVALID); // cannot happen: the copy is taken before ERASING
@@ -435,7 +468,7 @@ void update_split_slave_task(void) {
             slave_check_manifest(mseq);
             break;
         case UPDATE_STATE_ERASING:
-            slave_erase(mseq, erase_off);
+            slave_erase(mseq, erase_off, erase_gate);
             break;
         case UPDATE_STATE_VERIFYING_IMAGE:
             slave_verify(mseq);
@@ -457,6 +490,10 @@ void update_split_slave_task(void) {
 // INVALID again. So INVALID is taken as a refusal only on the fourth answer
 // in a row to the same frame.
 #define RELAY_INVALID_TRIES 4
+// The probe after the hold finds the other half still COMMITTING (it answers,
+// so its interrupts are on and its copy has not begun): probe again every
+// SVAL_UPDATE_RELAY_PROBE_MS, still paused, at most this many times in all.
+#define RELAY_PROBES_MAX 20
 
 static uint8_t master_seq; // every new request gets the next one (retries keep theirs)
 
@@ -476,6 +513,10 @@ static struct {
     uint32_t        acked;
     uint16_t        retries, resyncs;
     uint8_t         invalids; // INVALID answers in a row to the pending frame
+    uint8_t         abort_to; // RELAY_ABORTING ends in this phase (RELAY_FAILED or RELAY_IDLE)
+    uint8_t         probes;   // RELAY_HOLD: probes so far
+    bool            saw_committing; // the last probe found the other half COMMITTING
+    bool            unconfirmed;    // DONE without an answer after COMMIT (the probe went unanswered)
     uint32_t        page_off; // the slot page in page[], or UINT32_MAX
     uint8_t         page[UPDATE_FLASH_PAGE] __attribute__((aligned(4)));
 } rl;
@@ -515,16 +556,61 @@ static void relay_send_abort(void) {
     update_split_port_rpc(req, len, rsp, usplit_rsp_len(USPLIT_OP_ABORT)); // one try: the other half times out anyway
 }
 
-static void relay_fail(update_status_t st) {
-    if (!update_relay_busy()) return;
-    rl.phase   = RELAY_FAILED;
-    rl.error   = st;
+static void relay_finish(void) {
+    rl.phase   = rl.abort_to;
     rl.pending = false;
     rl.end_ms  = update_split_port_now_ms();
-    // The other half drops its session (it refuses while committing), then
-    // the link runs again.
-    relay_send_abort();
     relay_resume();
+}
+
+// Ends the relay in phase to (RELAY_FAILED or RELAY_IDLE). The other half is
+// told to drop its session first, and the link (if paused) stays paused until
+// it has answered the ABORT (RELAY_ABORTING, one try per pass), or for at most
+// SVAL_UPDATE_RELAY_LINK_TIMEOUT_MS: it may be in the middle of its erase,
+// which must not run with the link live (D15). Only when the link is already
+// dead (no valid answer for the link timeout) is there one try and no wait.
+static void relay_stop(uint8_t to, bool link_dead) {
+    rl.abort_to = to;
+    if (link_dead) {
+        relay_send_abort();
+        relay_finish();
+        return;
+    }
+    rl.phase      = RELAY_ABORTING;
+    rl.last_ok_ms = update_split_port_now_ms();
+    if (!relay_new(USPLIT_OP_ABORT)) relay_finish();
+}
+
+static void relay_fail_how(update_status_t st, bool link_dead) {
+    if (!update_relay_busy() || rl.phase == RELAY_ABORTING) return;
+    rl.error = st;
+    relay_stop(RELAY_FAILED, link_dead);
+}
+
+static void relay_fail(update_status_t st) {
+    relay_fail_how(st, false);
+}
+
+// The other half's commit and reboot: the link stays paused for both (R18),
+// then the probe decides.
+static void relay_hold(uint32_t now) {
+    rl.phase         = RELAY_HOLD;
+    rl.pending       = false;
+    rl.hold_until_ms = now + SVAL_UPDATE_SPLIT_COMMIT_MS + SVAL_UPDATE_SPLIT_REBOOT_MS;
+}
+
+// No valid answer for SVAL_UPDATE_RELAY_LINK_TIMEOUT_MS.
+static void relay_timeout(uint32_t now) {
+    if (rl.phase == RELAY_ABORTING) {
+        relay_finish(); // the other half drops its session by its own timeout
+    } else if (rl.phase == RELAY_COMMIT) {
+        // COMMIT may have been taken with its answer lost, and the other half
+        // may be writing now (it cannot answer then): not resumed, not a
+        // failure. The hold, then the probe decides.
+        relay_hold(now);
+    } else {
+        relay_fail_how(UPDATE_UNAVAILABLE, true);
+    }
 }
 
 // The other half answered in a state the relay did not expect: its error if
@@ -550,7 +636,7 @@ static bool relay_exchange(usplit_rsp_t *r, uint8_t *buf) {
         return true;
     }
     rl.retries++;
-    if (now - rl.last_ok_ms >= SVAL_UPDATE_RELAY_LINK_TIMEOUT_MS) relay_fail(UPDATE_UNAVAILABLE);
+    if ((int32_t)(now - rl.last_ok_ms) >= SVAL_UPDATE_RELAY_LINK_TIMEOUT_MS) relay_timeout(now);
     return false;
 }
 
@@ -699,39 +785,81 @@ static bool relay_step(void) {
 
         case RELAY_COMMIT:
             // The request was built by update_relay_commit(); a retry keeps it.
+            // No valid answer for the link timeout: the hold (relay_timeout).
             if (!relay_exchange(&r, buf)) return false;
-            if (r.status != UPDATE_ACCEPTED) break;
-            // The other half commits and resets. The link stays paused so this
-            // half does not stall on a silent link (R18).
-            rl.phase         = RELAY_HOLD;
-            rl.hold_until_ms = now + SVAL_UPDATE_SPLIT_COMMIT_MS + SVAL_UPDATE_SPLIT_REBOOT_MS;
+            // ACCEPTED: the other half commits and resets. IDLE: it already
+            // did (the answer to the first COMMIT was lost, and the retry
+            // reached its new image), or it lost the session; the probe after
+            // the hold tells which. Either way the link stays paused so this
+            // half does not stall on a silent link (R18), and is not resumed
+            // in the middle of the other half's commit.
+            if (r.status != UPDATE_ACCEPTED && r.state != UPDATE_STATE_IDLE) break;
+            relay_hold(now);
             return false;
 
         case RELAY_HOLD: {
             if (!due(now, rl.hold_until_ms)) return false;
-            // One probe. A half that reset into its new image answers IDLE
+            // The probe. A half that reset into its new image answers IDLE
             // with no error, or (with a new split table) not at all; one that
-            // refused the commit is still in ERROR, or dropped it by timeout.
+            // refused the commit is still in ERROR, or dropped it by timeout;
+            // one still COMMITTING has not begun its copy yet.
             rl.phase = RELAY_PROBE;
             if (!relay_new(USPLIT_OP_STATUS)) break;
             uint8_t want = usplit_rsp_len(USPLIT_OP_STATUS);
             memset(buf, 0, sizeof(buf));
             bool answered = update_split_port_rpc(rl.req, rl.req_len, buf, want) && usplit_rsp_parse(buf, want, USPLIT_OP_STATUS, rl.req[1], &r) == UPDATE_OK;
             rl.pending = false;
+            rl.probes++;
             if (answered) {
                 rl.slave_state = r.state;
                 relay_status_payload(&r);
-                bool failed = r.state == UPDATE_STATE_ERROR || (r.state == UPDATE_STATE_IDLE && r.payload[0] != UPDATE_OK) || (r.state != UPDATE_STATE_IDLE && r.state != UPDATE_STATE_COMMITTING);
+                if (r.state == UPDATE_STATE_COMMITTING) {
+                    // Not DONE: it has still to write. Probe again soon, still paused.
+                    if (rl.probes >= RELAY_PROBES_MAX) {
+                        relay_fail(UPDATE_TIMEOUT);
+                        return false;
+                    }
+                    rl.saw_committing = true;
+                    rl.phase          = RELAY_HOLD;
+                    rl.hold_until_ms  = now + SVAL_UPDATE_RELAY_PROBE_MS;
+                    return false;
+                }
+                bool failed = r.state != UPDATE_STATE_IDLE || r.payload[0] != UPDATE_OK;
                 if (failed) {
                     relay_lost();
                     return false;
                 }
+            } else if (rl.saw_committing) {
+                // COMMITTING at the last probe and silent now: it has begun
+                // its copy (interrupts off). The whole hold again.
+                if (rl.probes >= RELAY_PROBES_MAX) {
+                    relay_fail(UPDATE_TIMEOUT);
+                    return false;
+                }
+                rl.saw_committing = false;
+                relay_hold(now);
+                return false;
+            } else {
+                rl.unconfirmed = true; // a new release may not talk to this one (V): the host checks presence
             }
-            rl.phase  = RELAY_DONE;
-            rl.end_ms = update_split_port_now_ms();
+            rl.phase       = RELAY_DONE;
+            rl.end_ms      = update_split_port_now_ms();
+            awaiting_match = true;
             relay_resume();
             return false;
         }
+
+        case RELAY_ABORTING:
+            // relay_stop(): ABORT until the other half answers (it then holds
+            // no session, or refuses as BUSY while COMMITTING), or for the
+            // link timeout (relay_timeout); then the link resumes.
+            if (!rl.pending && !relay_new(USPLIT_OP_ABORT)) {
+                relay_finish();
+                return false;
+            }
+            if (!relay_exchange(&r, buf)) return false;
+            relay_finish();
+            return false;
 
         default:
             return false;
@@ -773,17 +901,23 @@ bool update_relay_commit(void) {
         return false;
     }
     rl.phase = RELAY_COMMIT;
+    // COMMIT gets the whole link timeout, not what is left of the keepalive's.
+    rl.last_ok_ms = update_split_port_now_ms();
     return true;
 }
 
 void update_relay_abort(void) {
     if (rl.phase == RELAY_COMMIT || rl.phase == RELAY_HOLD || rl.phase == RELAY_PROBE) return; // COMMIT is out
+    if (rl.phase == RELAY_ABORTING) return;                                                       // already stopping
     if (update_relay_busy()) {
-        relay_send_abort();
-        rl.phase   = RELAY_IDLE;
-        rl.pending = false;
+        relay_stop(RELAY_IDLE, false); // the link resumes once the other half has answered the ABORT
+        return;
     }
     relay_resume(); // a finished relay (DONE, FAILED) keeps its record for the RELAY op
+}
+
+bool update_split_awaiting_match(void) {
+    return awaiting_match;
 }
 
 void update_relay_info(update_relay_info_t *info) {
@@ -799,6 +933,7 @@ void update_relay_info(update_relay_info_t *info) {
     info->retries        = rl.retries;
     info->elapsed_ms     = rl.phase == RELAY_IDLE ? 0 : (update_relay_busy() ? update_split_port_now_ms() : rl.end_ms) - rl.start_ms;
     info->paused         = rl.paused;
+    info->unconfirmed    = rl.phase == RELAY_DONE && rl.unconfirmed;
 }
 
 update_status_t update_split_other_info(uint8_t payload[USPLIT_INFO_PAYLOAD], uint8_t *state) {
@@ -823,8 +958,9 @@ void update_split_host_reset(void) {
     memset(&sl, 0, sizeof(sl));
     memset(&hk, 0, sizeof(hk));
     memset(&rl, 0, sizeof(rl));
-    master_seq = 0;
-    presence   = UPDATE_PRESENCE_NONE;
+    master_seq     = 0;
+    presence       = UPDATE_PRESENCE_NONE;
+    awaiting_match = false;
     memset(&presence_last, 0, sizeof(presence_last));
 }
 
@@ -832,6 +968,14 @@ void update_split_host_reset(void) {
 void update_split_host_slave_reset(void) {
     memset(&sl, 0, sizeof(sl));
     memset(&hk, 0, sizeof(hk));
+}
+
+// This half's RAM after a reset (pair: its own commit).
+void update_split_host_master_reset(void) {
+    memset(&rl, 0, sizeof(rl));
+    presence       = UPDATE_PRESENCE_NONE;
+    awaiting_match = false;
+    memset(&presence_last, 0, sizeof(presence_last));
 }
 #else
 
@@ -844,9 +988,21 @@ void update_split_host_slave_reset(void) {
 #    include "version.h" // QMK_GIT_HASH
 #    include "split_pause.h"
 #    include "updater.h"
+#    include "hardware/sync.h"
+#    include "hardware/regs/addressmap.h"
+#    include "hardware/regs/dma.h"
+#    include "hardware/platform_defs.h"
 
 static update_build_id_t self_id;
 static uint8_t           info_flags; // the constant bits
+
+// P1 (keyboards/svalboard/tools/check_split_tables.py): the keyboard RPC
+// entries of split_transaction_table are all zero in the ELF (they are filled
+// at boot), so the order of SPLIT_TRANSACTION_IDS_KB cannot be read from it.
+// This table names each ID: 'S','V','K','B', the count of entries, then per
+// entry its ID and a two-letter tag. Two builds that order the IDs
+// differently differ here. update_split_init() reads it, so it is linked.
+const uint8_t sval_split_kb_ids[] = {'S', 'V', 'K', 'B', 3, KEYBOARD_SYNC_A, 'S', 'A', KEYBOARD_SYNC_B, 'S', 'B', KEYBOARD_UPDATE, 'U', 'P'};
 
 static void keyboard_update_rpc(uint8_t in_len, const void *in, uint8_t out_len, void *out) {
     update_split_slave_rpc((const uint8_t *)in, in_len, (uint8_t *)out, out_len);
@@ -867,6 +1023,7 @@ void update_split_init(void) {
     info_flags |= 0x08;
 #    endif
     transaction_register_rpc(KEYBOARD_UPDATE, keyboard_update_rpc);
+    (void)*(const volatile uint8_t *)&sval_split_kb_ids[4]; // kept in the ELF for P1
 }
 
 void update_split_port_build_id(update_build_id_t *id) {
@@ -891,6 +1048,22 @@ void update_split_port_lock(void) {
 
 void update_split_port_unlock(void) {
     split_shared_memory_unlock();
+}
+
+#    define DMA_CH_STRIDE 0x40u
+_Static_assert(DMA_CH1_CTRL_TRIG_OFFSET - DMA_CH0_CTRL_TRIG_OFFSET == DMA_CH_STRIDE, "DMA channel stride");
+
+update_status_t update_split_port_program_page(uint32_t off, const uint8_t *page) {
+    uint32_t irq = save_and_disable_interrupts();
+    for (uint32_t ch = 0; ch < NUM_DMA_CHANNELS; ch++) {
+        if (*(volatile uint32_t *)(DMA_BASE + DMA_CH_STRIDE * ch + DMA_CH0_CTRL_TRIG_OFFSET) & DMA_CH0_CTRL_TRIG_BUSY_BITS) {
+            restore_interrupts(irq);
+            return UPDATE_BUSY;
+        }
+    }
+    update_status_t st = update_flash_program_page(off, page); // its own interrupts-off section nests in this one
+    restore_interrupts(irq);
+    return st;
 }
 
 bool update_split_port_rpc(const uint8_t *req, uint8_t req_len, uint8_t *rsp, uint8_t rsp_len) {

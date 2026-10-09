@@ -95,7 +95,7 @@ ST_IDLE, ST_MANIFEST_LOADING, ST_CONFIRM_WAIT, ST_RECEIVING, ST_VERIFIED, ST_ERR
 ST_RELAYING, ST_RELAYED, ST_SUBSIDE_COMMITTING = 10, 11, 12
 # relay_phase_t (keyboards/svalboard/updater/update_split.h)
 RELAY_PHASES = ["idle", "start", "manifest", "checking and erasing", "sending", "end", "verifying", "verified",
-                "commit", "committing", "probe", "done", "failed"]
+                "commit", "committing", "probe", "done", "failed", "aborting"]
 PRESENCE_MATCH, PRESENCE_VERSION = 1, 2
 HANDS = {0: "left", 1: "right"}
 POINTING = {v: k for k, v in make_update.POINTING.items()}
@@ -207,6 +207,36 @@ def decode_info(st, r):
                 test_key=bool(r[20] & 16), other_half_mismatch=bool(r[20] & 32), last_error=status_name(r[21]))
 
 
+def image_refusal(m, info):
+    """Why a half would refuse this manifest, as far as its INFO shows (None: no reason seen).
+    The same order of checks as update_manifest_check() (update_image.c)."""
+    if m["key_id"] == 0 and (m["flags"] & make_update.FLAG_RELEASE or info["release_build"] or not info["test_key"]):
+        return "BAD_SIG: signed with the TEST-ONLY key, which this build does not accept"
+    if info["release_build"] and m["flags"] & make_update.FLAG_DIAGNOSTIC:
+        return "BAD_IMAGE: a DIAGNOSTIC image on a release build"
+    if m["hand"] != info["hand_id"]:
+        return f"UNSUPPORTED: the image is for hand {HANDS.get(m['hand'], m['hand'])}, the half is {info['hand']}"
+    if m["pointing_id"] != info["pointing_id"]:
+        return f"WRONG_HW: the image is for pointing {POINTING.get(m['pointing_id'], m['pointing_id'])}, the half has {info['pointing']}"
+    if m["security_epoch"] < info["security_epoch"]:
+        return f"EPOCH: image epoch {m['security_epoch']}, the half's floor {info['security_epoch']}"
+    if m["storage_format"] < info["storage_format"]:
+        return f"STORAGE: image storage format {m['storage_format']}, the half's floor {info['storage_format']}"
+    if m["image_len"] > int(info["max_image"], 16):
+        return f"TOO_LARGE: {m['image_len']} B, the half takes at most {info['max_image']}"
+    return None
+
+
+def fw_differs(seen, m):
+    """A half reports another fw than the manifest it was given (both set: a build with
+    EXTRAFLAGS=-DSVAL_FW_VERSION=N and an image made with --fw-version N)."""
+    return seen != m["fw_version"] and seen != 0 and m["fw_version"] != 0
+
+
+FW_NOTE = ("(until M3 a build reports the SVAL_FW_VERSION it was compiled with, which make_update.py does not set: "
+           "build with EXTRAFLAGS=-DSVAL_FW_VERSION=N and make the image with --fw-version N)")
+
+
 def relay_phase_name(code):
     return RELAY_PHASES[code] if code < len(RELAY_PHASES) else f"phase {code}"
 
@@ -218,7 +248,8 @@ def decode_relay(st, r):
                 acked=r[3] | r[4] << 8 | r[5] << 16, image_len=r[6] | r[7] << 8 | r[8] << 16,
                 other_sectors_erased=struct.unpack_from("<H", r, 9)[0],
                 other_sectors_to_erase=struct.unpack_from("<H", r, 11)[0], retries=struct.unpack_from("<H", r, 13)[0],
-                relay_ms=struct.unpack_from("<I", r, 15)[0], link_paused=bool(r[19] & 1), error=status_name(r[20]),
+                relay_ms=struct.unpack_from("<I", r, 15)[0], link_paused=bool(r[19] & 1), unconfirmed=bool(r[19] & 2),
+                error=status_name(r[20]),
                 error_id=r[20], state=state_name(r[21]), state_id=r[21])
 
 
@@ -509,7 +540,11 @@ class Session:
             if time.monotonic() > deadline:
                 raise UpdaterError(f"the other half's commit: no end in 30 s ({s['state']})")
             time.sleep(0.2)
-        print("the other half took COMMIT")
+        rl = self.relay()
+        if rl["unconfirmed"]:
+            print("the other half did not answer after COMMIT (unconfirmed): its version is checked next")
+        else:
+            print("the other half took COMMIT")
         self.nonce = None
         if not confirm_other:
             return 0
@@ -524,8 +559,11 @@ class Session:
                 seen = decode_info(st, r)["fw_version"]
                 s = decode_status(*self.dev.op(STATUS, hand=self.hand))
                 print(f"the other half answers again: fw {seen}, presence {s['other_half']}")
+                if fw_differs(seen, m):
+                    raise UpdaterError(f"the other half reports fw {seen}, the image's manifest says fw "
+                                       f"{m['fw_version']}: the update did not take")
                 if seen != m["fw_version"]:
-                    print(f"warning: the image's manifest says fw {m['fw_version']} (until M3 a build reports the SVAL_FW_VERSION it was compiled with, which make_update.py does not set: build with EXTRAFLAGS=-DSVAL_FW_VERSION=N and make the image with --fw-version N)")
+                    print(f"warning: the image's manifest says fw {m['fw_version']} {FW_NOTE}")
                 if s["other_half_id"] != PRESENCE_MATCH:
                     print("note: the halves now run different releases, which is not supported (V): the half "
                           "with USB blinks red until it is updated too (use pair)")
@@ -568,6 +606,27 @@ def pair(dev, args, paths, sessions):
     if len(other) != 1 or len(this) != 1:
         raise UpdaterError(f"pair needs one image for each half; this half is {HANDS.get(board, board)}, the images are for "
                            + ", ".join(HANDS.get(m["hand"], str(m["hand"])) for _, m in images))
+    # Both images are checked against both halves before anything is sent:
+    # a refusal of the second image after the first half committed would
+    # leave the halves on different releases.
+    deadline = time.monotonic() + 5
+    while True:
+        s = decode_status(*dev.op(STATUS, hand=board))
+        if s["other_half_id"] in (PRESENCE_MATCH, PRESENCE_VERSION) or time.monotonic() >= deadline:
+            break
+        time.sleep(0.25)
+    if s["other_half_id"] not in (PRESENCE_MATCH, PRESENCE_VERSION):
+        raise UpdaterError(f"pair: the other half: presence {s['other_half']}; it must be connected and run an "
+                           "SVAL_UPDATER build")
+    st, r = dev.op(INFO, hand=board ^ 1)
+    if r[0] == 0xFF:
+        raise UpdaterError(f"pair: the other half does not answer INFO ({status_name(st)})")
+    infos = {board: decode_info(*dev.op(INFO)), board ^ 1: decode_info(st, r)}
+    for p, m in other + this:
+        why = image_refusal(m, infos[m["hand"]])
+        if why:
+            raise UpdaterError(f"pair: {p.name} would be refused by the {HANDS[m['hand']]} half ({why}); nothing was sent")
+    print("pair: the chord is made twice, both times on this half (the one with USB): once for each image")
     print(f"== 1/2: the other ({HANDS[board ^ 1]}) half, {other[0][0].name} ==")
     sessions.append(Session(dev, args))
     rc = sessions[-1].run(other[0][0], confirm_other=False)
@@ -602,8 +661,11 @@ def pair(dev, args, paths, sessions):
         theirs = decode_info(st, r)["fw_version"] if r[0] != 0xFF else None
         print(f"pair: presence {s['other_half']} after {time.monotonic() - t0:.1f} s; this half fw {mine}, "
               f"the other half fw {theirs}")
+        if (theirs is None or fw_differs(mine, this[0][1]) or fw_differs(theirs, other[0][1])):
+            raise UpdaterError(f"pair: the manifests say fw {this[0][1]['fw_version']} (this half) and "
+                               f"{other[0][1]['fw_version']} (the other half), the halves report {mine} and {theirs}")
         if mine != this[0][1]["fw_version"] or theirs != other[0][1]["fw_version"]:
-            print(f"warning: the manifests say fw {this[0][1]['fw_version']} and {other[0][1]['fw_version']} (until M3 a build reports the SVAL_FW_VERSION it was compiled with, which make_update.py does not set: build with EXTRAFLAGS=-DSVAL_FW_VERSION=N and make the image with --fw-version N)")
+            print(f"warning: the manifests say fw {this[0][1]['fw_version']} and {other[0][1]['fw_version']} {FW_NOTE}")
         return 0
     finally:
         dev2.close()

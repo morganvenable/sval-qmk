@@ -49,7 +49,9 @@
 //                                                (relay_phase_t), the other half's state and last error,
 //                                                bytes it acknowledged u24, image_len u24, its sectors
 //                                                erased u16 and to erase u16, retries u16, relay ms u32,
-//                                                flags (bit0 the link is paused), the relay's error, this
+//                                                flags (bit0 the link is paused; bit1 DONE without an
+//                                                answer from the other half after COMMIT, unconfirmed),
+//                                                the relay's error, this
 //                                                half's session state. Any hand.
 //
 // The image CRC is CRC-32/MPEG-2 over image bytes [0x100, image_len): the
@@ -186,9 +188,11 @@ static uint16_t ms16(uint32_t ms) {
 }
 
 // The other half answers presence and is not the same release (V).
+// Also after a relay that ended DONE, until presence first reads MATCH: a
+// release that changes the split table leaves presence at NONE (V).
 static bool split_mismatch(void) {
     uint8_t p = updater_port_split_presence();
-    return p == UPDATE_PRESENCE_VERSION || p == UPDATE_PRESENCE_SAME_HAND || p == UPDATE_PRESENCE_INVALID;
+    return p == UPDATE_PRESENCE_VERSION || p == UPDATE_PRESENCE_SAME_HAND || p == UPDATE_PRESENCE_INVALID || update_split_awaiting_match();
 }
 
 static uint8_t self_hand(void) {
@@ -270,7 +274,11 @@ static update_status_t op_info(uint8_t *rsp) {
     memcpy(&rsp[9], jedec, UPDATE_JEDEC_BYTES);
     rsp[12] = dev.pointing_id;
     rsp[13] = dev.hand;
-    put32(&rsp[14], SVAL_FW_VERSION);
+    // The fw_version presence sends too (SVAL_FW_VERSION in firmware), so the
+    // two can never disagree.
+    update_build_id_t id;
+    update_split_port_build_id(&id);
+    put32(&rsp[14], id.fw_version);
     rsp[18] = dev.storage_format;
     put16(&rsp[19], dev.security_epoch);
     rsp[21] = (die_ok ? 0x01 : 0) | (failing ? 0x02 : 0) | (dev.release_build ? 0x04 : 0) | (update_key(UPDATE_KEY_TEST) ? 0x10 : 0) | (split_mismatch() ? 0x20 : 0);
@@ -580,7 +588,7 @@ static update_status_t op_relay(uint32_t client, uint8_t *rsp) {
     put16(&rsp[12], ri.slave_to_erase);
     put16(&rsp[14], ri.retries);
     put32(&rsp[16], ri.elapsed_ms);
-    rsp[20] = ri.paused ? 0x01 : 0;
+    rsp[20] = (ri.paused ? 0x01 : 0) | (ri.unconfirmed ? 0x02 : 0);
     rsp[21] = ri.error;
     rsp[22] = s.state;
     return UPDATE_OK;

@@ -281,7 +281,10 @@ than a default build's. Both halves fold the transaction count into every
 split handshake, so an `SVAL_UPDATER` half cannot talk to a default-build half
 at all: flash both halves with `SVAL_UPDATER` builds of the same commit.
 `kb/tools/check_split_tables.py` checks that every left/right pairing of a set
-of builds has the same table (P1):
+of builds has the same table (P1). The keyboard RPC entries of that table
+are all zero in the ELF (they are filled at boot), so updater builds also
+carry `sval_split_kb_ids` (`kb/updater/update_split.c`): each keyboard RPC's
+ID with a tag, which the check compares too (the order of the IDs):
 
 ```
 python3 -I keyboards/svalboard/tools/check_split_tables.py --dir DIR_WITH_ELFS
@@ -344,14 +347,15 @@ exactly as in M1. Then:
 2. The other half holds the image and has verified it: state RELAYED.
 3. COMMIT again: state SUBSIDE_COMMITTING. The other half commits and resets;
    this half keeps the link paused for its commit and reboot (2 s + 2.5 s,
-   R18), probes it once, and goes back to IDLE. This half never commits that
+   R18), probes it, and goes back to IDLE. This half never commits that
    image: the session never reaches COMMITTING, and commit step 0 would refuse
    its hand anyway.
 
 ABORT works up to the second COMMIT, and tells the other half. A relay
 failure latches ERROR with the reason: the other half's own refusal (BAD_SIG,
 BAD_HASH, EPOCH, WRONG_HW, FLASH_ERR, ...), or UNAVAILABLE when it stopped
-answering for 2 s. The 30 s session timeout still applies while relaying and
+answering for 2 s, or TIMEOUT when it stayed in COMMITTING past the probes.
+The 30 s session timeout still applies while relaying and
 while RELAYED (D23: a host that went away stops the relay before the copy).
 While a session for one hand runs, the session ops for the other hand get
 BUSY. INFO with the other hand asks the other half over `KEYBOARD_UPDATE`
@@ -365,24 +369,38 @@ with USB):
 | Phase | Link | What happens |
 |---|---|---|
 | start, manifest | paused | ABORT (clears an old session there), then BEGIN: the signed manifest in 7 fragments |
-| checking and erasing | paused | The other half checks the manifest against its own build and the signature itself (D7), then erases its slot a sector per pass; this half polls STATUS every 20 ms |
+| checking and erasing | paused | The other half checks the manifest against its own build and the signature itself (D7), then erases its slot a sector per pass; this half polls STATUS every 20 ms. A sector erase keeps the other half's interrupts off for about 50 ms, longer than the 20 ms serial timeout, so it erases a sector that needs it only after a request since its last erase and 5 ms after that request (`SVAL_UPDATE_SPLIT_ERASE_GAP_MS`): this half gets an answer between every two sectors, and an ABORT lands within a sector |
 | sending | running | PAGE fragments read from this half's slot, at most 4 ms of RPCs per main-loop pass; both halves type between them |
 | end, verifying | paused | END; the other half hashes its slot (SHA-512, structure, CRC); its CRC must equal this half's |
 | verified | running | STATUS every 1 s keeps the other half's session alive until the host's COMMIT |
-| commit, hold | paused | COMMIT; the other half commits 100 ms later from housekeeping with the M1 routine; the link stays paused 4.5 s |
-| probe | - | One STATUS: a half still in ERROR, or IDLE with an error, did not commit (failure); IDLE without one, or no answer (a new release may not talk to this one, V), is done |
+| commit, hold | paused | COMMIT; the other half commits 100 ms later from housekeeping with the M1 routine; the link stays paused 4.5 s. An answer of IDLE to COMMIT (it already rebooted, or lost the session), or no valid answer for 2 s (COMMIT may have been taken with its answer lost), also leads to the hold: the probe decides |
+| probe | paused | STATUS. ERROR, or IDLE with an error: it did not commit (failure). COMMITTING: it has not begun its copy; probe again every 500 ms, and if it then falls silent (its copy) the whole hold again; at most 20 probes, then TIMEOUT. IDLE without an error: done. No answer (a new release may not talk to this one, V): done, flagged unconfirmed (RELAY flags bit1) |
+| aborting | as it was | After an ABORT from the host, the session timeout, or a failure: ABORT once per pass until the other half answers (it may be erasing), for at most 2 s, and only then the link resumes. A relay whose link is already dead (no valid answer for 2 s) sends one ABORT and resumes at once |
 
 A request without a valid answer is sent again unchanged (the other half
 answers a retry from its cache); INVALID is accepted as a refusal only on the
 fourth answer in a row, since a request damaged on the way is also answered
 INVALID. No valid answer for 2 s fails the relay with UNAVAILABLE, then this
-half sends one ABORT and resumes the link.
+half sends one ABORT and resumes the link (in the commit phase it holds
+instead, above).
+
+After a relay ends done, this half shows the red error LED (and INFO flags
+bit5) until presence first reads MATCH, also while presence reads NONE: a
+release that changes the split table cannot talk to the old half at all, and
+would otherwise look like an unplugged cable (V).
 
 **The other half** (`update_split_slave_rpc` in the SlaveThread,
 `update_split_slave_task` from housekeeping):
 
 - The callback answers every request at once. It programs one 256 B page when
-  a PAGE completes a page (R16) and does nothing else slow.
+  a PAGE completes a page (R16) and does nothing else slow. The callback runs
+  in the SlaveThread, which can preempt the main thread in the middle of a
+  DMA transfer, and the PMW SPI's DMA reads its TX source from XIP (R6): so
+  the program is refused with BUSY while any DMA channel is busy, checked
+  with interrupts off in the same section as the program, and the fragment
+  is given back (the relay sends it again).
+- The request and response lengths come from the wire (`rpc_info`, behind a
+  CRC-8 only) and are clamped to the 32-byte RPC buffers.
 - The manifest and signature check, the erase, the image hash and the commit
   run in housekeeping, behind the pause. The two meet in a single-slot
   mailbox with a sequence number: the callback posts a job by changing the
@@ -406,9 +424,13 @@ half sends one ABORT and resumes the link.
 hand. For the other half it waits for presence, prints the other half's INFO,
 stages and verifies as in M1, relays (printing the phases), commits the other
 half, then waits up to 10 s for it to answer again and prints its version and
-presence. `pair A.svup B.svup` does the other half, then this half over USB
-(the chord twice), waits for the board to come back, and requires presence to
-show the same release on both halves within 10 s. `relay` prints the RELAY op;
+presence; a fw that differs from the manifest's (both nonzero) is an error.
+`pair A.svup B.svup` first checks both images against both halves' INFO (hand,
+pointing device, test key or release build, epoch, storage format, size) and
+sends nothing if either would be refused; then it does the other half, then
+this half over USB (the chord twice, both on this half), waits for the board
+to come back, and requires presence to show the same release on both halves
+within 10 s and each half's fw to equal its manifest's (when both are set). `relay` prints the RELAY op;
 `info --other` asks the other half. Until M3 a build reports the
 `SVAL_FW_VERSION` it was compiled with (0 by default), which `make_update.py
 --fw-version` does not set: for the version checks to mean anything, build
@@ -455,6 +477,13 @@ with `EXTRAFLAGS=-DSVAL_FW_VERSION=N` and make the image with `--fw-version N`.
   boots, a new relay succeeds), the other half's commit with the real
   `update_commit.c` cut after every flash operation, `updater.c`'s session for
   the other half, and the version mismatch a half-done pair leaves (red LED,
-  then MATCH once this half is updated too). `test_sval_update_tool.py` runs
+  then MATCH once this half is updated too). `test_relay_review.c` adds the
+  review fixes: the slave's timeout race (a request between its clock read and
+  its lock), RPC lengths past the buffers, a busy DMA channel at a page
+  program, the other half with its interrupts off while it erases and commits
+  (every RPC then fails; a 125,184 B and a 256 KiB relay still verify, and an
+  ABORT while it erases lands between sectors with the link still paused),
+  the probe finding it still COMMITTING, every COMMIT answer lost, and the red
+  LED until MATCH. `test_sval_update_tool.py` runs
   `sval_update.py update` with the other half's image and `pair` against the
   same simulation.

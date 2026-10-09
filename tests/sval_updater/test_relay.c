@@ -299,10 +299,11 @@ static void test_relay_link_loss(void) {
         CHECK_EQ(ri.phase, want);
         link_up     = false;
         uint64_t t0 = sim_us;
-        uint64_t slave_idle_at = 0, failed_at = 0;
+        uint64_t slave_idle_at = 0, failed_at = 0, resumed_at = 0;
         for (int i = 0; i < 12000; i++) {
             pass();
             relay_get();
+            if (!resumed_at && !link_paused) resumed_at = sim_us;
             if (!failed_at && (ri.phase == RELAY_FAILED || ri.phase == RELAY_DONE)) failed_at = sim_us;
             if (!slave_idle_at && update_split_slave_state() == UPDATE_STATE_IDLE) slave_idle_at = sim_us;
         }
@@ -311,10 +312,17 @@ static void test_relay_link_loss(void) {
             CHECK_EQ(ri.phase, RELAY_DONE);
             CHECK_EQ(slave_commit_runs, 1);
         } else if (want == RELAY_COMMIT) {
-            // COMMIT never arrived: failed, and the other half never commits
-            CHECK_EQ(ri.phase, RELAY_FAILED);
-            CHECK_EQ(ri.error, UPDATE_UNAVAILABLE);
+            // COMMIT never arrived. This half cannot tell that from a COMMIT
+            // taken with its answer lost and the other half now writing, so
+            // it holds the link paused for the whole hold after the link
+            // timeout, and the unanswered probe ends it DONE, unconfirmed
+            // (the host then checks presence). The other half never commits.
+            CHECK_EQ(ri.phase, RELAY_DONE);
+            CHECK(ri.unconfirmed);
             CHECK_EQ(slave_commit_runs, 0);
+            CHECK(resumed_at - t0 >= (uint64_t)(SVAL_UPDATE_RELAY_LINK_TIMEOUT_MS + SVAL_UPDATE_SPLIT_COMMIT_MS + SVAL_UPDATE_SPLIT_REBOOT_MS) * 1000);
+            CHECK(update_split_awaiting_match()); // the red LED until presence shows MATCH
+            CHECK(slave_idle_at > 0);             // its session times out
         } else {
             CHECK_EQ(ri.phase, RELAY_FAILED);
             CHECK_EQ(ri.error, UPDATE_UNAVAILABLE);
@@ -465,8 +473,13 @@ static update_status_t m_page(uint32_t off, uint8_t n) {
     uint8_t req[USPLIT_MSG_MAX];
     return mrpc(req, usplit_req_page(req, ++mseq, off, img + off, n));
 }
+// Housekeeping passes, each after a STATUS poll as the master sends them (a
+// sector is erased only after a request, SVAL_UPDATE_SPLIT_ERASE_GAP_MS ago).
 static void slave_ticks(int n) {
     for (int i = 0; i < n; i++) {
+        uint8_t req[USPLIT_MSG_MAX], out[USPLIT_MSG_MAX];
+        slave_rpc(req, usplit_req_build(req, USPLIT_OP_STATUS, ++mseq, NULL, 0), out, USPLIT_MSG_MAX);
+        sim_us += SVAL_UPDATE_SPLIT_ERASE_GAP_MS * 1000;
         slave_hk();
         sim_us += 1000;
     }
@@ -941,9 +954,15 @@ static void test_relay_session(void) {
     CHECK_EQ(update_split_slave_state(), UPDATE_STATE_RECEIVING);
     CHECK_EQ(send_nonce(CLIENT_A, UPDATE_OP_ABORT, session_nonce), UPDATE_OK);
     CHECK_EQ(updater_state(), UPDATE_STATE_IDLE);
+    relay_get();
+    CHECK_EQ(ri.phase, RELAY_ABORTING); // the ABORT goes out on the next pass
+    pass();
+    relay_get();
+    CHECK_EQ(ri.phase, RELAY_IDLE);
     CHECK_EQ(update_split_slave_state(), UPDATE_STATE_IDLE);
     CHECK(!link_paused);
     CHECK(!update_relay_busy());
+    CHECK(!updater_active());
 
     // COMMIT in VERIFIED with the link down: refused, still VERIFIED.
     fresh(len);
@@ -1047,6 +1066,8 @@ static void test_relay_presence(void) {
     update_relay_abort();
 }
 
+#include "test_relay_review.c"
+
 static void test_relay(void) {
     int before_failures = failures;
     test_relay_presence();
@@ -1060,6 +1081,7 @@ static void test_relay(void) {
     test_relay_faults();
     test_relay_cuts();
     test_relay_session();
+    test_relay_review();
     printf("relay tests: %s\n", failures == before_failures ? "pass" : "FAIL");
 }
 

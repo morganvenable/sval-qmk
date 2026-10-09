@@ -128,6 +128,19 @@ static update_build_id_t master_id, slave_id;
 static bool              link_up = true, link_paused, link_dead;
 static int               pause_calls, lock_depth, lock_errors, unlocks;
 static void (*unlock_hook)(int n); // after each unlock by the other half's housekeeping (a preemption point)
+static void (*lock_hook)(void);     // before each lock by the other half's housekeeping (a preemption point)
+// The other half with its interrupts off: while it erases a sector or runs its
+// commit (slave_irq_sim), RPCs fail as on the real link (the master's serial
+// transactions time out), and its housekeeping does not run until it is done.
+static bool     slave_irq_sim;
+static uint64_t slave_busy_until_us;
+static uint32_t slave_busy_rpcs; // RPCs that failed for it
+#define SIM_ERASE_US 50000        // M1 #13: a sector erase 50-53 ms
+#define SIM_SLAVE_COMMIT_US 1500000
+// DMA busy when the other half programs a page (update_split_port_program_page).
+static uint32_t dma_busy_pct, dma_refusals;
+static bool     slave_hk_frozen; // the other half's housekeeping does not run (it is stuck)
+static int      drop_rsp_op = -1; // every answer to requests with this op is lost
 static const uint8_t *master_slot;  // this half's slot for the relay; NULL: the die's
 static uint8_t        shadow[SVAL_UPDATE_MAX_IMAGE];
 static bool           auto_shadow; // the relay's pause takes a copy of the die's slot as this half's (tool tests)
@@ -156,6 +169,7 @@ bool update_split_port_updating(void) {
     return sim_slave ? update_split_slave_active() : updater_active();
 }
 void update_split_port_lock(void) {
+    if (lock_hook) lock_hook();
     if (!sim_slave || lock_depth) lock_errors++; // only the other half's housekeeping takes it, never nested
     lock_depth++;
 }
@@ -192,6 +206,14 @@ static bool chance(uint32_t pct) {
     return pct && rnd() % 100 < pct;
 }
 
+update_status_t update_split_port_program_page(uint32_t off, const uint8_t *page) {
+    if (chance(dma_busy_pct)) {
+        dma_refusals++;
+        return UPDATE_BUSY;
+    }
+    return update_flash_program_page(off, page);
+}
+
 // The other half's callback, as the SlaveThread runs it.
 static void slave_rpc(const uint8_t *in, uint8_t len, uint8_t *out, uint8_t out_len) {
     bool was  = sim_slave;
@@ -208,6 +230,11 @@ bool update_split_port_rpc(const uint8_t *req, uint8_t req_len, uint8_t *rsp, ui
     lk.n++;
     sim_us += SIM_RPC_US;
     if (!link_up || link_dead) {
+        sim_us += SIM_RPC_FAIL_US;
+        return false;
+    }
+    if (sim_us < slave_busy_until_us) { // its interrupts are off: no answer
+        slave_busy_rpcs++;
         sim_us += SIM_RPC_FAIL_US;
         return false;
     }
@@ -245,7 +272,7 @@ bool update_split_port_rpc(const uint8_t *req, uint8_t req_len, uint8_t *rsp, ui
         hist_len[hist_n % 8] = req_len;
         hist_n++;
     }
-    if (chance(lk.drop_rsp)) { // the answer is lost
+    if (chance(lk.drop_rsp) || (drop_rsp_op >= 0 && req[0] == drop_rsp_op)) { // the answer is lost
         lk.faults++;
         sim_us += SIM_RPC_FAIL_US;
         return false;
@@ -267,9 +294,13 @@ static void slave_reboot(void) {
 
 // The other half's housekeeping pass.
 static void slave_hk(void) {
-    sim_slave = true;
+    if (sim_us < slave_busy_until_us || slave_hk_frozen) return; // still erasing, or committing
+    int erases = erase_ops, commits = slave_commit_runs;
+    sim_slave  = true;
     update_split_slave_task();
     sim_slave = false;
+    if (slave_irq_sim && erase_ops != erases) slave_busy_until_us = sim_us + SIM_ERASE_US;
+    if (slave_irq_sim && slave_commit_runs != commits) slave_busy_until_us = sim_us + SIM_SLAVE_COMMIT_US;
     if (slave_reset_pending) {
         slave_reset_pending = false;
         slave_reboot();
@@ -345,6 +376,7 @@ static void pass(void) {
     if (master_reset_pending) { // this half "reset into its new image" (pair)
         master_reset_pending = false;
         updater_host_reset();
+        update_split_host_master_reset();
         master_id.fw_version = master_next_fw;
         master_reboots++;
     }
@@ -512,6 +544,13 @@ static void fresh(uint32_t len) {
     link_paused       = link_dead = false;
     pause_calls       = lock_depth = lock_errors = unlocks = 0;
     unlock_hook       = NULL;
+    lock_hook         = NULL;
+    slave_irq_sim     = false;
+    slave_busy_until_us = 0;
+    slave_busy_rpcs   = 0;
+    dma_busy_pct      = dma_refusals = 0;
+    slave_hk_frozen   = false;
+    drop_rsp_op       = -1;
     master_slot       = NULL;
     auto_shadow       = false;
     memset(&lk, 0, sizeof(lk));

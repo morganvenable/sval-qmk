@@ -31,6 +31,14 @@ all zero in the ELF: transaction_register_rpc() fills them at boot with the
 RPC buffers' offsets, which the PUT_RPC_REQ_DATA / GET_RPC_RESP_DATA entries
 already carry.
 
+So that the order of those IDs can be checked too, updater builds carry a
+table sval_split_kb_ids (updater/update_split.c): b"SVKB", the number of
+entries, then for each keyboard RPC its ID and a two-letter tag (SA, SB, UP
+for KEYBOARD_SYNC_A, KEYBOARD_SYNC_B, KEYBOARD_UPDATE). It must be byte for
+byte the same on both sides; one side having it and the other not is a
+mismatch. Default builds have none (they are not paired with updater builds:
+their transaction counts differ anyway).
+
 With --left/--right every left ELF is checked against every right ELF; with
 --dir, *left*.elf and *right*.elf in each directory are paired the same way.
 Exit 1 on any mismatch or unreadable table. The size of the shared-memory
@@ -50,6 +58,7 @@ import sys
 ENTRY = 12
 TABLE = "split_transaction_table"
 SHMEM = "shared_memory"  # quantum/split_common/transport.c: static split_shared_memory_t shared_memory
+KB_IDS = "sval_split_kb_ids"  # updater/update_split.c, updater builds only
 MAX_TRANSACTIONS = 32    # transaction_id_define.h: 5 bits
 
 
@@ -128,7 +137,20 @@ def read_table(path):
         entries.append(dict(id=i, i2t_size=i2t_size, i2t_offset=i2t_off, t2i_size=t2i_size, t2i_offset=t2i_off,
                             callback=cb != 0))
     shmem = symbols.get(SHMEM, [])
-    return dict(elf=path, count=count, entries=entries, shmem_size=shmem[0][1] if len(shmem) == 1 else None)
+    kb_ids = None
+    if KB_IDS in symbols:
+        kaddr, ksize = one_symbol(symbols, KB_IDS, path)
+        raw_ids = read(kaddr, ksize)
+        if ksize < 5 or raw_ids[:4] != b"SVKB" or ksize != 5 + 3 * raw_ids[4]:
+            raise ElfError(f"{path}: {KB_IDS} is not b'SVKB', n, then n (id, tag) triples ({raw_ids.hex()})")
+        kb_ids = [dict(id=raw_ids[5 + 3 * i], tag=raw_ids[6 + 3 * i:8 + 3 * i].decode("latin-1"))
+                  for i in range(raw_ids[4])]
+        for e in kb_ids:
+            if e["id"] >= count or any(entries[e["id"]][f] for f in ("i2t_size", "t2i_size", "callback")):
+                raise ElfError(f"{path}: keyboard RPC {e['tag']} has ID {e['id']}, which is not an empty "
+                               "(boot-filled) entry of the table")
+    return dict(elf=path, count=count, entries=entries, shmem_size=shmem[0][1] if len(shmem) == 1 else None,
+                kb_ids=kb_ids)
 
 
 FIELDS = ("i2t_size", "i2t_offset", "t2i_size", "t2i_offset", "callback")
@@ -143,11 +165,17 @@ def compare(a, b):
         for f in FIELDS:
             if ea[f] != eb[f]:
                 diffs.append(f"ID {ea['id']}: {f} {ea[f]} vs {eb[f]}")
+    if a.get("kb_ids") != b.get("kb_ids"):
+        def ids(t):
+            return "none" if t.get("kb_ids") is None else ", ".join(f"{e['tag']}={e['id']}" for e in t["kb_ids"])
+        diffs.append(f"keyboard RPC IDs ({KB_IDS}) {ids(a)} vs {ids(b)}")
     return diffs
 
 
 def fmt(t):
     lines = [f"{t['elf']}: {t['count']} transactions, shared memory {t['shmem_size']} B"]
+    if t.get("kb_ids") is not None:
+        lines.append("  keyboard RPC IDs: " + ", ".join(f"{e['tag']}={e['id']}" for e in t["kb_ids"]))
     for e in t["entries"]:
         lines.append(f"  ID {e['id']:2}: m2s {e['i2t_size']:3} B @ {e['i2t_offset']:#06x}  "
                      f"s2m {e['t2i_size']:3} B @ {e['t2i_offset']:#06x}  {'callback' if e['callback'] else ''}")
