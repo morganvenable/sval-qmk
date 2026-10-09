@@ -10,29 +10,35 @@ name: Release QMK Firmware
 #   version  the tag and keyboards/svalboard/updater/fw_version.txt (D32):
 #            the number must go up; dry-run tags (vM3-dryrun1) are prereleases;
 #            a normal tag is refused while the release keys are DRY RUN
-#   build    12 release updater builds; each uploads its .uf2, raw image,
-#            unsigned manifest and ELF. No build job sees a signing key
+#   build    12 release updater builds (pinned image and toolchain); each
+#            uploads its .uf2, raw image, unsigned manifest and ELF. No build
+#            job sees a signing key, and none can write to the repository
 #   lint     the release ELFs: no test key, two release key slots, no test
 #            hooks, keytest or host bootloader; the split message table of
-#            every left/right pairing matches the committed golden table (P1)
-#   publish  the .uf2 files, to a release that is a prerelease for a dry run
+#            every left/right pairing matches the committed golden table (P1);
+#            each image is its ELF's flash contents and its .uf2's, and its
+#            manifest and build-info record match the build. Outputs each
+#            image's SHA-512 for the signer
+#   publish  a DRAFT release with the .uf2 files (a prerelease for a dry run);
+#            drafts are not public
 #   sign     in the release-signing environment, which needs approval for
-#            each run (D29): signs the release images with the key in its
-#            secret, refusing anything that is not a release image (D22), and
-#            publishes a .svup next to each .uf2
+#            each run (D29): checks the tag still names this run's commit,
+#            signs exactly the linted images (D22), uploads a .svup next to
+#            each .uf2, then publishes the release
+#
+# Every job checks out the run's commit (github.sha), never the tag by name,
+# so moving the tag while the run waits for approval changes nothing it runs.
 on:
   push:
     tags:
       - 'v*'
 
-
-permissions: write-all
+permissions:
+  contents: read
 
 jobs:
   version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     outputs:
       version: ${{ steps.check.outputs.version }}
       fw_version: ${{ steps.check.outputs.fw_version }}
@@ -40,8 +46,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ github.ref }}
         fetch-depth: 0  # the previous release's tag
+        persist-credentials: false
 
     - name: Check the version (D32)
       id: check
@@ -53,6 +59,8 @@ jobs:
 
   build_sval:
     needs: version
+    permissions:
+      contents: read
     uses: ./.github/workflows/build-firmware.yml
     with:
       keyboard: ${{ matrix.keyboard }}
@@ -70,6 +78,8 @@ jobs:
 
   build_blank:
     needs: version
+    permissions:
+      contents: read
     uses: ./.github/workflows/build-firmware.yml
     with:
       keyboard: ${{ matrix.keyboard }}
@@ -86,14 +96,19 @@ jobs:
         side: [ left, right ]
 
   lint:
-    needs: [ build_sval, build_blank ]
+    needs: [ version, build_sval, build_blank ]
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    outputs:
+      images: ${{ steps.artifacts.outputs.images }}
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ github.ref }}
+        persist-credentials: false
+
+    - name: The tag still names this run's commit
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: bash keyboards/svalboard/tools/check_tag_commit.sh
 
     - uses: actions/download-artifact@v4
       with:
@@ -101,9 +116,17 @@ jobs:
         path: release
         merge-multiple: true
 
-    - name: Lint the release updater ELFs
+    - name: Each image is its ELF's and its .uf2's; manifests match the builds
+      id: artifacts
+      env:
+        VERSION: ${{ needs.version.outputs.version }}
       run: |
         ls -l release
+        python3 -I keyboards/svalboard/tools/check_release_artifacts.py release \
+          --version "$VERSION" --github-output "$GITHUB_OUTPUT"
+
+    - name: Lint the release updater ELFs
+      run: |
         test "$(find release -name "*.elf" | wc -l)" -eq 12
         python3 -I keyboards/svalboard/tools/check_release_elf.py release/*.elf
 
@@ -124,27 +147,39 @@ jobs:
         path: release
         merge-multiple: true
 
-    - name: Release
-      uses: ncipollo/release-action@v1.11.2
-      with:
-        allowUpdates: True
-        omitBodyDuringUpdate: True
-        omitNameDuringUpdate: True
-        prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
-        artifacts: "release/*.uf2"
+    - name: Draft release with the .uf2 files
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ github.ref_name }}
+        PRE: ${{ needs.version.outputs.prerelease }}
+      run: |
+        R="$GITHUB_REPOSITORY"
+        if gh release view "$TAG" -R "$R" >/dev/null 2>&1; then
+          echo "::error::$TAG already has a release (maybe a draft): delete it, then re-run all jobs"
+          exit 1
+        fi
+        args=(--draft --verify-tag --title "$TAG" --notes "")
+        if [ "$PRE" = true ]; then args+=(--prerelease); fi
+        gh release create "$TAG" -R "$R" "${args[@]}" release/*.uf2
 
   sign:
-    needs: [ version, publish ]
+    needs: [ version, lint, publish ]
     runs-on: ubuntu-latest
     # Holds SVAL_UPDATE_SIGNING_KEY and needs approval for each run (D29).
-    # Only this job can read the secret.
+    # Only the signing step can read the secret. Before approving, check that
+    # the commit this run shows is the one you meant to release.
     environment: release-signing
     permissions:
       contents: write
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ github.ref }}
+        persist-credentials: false
+
+    - name: The tag still names this run's commit
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: bash keyboards/svalboard/tools/check_tag_commit.sh
 
     - uses: actions/download-artifact@v4
       with:
@@ -152,21 +187,44 @@ jobs:
         path: release
         merge-multiple: true
 
+    - name: The images are the ones the lint checked
+      env:
+        VERSION: ${{ needs.version.outputs.version }}
+        IMAGES: ${{ needs.lint.outputs.images }}
+      run: |
+        python3 -I keyboards/svalboard/tools/check_release_artifacts.py release \
+          --version "$VERSION" --expect "$IMAGES"
+
+    - name: The draft holds exactly those .uf2 files
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ github.ref_name }}
+      run: |
+        R="$GITHUB_REPOSITORY"
+        test "$(gh release view "$TAG" -R "$R" --json isDraft -q .isDraft)" = true
+        gh release download "$TAG" -R "$R" -D published
+        test "$(find published -type f | wc -l)" -eq 12
+        for f in published/*; do cmp "$f" "release/$(basename "$f")"; done
+
     - name: Sign the release images
       env:
         SVAL_UPDATE_SIGNING_KEY: ${{ secrets.SVAL_UPDATE_SIGNING_KEY }}
         VERSION: ${{ needs.version.outputs.version }}
         FW_VERSION: ${{ needs.version.outputs.fw_version }}
+        IMAGES: ${{ needs.lint.outputs.images }}
       run: |
         mkdir -p signed
-        test "$(find release -name "*.manifest" | wc -l)" -eq 12
-        for m in release/*.manifest; do
-          base="${m%.manifest}"
-          name="$(basename "$base")"
+        n=0
+        for pair in $IMAGES; do
+          name="${pair%%=*}"
           python3 -I keyboards/svalboard/tools/make_update.py sign \
-            --image "$base.img" --manifest "$m" -o "signed/${name}_${VERSION}.svup" \
-            --key-env SVAL_UPDATE_SIGNING_KEY --expect-version "$VERSION" --expect-fw-version "$FW_VERSION"
+            --image "release/$name.img" --manifest "release/$name.manifest" \
+            -o "signed/${name}_${VERSION}.svup" --key-env SVAL_UPDATE_SIGNING_KEY \
+            --expect-sha512 "${pair#*=}" \
+            --expect-version "$VERSION" --expect-fw-version "$FW_VERSION"
+          n=$((n + 1))
         done
+        test "$n" -eq 12
 
     - name: Check each .svup as a release build would
       run: |
@@ -174,11 +232,15 @@ jobs:
           python3 -I keyboards/svalboard/tools/make_update.py verify "$f" --build release
         done
 
-    - name: Publish the .svup files
-      uses: ncipollo/release-action@v1.11.2
-      with:
-        allowUpdates: True
-        omitBodyDuringUpdate: True
-        omitNameDuringUpdate: True
-        prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
-        artifacts: "signed/*.svup"
+    - name: Upload the .svup files and publish the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ github.ref_name }}
+        PRE: ${{ needs.version.outputs.prerelease }}
+      run: |
+        R="$GITHUB_REPOSITORY"
+        gh release upload "$TAG" -R "$R" signed/*.svup
+        assets="$(gh release view "$TAG" -R "$R" --json assets -q '.assets | length')"
+        test "$assets" -eq 24
+        gh release edit "$TAG" -R "$R" --draft=false --prerelease="$PRE"
+        gh release view "$TAG" -R "$R" --json isDraft,isPrerelease

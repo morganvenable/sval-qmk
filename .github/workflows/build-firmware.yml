@@ -18,7 +18,9 @@ on:
       # and instead of publishing its .uf2 the job uploads the .uf2, the raw
       # image, the unsigned manifest and the ELF as the artifact
       # release-<name>; release.yml publishes them once the lint passes. With
-      # updater false (the default) the job is what it always was.
+      # updater false (the default) the job builds and publishes what it
+      # always did, from the same container; since M3 a tag build checks out
+      # the run's commit (github.sha) and keeps no Git credentials.
       updater:
         required: false
         type: boolean
@@ -35,17 +37,26 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/qmk/qmk_cli
+    # Updater (release) builds use a pinned image and, below, the pinned Arm
+    # GNU 13.2.rel1 toolchain the updater was tested with: the image's own GCC
+    # (15.2 in this digest) builds the commit's RAM code differently, and
+    # check_ram_funcs.py refuses it (docs/updater.md, "Toolchain"). Other
+    # callers keep the image they always had.
+    container: ${{ inputs.updater && 'ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a' || 'ghcr.io/qmk/qmk_cli' }}
 
     steps:
+    # A tag build checks out the run's commit (github.sha), not the tag by
+    # name: a tag moved while the run waits cannot change what later jobs of
+    # the same run build or sign.
     - name: Checkout code - Non PR
       uses: actions/checkout@v4
       if: ${{ startsWith(github.ref, 'refs/tags') }}
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        ref: ${{ github.ref }}
+        ref: ${{ github.sha }}
         fetch-depth: 0
         submodules: 'recursive'
+        persist-credentials: false
 
     - name: Checkout code - PR
       uses: actions/checkout@v4
@@ -55,6 +66,19 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
         submodules: 'recursive'
+        persist-credentials: false
+
+    - name: Pinned Arm toolchain (updater builds)
+      if: ${{ inputs.updater }}
+      run: |
+        T=arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi
+        U=https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel
+        curl -fsSL --retry 3 -o "/tmp/$T.tar.xz" "$U/$T.tar.xz"
+        echo "6cd1bbc1d9ae57312bcd169ae283153a9572bd6a8e4eeae2fedfbc33b115fdbb  /tmp/$T.tar.xz" | sha256sum -c -
+        mkdir -p /opt/arm
+        tar -xJf "/tmp/$T.tar.xz" -C /opt/arm
+        echo "/opt/arm/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin" >> "$GITHUB_PATH"
+      shell: bash
 
     - name: Get tag version
       if: ${{ startsWith(github.ref, 'refs/tags/')}}
@@ -72,6 +96,8 @@ jobs:
         pip3 install --break-system-packages -r requirements.txt
         qmk setup -y
         if [ "$UPDATER" = "true" ]; then
+          command -v arm-none-eabi-gcc
+          test "$(arm-none-eabi-gcc -dumpversion)" = 13.2.1
           make ${{ inputs.keyboard }}/${{ inputs.side }}:${{ inputs.keymap }} \
             SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes "SVAL_FW_VERSION_STRING=$VERSION_STRING"
         else
