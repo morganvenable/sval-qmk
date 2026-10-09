@@ -521,7 +521,9 @@ void housekeeping_task_kb(void) {
 #endif
 #ifdef SVAL_UPDATER
     // The updater owns the LEDs and the flash while active: no idle dimming,
-    // and no identity reboot.
+    // and no identity reboot. On the half without USB, the session the other
+    // half runs over KEYBOARD_UPDATE does its slow work here first (M2).
+    if (!is_keyboard_master()) update_split_slave_task();
     updater_task();
     if (!updater_active()) identity_task();
 #else
@@ -553,6 +555,12 @@ void housekeeping_task_kb(void) {
 #endif
                 if (!is_connected) {
                     is_connected = true;
+#ifdef SVAL_UPDATER
+                    // D21: no settings write while an update runs (the other
+                    // half reconnects after its commit, while this one may be
+                    // staging its own update).
+                    if (!updater_active())
+#endif
                     sval_on_reconnect();
                 }
             } else {

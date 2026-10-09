@@ -44,6 +44,14 @@ lib.host_state.restype = ctypes.c_int
 lib.host_slot.restype = ctypes.POINTER(ctypes.c_uint8)
 lib.host_commit_runs.restype = ctypes.c_int
 lib.host_commit_crc.restype = ctypes.c_uint32
+lib.host_lib_split.argtypes = [ctypes.c_int]
+lib.host_slave_commits.restype = ctypes.c_int
+lib.host_slave_commit_crc.restype = ctypes.c_uint32
+lib.host_master_reboots.restype = ctypes.c_int
+lib.host_slave_fw.restype = ctypes.c_uint32
+lib.host_master_fw.restype = ctypes.c_uint32
+lib.host_slave_state.restype = ctypes.c_int
+lib.host_link_paused.restype = ctypes.c_int
 
 BOOT2 = bytes(int(h, 16) for h in __import__("re").findall(r"0x([0-9a-f]{2})", (Path(__file__).parent / "boot2_page0.h").read_text().split("#define BOOT2_PAGE0_BYTES")[1]))
 
@@ -63,6 +71,7 @@ class FakeBoard(su.Device):
 
     def __init__(self, allow_unwrapped=False):
         self.handle = None
+        self.serial = "sval:fake"
         self.client = None
         self.round_trips = 0
         self.round_trip_s = 0.0
@@ -126,8 +135,18 @@ def run_update(svup, commit_available, rebind_every=0.0, min_rebinds=0):
     return rc, board, session
 
 
+slept = [0.0]
+real_monotonic = __import__("time").monotonic
+
+
+def fake_monotonic():
+    """The tool's deadlines run on the simulated time its sleeps add."""
+    return real_monotonic() + slept[0]
+
+
 def fake_sleep(s):
     """Simulated time while the tool polls; the fake user acts on the next poll."""
+    slept[0] += s
     lib.host_passes(max(int(s * 1000), 1))
     if FakeBoard.current:
         FakeBoard.current.waited = True
@@ -137,6 +156,7 @@ def main():
     out = Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
     su.time.sleep = fake_sleep
+    su.time.monotonic = fake_monotonic
 
     img = image(0x5100)
     seed = mu.read_key(mu.TEST_KEY_FILE)
@@ -230,16 +250,103 @@ def main():
     st, r = board.op(su.ABORT, bytes(4), hand=1)
     check(st == su.OK, "ABORT in IDLE")
 
-    # a wrong-hand image: refused by the board at ARM, and the tool ABORTs
+    # an image for the other half with no other half connected: refused before any op
     bad = mu.build_manifest(img, key_id=0, hand=0, pointing_id=3, keymap_id=1, flags=0, epoch=0, storage_format=2, fw_version=7, version="left")
     badf = out / "left.svup"
     badf.write_bytes(bad + mu.sign(seed, bad, "pure") + img)
     lib.host_lib_reset(0)
     try:
-        su.Session(FakeBoard(), Args()).run(badf)
-        check(False, "wrong hand accepted")
+        with contextlib.redirect_stdout(io.StringIO()):
+            su.Session(FakeBoard(), Args()).run(badf)
+        check(False, "an image for an absent other half accepted")
     except su.UpdaterError as exc:
-        check("ARM: UNSUPPORTED" in str(exc), f"wrong hand: {exc}")
+        check("presence none" in str(exc), f"no other half: {exc}")
+    check(lib.host_state() == 0, "no session without the other half")
+
+    # ---- M2: the other half, through this one ----
+    left_m = mu.build_manifest(img, key_id=0, hand=0, pointing_id=1, keymap_id=1, flags=0, epoch=0, storage_format=2,
+                               fw_version=9, version="left-9")
+    left = out / "left9.svup"
+    left.write_bytes(left_m + mu.sign(seed, left_m, "pure") + img)
+    right_m = mu.build_manifest(img, key_id=0, hand=1, pointing_id=3, keymap_id=1, flags=0, epoch=0, storage_format=2,
+                                fw_version=9, version="right-9")
+    right = out / "right9.svup"
+    right.write_bytes(right_m + mu.sign(seed, right_m, "pure") + img)
+    crc = mu.crc32_mpeg2(img[0x100:])
+
+    # update with the other half's image: staged here, relayed, committed there
+    lib.host_lib_reset(1)
+    lib.host_lib_split(1)
+    board = FakeBoard()
+    with contextlib.redirect_stdout(io.StringIO()) as log:
+        rc = su.Session(board, Args()).run(left)
+    text = log.getvalue()
+    check(rc == 0, f"other half: exit {rc}\n{text}")
+    check(lib.host_slave_commits() == 1, f"the other half committed {lib.host_slave_commits()} times")
+    check(lib.host_slave_commit_crc() == crc, "the other half committed the image's CRC")
+    check(lib.host_slave_fw() == 9 and lib.host_master_fw() == 2001, f"fw {lib.host_slave_fw()} / {lib.host_master_fw()}")
+    check(lib.host_commit_runs() == 0 and lib.host_master_reboots() == 0, "this half did not commit")
+    check(lib.host_state() == 0 and not lib.host_link_paused(), "IDLE, link running afterwards")
+    for what in ("for the other (left) half", "relaying to the other half", "relayed:", "the other half took COMMIT",
+                 "the other half answers again: fw 9, presence version differs", "halves now run different releases"):
+        check(what in text, f"other half: no '{what}' in\n{text}")
+    check("the left half without USB" in text and "on the right half, the one with USB" in text, f"chord text\n{text}")
+    rl = su.decode_relay(*board.op(su.RELAY, hand=0))
+    check(rl["phase"] == "done" and rl["acked"] == len(img) and rl["image_len"] == len(img), f"relay {rl}")
+    st = su.decode_status(*board.op(su.STATUS, hand=1))
+    check(st["other_half"] == "version differs", f"status {st}")
+    inf = board.op(su.INFO, hand=0)
+    check(su.decode_info(*inf)["fw_version"] == 9 and su.decode_info(*inf)["hand"] == "left", f"info --other {inf}")
+
+    # --no-commit stops at VERIFIED here, before any relay
+    lib.host_lib_reset(1)
+    lib.host_lib_split(1)
+    a = Args()
+    a.no_commit = True
+    with contextlib.redirect_stdout(io.StringIO()):
+        rc = su.Session(FakeBoard(), a).run(left)
+    check(rc == 0 and lib.host_state() == 7 and lib.host_slave_state() == 0, "no-commit: VERIFIED here, nothing relayed")
+
+    # the other half's pointing device is checked at ARM (D18)
+    wrong_m = mu.build_manifest(img, key_id=0, hand=0, pointing_id=3, keymap_id=1, flags=0, epoch=0, storage_format=2,
+                                fw_version=9, version="left-3389")
+    wrong = out / "left3389.svup"
+    wrong.write_bytes(wrong_m + mu.sign(seed, wrong_m, "pure") + img)
+    lib.host_lib_reset(1)
+    lib.host_lib_split(1)
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            su.Session(FakeBoard(), Args()).run(wrong)
+        check(False, "wrong pointing for the other half accepted")
+    except su.UpdaterError as exc:
+        check("ARM: WRONG_HW" in str(exc), f"wrong pointing: {exc}")
+
+    # pair: the other half, then this one; the board comes back and presence matches
+    lib.host_lib_reset(1)
+    lib.host_lib_split(1)
+    su.reopen = lambda serial, timeout: FakeBoard()
+    board = FakeBoard()
+    sessions = []
+    with contextlib.redirect_stdout(io.StringIO()) as log:
+        rc = su.pair(board, Args(), [right, left], sessions)
+    text = log.getvalue()
+    check(rc == 0, f"pair: exit {rc}\n{text}")
+    check(lib.host_slave_commits() == 1 and lib.host_master_reboots() == 1, "pair: each half committed once")
+    check(lib.host_slave_fw() == 9 and lib.host_master_fw() == 9, f"pair: fw {lib.host_slave_fw()} / {lib.host_master_fw()}")
+    check(text.index("1/2: the other (left) half") < text.index("2/2: this (right) half"), "pair: the other half first")
+    check("pair: presence match" in text, f"pair:\n{text}")
+    # this half reports its build's SVAL_FW_VERSION (0 on the host), not the manifest's: a warning, not a failure
+    check("this half fw 0, the other half fw 9" in text and "EXTRAFLAGS=-DSVAL_FW_VERSION=N" in text, f"pair:\n{text}")
+    check(len(sessions) == 2, "pair: two sessions")
+    # pair refuses two images for the same half, before any op
+    lib.host_lib_reset(1)
+    lib.host_lib_split(1)
+    try:
+        su.pair(FakeBoard(), Args(), [right, right], [])
+        check(False, "pair with two right images")
+    except su.UpdaterError as exc:
+        check("one image for each half" in str(exc), f"pair: {exc}")
+    check(lib.host_state() == 0, "pair refused: nothing started")
 
     print(f"sval_update.py: {checks} checks, {failures} failures")
     return 1 if failures else 0

@@ -1,22 +1,38 @@
 #!/usr/bin/env python3
-"""Svalboard in-firmware updater, host side (M1: the half with USB, over USB).
+"""Svalboard in-firmware updater, host side: the half with USB over USB (M1),
+and the other half through it over the split link (M2).
 
 Needs hidapi (the 'hid' module) and a board running an SVAL_UPDATER=yes build.
 Close other configuration clients (Keybard) first: raw HID replies go to every
 open handle.
 
     sval_update.py list
-    sval_update.py info
+    sval_update.py info [--other]
     sval_update.py status
+    sval_update.py relay
     sval_update.py diag [--clear]
     sval_update.py abort [--nonce N]
     sval_update.py update FILE.svup [--delay S] [--rebind-every S] [--min-rebinds N]
                                     [--no-commit] [--halt POINT [--halt-unfed]]
+    sval_update.py pair FILE1.svup FILE2.svup [--delay S] [--rebind-every S]
     sval_update.py reject FILE.svup
 
 update sends the manifest, prints the manifest hash you confirm, waits for the
-chord (Index South + Middle South held for 1 s on this half), then erases,
-sends the image, verifies and commits. The client ID is renewed every
+chord (Index South + Middle South held for 1 s on the half with USB), then
+erases, sends the image, verifies and commits.
+
+The image's own hand picks the half. An image for the other half (the one
+without USB) is staged and verified on the half with USB, then relayed to the
+other half, which checks the signature and hash itself (D7); a second COMMIT
+makes it write the image and reset. The link to it pauses while it erases,
+verifies and commits (both halves type while the image streams). The tool
+then waits up to 10 s for the other half to answer with the new version. With
+only one half updated the halves differ, which is not supported (V): the half
+with USB blinks red until both match. pair does both: the other half first,
+then the half with USB over USB (the chord twice, once per image), then waits
+for the board to come back and for presence to show the same release on both
+halves within 10 s. relay prints the relay's progress; info --other asks the
+other half. The client ID is renewed every
 --rebind-every seconds (50, as Keybard does) and the session moved to it with
 REBIND; after each REBIND the old ID must be refused. The number of renewals is
 printed; --min-rebinds N fails the run (before COMMIT) if there were fewer (M1
@@ -63,7 +79,7 @@ CHANNEL = 0x55
 SET_VALUE = 0x07
 WRAPPER, VIA_PROTO, WRAPPER_ERROR = 0xDD, 0xFE, 0xFF
 HAND_SELF = 0xFF
-INFO, MANIFEST, ARM, BEGIN, CHUNK, END, STATUS, COMMIT, ABORT, REBIND, TEST_HALT, DIAG = range(12)
+INFO, MANIFEST, ARM, BEGIN, CHUNK, END, STATUS, COMMIT, ABORT, REBIND, TEST_HALT, DIAG, RELAY = range(13)
 HALT_POINTS = {"invalidated": 1, "first-erase": 2, "mid-program": 3, "last-sector": 4, "page0": 5, "fault": 6,
                "fault-erased": 7}
 MANIFEST_PIECE, CHUNK_PIECE = 20, 18
@@ -72,10 +88,15 @@ STATUS_NAMES = ["OK", "INVALID", "UNAVAILABLE", "FLASH_ERR", "ACCEPTED", "BUSY",
                 "BAD_HASH", "BAD_IMAGE", "EPOCH", "OUT_OF_ORDER", "OVERRUN", "TOO_LARGE", "TIMEOUT", "OTHER_CLIENT",
                 "UNSUPPORTED", "STORAGE"]
 STATE_NAMES = ["IDLE", "MANIFEST_LOADING", "CONFIRM_WAIT", "VERIFYING_MANIFEST", "ERASING", "RECEIVING",
-               "VERIFYING_IMAGE", "VERIFIED", "COMMITTING", "ERROR"]
+               "VERIFYING_IMAGE", "VERIFIED", "COMMITTING", "ERROR", "RELAYING", "RELAYED", "SUBSIDE_COMMITTING"]
 OK, INVALID, ACCEPTED, NOT_CONFIRMED, BAD_HASH = 0, 1, 4, 6, 9
 OUT_OF_ORDER, OVERRUN, OTHER_CLIENT, UNSUPPORTED = 12, 13, 16, 17
 ST_IDLE, ST_MANIFEST_LOADING, ST_CONFIRM_WAIT, ST_RECEIVING, ST_VERIFIED, ST_ERROR = 0, 1, 2, 5, 7, 9
+ST_RELAYING, ST_RELAYED, ST_SUBSIDE_COMMITTING = 10, 11, 12
+# relay_phase_t (keyboards/svalboard/updater/update_split.h)
+RELAY_PHASES = ["idle", "start", "manifest", "checking and erasing", "sending", "end", "verifying", "verified",
+                "commit", "committing", "probe", "done", "failed"]
+PRESENCE_MATCH, PRESENCE_VERSION = 1, 2
 HANDS = {0: "left", 1: "right"}
 POINTING = {v: k for k, v in make_update.POINTING.items()}
 
@@ -186,13 +207,29 @@ def decode_info(st, r):
                 test_key=bool(r[20] & 16), other_half_mismatch=bool(r[20] & 32), last_error=status_name(r[21]))
 
 
+def relay_phase_name(code):
+    return RELAY_PHASES[code] if code < len(RELAY_PHASES) else f"phase {code}"
+
+
+def decode_relay(st, r):
+    """The RELAY op: the relay to the other half (M2)."""
+    return dict(status=status_name(st), phase=relay_phase_name(r[0]), phase_id=r[0], other_state=state_name(r[1]),
+                other_state_id=r[1], other_error=status_name(r[2]), other_error_id=r[2],
+                acked=r[3] | r[4] << 8 | r[5] << 16, image_len=r[6] | r[7] << 8 | r[8] << 16,
+                other_sectors_erased=struct.unpack_from("<H", r, 9)[0],
+                other_sectors_to_erase=struct.unpack_from("<H", r, 11)[0], retries=struct.unpack_from("<H", r, 13)[0],
+                relay_ms=struct.unpack_from("<I", r, 15)[0], link_paused=bool(r[19] & 1), error=status_name(r[20]),
+                error_id=r[20], state=state_name(r[21]), state_id=r[21])
+
+
 def decode_diag(st, r):
     return dict(status=status_name(st), stack_unused=struct.unpack_from("<H", r, 0)[0],
                 stack_size=struct.unpack_from("<H", r, 2)[0], longest_pass_ms=struct.unpack_from("<H", r, 4)[0],
                 longest_pass_state=state_name(r[6]), **decode_crumbs(r))
 
 
-OP_NAMES = ["INFO", "MANIFEST", "ARM", "BEGIN", "CHUNK", "END", "STATUS", "COMMIT", "ABORT", "REBIND", "TEST_HALT", "DIAG"]
+OP_NAMES = ["INFO", "MANIFEST", "ARM", "BEGIN", "CHUNK", "END", "STATUS", "COMMIT", "ABORT", "REBIND", "TEST_HALT", "DIAG",
+            "RELAY"]
 
 
 def decode_crumbs(r):
@@ -286,7 +323,7 @@ class Session:
             time.sleep(0.2)
         raise UpdaterError(f"{what}: no progress in {timeout} s")
 
-    def run(self, path):
+    def run(self, path, confirm_other=True):
         data = Path(path).read_bytes()
         manifest, sig, image = make_update.parse_svup(data)
         self.image = image
@@ -296,17 +333,24 @@ class Session:
         version = m["version"].rstrip(b"\0").decode("ascii", "replace")
 
         info = decode_info(*self.dev.op(INFO))
-        self.hand = info["hand_id"]
+        board_hand = info["hand_id"]
+        # The image's own hand picks the half: this one, or the other one through it (M2).
+        self.other = m["hand"] in HANDS and m["hand"] == board_hand ^ 1
+        self.hand = m["hand"] if self.other else board_hand
         if getattr(self.args, "halt", None) and not info["test_hooks"]:
             raise UpdaterError("--halt needs an SVAL_UPDATE_TEST_HOOKS build on the board")
+        if getattr(self.args, "halt", None) and self.other:
+            raise UpdaterError("--halt is for the half with USB only")
         print(f"board: {info['hand']} half, pointing {info['pointing']}, JEDEC {info['jedec']}, state {info['state']}, "
               f"status {info['status']}")
-        if m["hand"] != self.hand or m["pointing_id"] != info["pointing_id"]:
+        target = self.other_half(m) if self.other else info
+        if not self.other and (m["hand"] != self.hand or m["pointing_id"] != info["pointing_id"]):
             print(f"warning: image is for hand {m['hand']}, pointing {m['pointing_id']}; the board will refuse it")
-        if m["key_id"] == 0 and not info["test_key"]:
+        if m["key_id"] == 0 and not target["test_key"]:
             print("warning: image is signed with the TEST-ONLY key, which this build does not accept "
                   "(build with SVAL_UPDATE_TEST_KEY=yes); the board will refuse it")
-        print(f"image: {version!r} ({m['fw_version']}), {len(image)} B, key_id {m['key_id']}, flags {m['flags']:#x}")
+        print(f"image: {version!r} ({m['fw_version']}), {len(image)} B, key_id {m['key_id']}, flags {m['flags']:#x}"
+              + (f", for the other ({HANDS[self.hand]}) half" if self.other else ""))
 
         t_start = time.monotonic()
         blob = manifest + sig
@@ -320,10 +364,13 @@ class Session:
         self.renewed = time.monotonic()
         if r[4:8] != mhash:
             raise UpdaterError(f"ARM: board's manifest hash {r[4:8].hex()} differs from this file's {mhash.hex()}")
+        usb_half = info["hand"]
         print()
-        print(f"  MANIFEST HASH  {mhash.hex()}   ({version}, {len(image)} bytes)")
-        print("  Check this matches what you expect, then confirm on the keyboard: hold Index South + Middle South")
-        print("  for 1 second on this half (M and , on the right; C and V on the left). The LED blinks blue.")
+        print(f"  MANIFEST HASH  {mhash.hex()}   ({version}, {len(image)} bytes"
+              + (f", for the {HANDS[self.hand]} half without USB)" if self.other else ")"))
+        print(f"  Check this matches what you expect, then confirm on the keyboard: hold Index South + Middle South")
+        print(f"  for 1 second on the {usb_half} half, the one with USB (M and , on the right; C and V on the left).")
+        print("  The LED blinks blue.")
         print()
         self.poll(lambda s: s["chord_made"], "waiting for the chord", 35)
         print("chord recognised")
@@ -369,6 +416,8 @@ class Session:
         if self.args.no_commit:
             print("--no-commit: leaving the verified image staged (ABORT to clear the session)")
             return 0
+        if self.other:
+            return self.relay_and_commit(crc_body, m, confirm_other)
         if getattr(self.args, "halt", None):
             fed = not self.args.halt_unfed
             self.need("TEST_HALT", self.nonce_op(TEST_HALT, bytes([HALT_POINTS[self.args.halt], int(fed)])), OK)
@@ -382,6 +431,110 @@ class Session:
         print("committing: the board writes the new image and resets")
         return 0
 
+    # ---- the other half (M2) ----
+
+    def wait_presence(self, timeout):
+        """STATUS until split presence shows the other half (or timeout); returns the last STATUS."""
+        deadline = time.monotonic() + timeout
+        while True:
+            s = decode_status(*self.dev.op(STATUS, hand=self.hand))
+            if s["other_half_id"] != 0 or time.monotonic() >= deadline:
+                return s
+            time.sleep(0.25)
+
+    def other_half(self, m):
+        """The half without USB must answer presence as the same release or another version, and INFO."""
+        s = self.wait_presence(5)
+        if s["other_half_id"] not in (PRESENCE_MATCH, PRESENCE_VERSION):
+            raise UpdaterError(f"the other half: presence {s['other_half']}; it must be connected and run an "
+                               "SVAL_UPDATER build (if it does not answer, plug USB into it and copy the .uf2)")
+        st, r = self.dev.op(INFO, hand=self.hand)
+        if r[0] == 0xFF:
+            raise UpdaterError(f"the other half does not answer INFO ({status_name(st)})")
+        oi = decode_info(st, r)
+        print(f"other half: {oi['hand']}, pointing {oi['pointing']}, fw {oi['fw_version']}, state {oi['state']}, "
+              f"status {oi['status']}, presence {s['other_half']}")
+        if m["pointing_id"] != oi["pointing_id"]:
+            print(f"warning: image is for pointing {m['pointing_id']}, the other half has {oi['pointing_id']}; "
+                  "it will be refused")
+        return oi
+
+    def relay(self):
+        return decode_relay(*self.dev.op(RELAY, hand=self.hand))
+
+    def relay_and_commit(self, crc_body, m, confirm_other):
+        crc = struct.pack("<H", crc_body & 0xFFFF)
+        self.need("COMMIT (relay)", self.nonce_op(COMMIT, crc), ACCEPTED)
+        print("relaying to the other half, which checks the signature and the hash itself")
+        deadline = time.monotonic() + 180
+        last = None
+        while True:
+            self.maybe_renew()
+            rl = self.relay()
+            if rl["state_id"] == ST_ERROR:
+                s = self.status()
+                raise UpdaterError(f"relay: {s['last_error']} (relay {rl['phase']}, {rl['error']}; other half "
+                                   f"{rl['other_state']}, {rl['other_error']})")
+            if rl["state_id"] == ST_RELAYED:
+                break
+            if rl["state_id"] != ST_RELAYING:
+                raise UpdaterError(f"relay: unexpected state {rl['state']}")
+            if rl["phase_id"] == 4:
+                now = f"sending {rl['acked'] * 100 // max(rl['image_len'], 1) // 5 * 5}%"
+            elif rl["phase_id"] == 3 and rl["other_sectors_to_erase"]:
+                now = f"the other half erases ({rl['other_sectors_erased']}/{rl['other_sectors_to_erase']} sectors)"
+            elif rl["phase_id"] == 3:
+                now = "the other half checks the signature"
+            else:
+                now = rl["phase"]
+            if now != last:
+                print(f"  {now}")
+                last = now
+            if time.monotonic() > deadline:
+                raise UpdaterError(f"relay: no end in 180 s ({rl['phase']})")
+            time.sleep(0.2)
+        print("relayed: " + json.dumps(dict(relay_ms=rl["relay_ms"], retries=rl["retries"], bytes=rl["acked"])))
+        # No REBIND from here: in SUBSIDE_COMMITTING only INFO, STATUS and RELAY are answered.
+        self.need("COMMIT (other half)", self.nonce_op(COMMIT, crc), ACCEPTED)
+        print("the other half writes the image and resets; the split link stays paused meanwhile")
+        deadline = time.monotonic() + 30
+        while True:
+            s = self.status()
+            if s["state_id"] == ST_ERROR:
+                rl = self.relay()
+                raise UpdaterError(f"the other half's commit: {s['last_error']} (other half {rl['other_state']}, "
+                                   f"{rl['other_error']})")
+            if s["state_id"] == ST_IDLE:
+                break
+            if time.monotonic() > deadline:
+                raise UpdaterError(f"the other half's commit: no end in 30 s ({s['state']})")
+            time.sleep(0.2)
+        print("the other half took COMMIT")
+        self.nonce = None
+        if not confirm_other:
+            return 0
+        return self.confirm_other(m)
+
+    def confirm_other(self, m):
+        """Up to 10 s (after its reboot) for the other half to answer again; its version and presence."""
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            st, r = self.dev.op(INFO, hand=self.hand)
+            if r[0] != 0xFF:
+                seen = decode_info(st, r)["fw_version"]
+                s = decode_status(*self.dev.op(STATUS, hand=self.hand))
+                print(f"the other half answers again: fw {seen}, presence {s['other_half']}")
+                if seen != m["fw_version"]:
+                    print(f"warning: the image's manifest says fw {m['fw_version']} (until M3 a build reports the SVAL_FW_VERSION it was compiled with, which make_update.py does not set: build with EXTRAFLAGS=-DSVAL_FW_VERSION=N and make the image with --fw-version N)")
+                if s["other_half_id"] != PRESENCE_MATCH:
+                    print("note: the halves now run different releases, which is not supported (V): the half "
+                          "with USB blinks red until it is updated too (use pair)")
+                return 0
+            time.sleep(0.5)
+        print("warning: the other half did not answer within 10 s. A new release may only talk to a matching half: "
+              "update the half with USB too (pair). If it still does not answer, plug USB into it and copy the .uf2.")
+        return 4
+
     def abort(self):
         if self.nonce is not None:
             try:
@@ -389,6 +542,71 @@ class Session:
                 print(f"ABORT: {status_name(st)}", file=sys.stderr)
             except Exception as exc:  # the board may be gone
                 print(f"ABORT failed: {exc}", file=sys.stderr)
+
+
+def reopen(serial, timeout):
+    """The board again after it reset (USB comes back with the new firmware)."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return Device(serial)
+        except (RuntimeError, OSError, IOError):
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.5)
+
+
+def pair(dev, args, paths, sessions):
+    """Both halves: the other one through this one, then this one over USB; then presence must match (V)."""
+    images = []
+    for p in paths:
+        manifest, _, _ = make_update.parse_svup(Path(p).read_bytes())
+        images.append((Path(p), make_update.parse_manifest(manifest)))
+    board = decode_info(*dev.op(INFO))["hand_id"]
+    other = [(p, m) for p, m in images if m["hand"] == board ^ 1]
+    this = [(p, m) for p, m in images if m["hand"] == board]
+    if len(other) != 1 or len(this) != 1:
+        raise UpdaterError(f"pair needs one image for each half; this half is {HANDS.get(board, board)}, the images are for "
+                           + ", ".join(HANDS.get(m["hand"], str(m["hand"])) for _, m in images))
+    print(f"== 1/2: the other ({HANDS[board ^ 1]}) half, {other[0][0].name} ==")
+    sessions.append(Session(dev, args))
+    rc = sessions[-1].run(other[0][0], confirm_other=False)
+    if rc != 0:
+        return rc
+    # Straight on, without waiting to hear from the other half: it may not be
+    # able to talk to this half's old firmware (V).
+    print(f"== 2/2: this ({HANDS[board]}) half, {this[0][0].name} ==")
+    sessions.append(Session(dev, args))
+    rc = sessions[-1].run(this[0][0])
+    if rc != 0:
+        return rc
+    serial = dev.serial
+    dev.close()
+    print("waiting for the board to come back")
+    dev2 = reopen(serial, 30)
+    try:
+        t0 = time.monotonic()
+        deadline = t0 + 10
+        s = None
+        while time.monotonic() < deadline:
+            s = decode_status(*dev2.op(STATUS, hand=board))
+            if s["other_half_id"] == PRESENCE_MATCH:
+                break
+            time.sleep(0.5)
+        if s is None or s["other_half_id"] != PRESENCE_MATCH:
+            raise UpdaterError(f"presence did not show the same release on both halves within 10 s "
+                               f"({s['other_half'] if s else 'no STATUS'}); if the other half does not answer, "
+                               "plug USB into it and copy the .uf2")
+        mine = decode_info(*dev2.op(INFO))["fw_version"]
+        st, r = dev2.op(INFO, hand=board ^ 1)
+        theirs = decode_info(st, r)["fw_version"] if r[0] != 0xFF else None
+        print(f"pair: presence {s['other_half']} after {time.monotonic() - t0:.1f} s; this half fw {mine}, "
+              f"the other half fw {theirs}")
+        if mine != this[0][1]["fw_version"] or theirs != other[0][1]["fw_version"]:
+            print(f"warning: the manifests say fw {this[0][1]['fw_version']} and {other[0][1]['fw_version']} (until M3 a build reports the SVAL_FW_VERSION it was compiled with, which make_update.py does not set: build with EXTRAFLAGS=-DSVAL_FW_VERSION=N and make the image with --fw-version N)")
+        return 0
+    finally:
+        dev2.close()
 
 
 class Rejects:
@@ -518,8 +736,10 @@ def main():
     ap.add_argument("--serial", help="exact device serial from list")
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("list")
-    sub.add_parser("info")
+    inf = sub.add_parser("info")
+    inf.add_argument("--other", action="store_true", help="the other half, over the split link (M2)")
     sub.add_parser("status")
+    sub.add_parser("relay", help="the relay to the other half: phase and progress (M2)")
     dg = sub.add_parser("diag", help="stack never used since boot and the longest updater pass (M1 #13)")
     dg.add_argument("--clear", action="store_true", help="restart the longest-pass record after reading it")
     ab = sub.add_parser("abort", help="ABORT: clears a latched error from any client, or a session given its nonce")
@@ -536,21 +756,35 @@ def main():
     up.add_argument("--halt", choices=sorted(HALT_POINTS, key=HALT_POINTS.get),
                     help="test-hooks builds: stop the commit at this point for good (M1 #8-#10)")
     up.add_argument("--halt-unfed", action="store_true", help="with --halt: let the watchdog reset the board (M1 #9)")
+    pr = sub.add_parser("pair", help="update both halves: the other one through this one, then this one (M2)")
+    pr.add_argument("svup", type=Path, nargs=2, help="one image for each half, in any order")
+    pr.add_argument("--delay", type=float, default=0.0, help="seconds between chunks")
+    pr.add_argument("--rebind-every", type=float, default=50.0, help="renew the client ID and REBIND every S seconds (0: never)")
+    pr.add_argument("--keep", action="store_true", help="on failure, leave the session for inspection instead of ABORTing")
     args = ap.parse_args()
 
     if args.command == "list":
         print(json.dumps([{k: d.get(k) for k in ("serial_number", "product_string", "vendor_id", "product_id")} for d in devices()], indent=2))
         return 0
+    if args.command == "pair":
+        args.min_rebinds, args.no_commit, args.halt, args.halt_unfed = 0, False, None, False
     if args.command == "update" and args.halt_unfed and not args.halt:
         ap.error("--halt-unfed needs --halt")
     if args.command == "update" and args.delay >= 30:
         print("warning: --delay of 30 s or more lets the session time out", file=sys.stderr)
     dev = Device(args.serial)
     try:
-        if args.command == "info":
+        if args.command == "info" and not args.other:
             print(json.dumps(decode_info(*dev.op(INFO)), indent=2))
             return 0
         hand = decode_info(*dev.op(INFO))["hand_id"]
+        if args.command == "info":
+            st, r = dev.op(INFO, hand=hand ^ 1)
+            print(json.dumps(decode_info(st, r) if r[0] != 0xFF else dict(status=status_name(st), answer="none"), indent=2))
+            return 0 if st == OK else 1
+        if args.command == "relay":
+            print(json.dumps(decode_relay(*dev.op(RELAY, hand=hand)), indent=2))
+            return 0
         if args.command == "status":
             print(json.dumps(decode_status(*dev.op(STATUS, hand=hand)), indent=2))
             return 0
@@ -566,6 +800,15 @@ def main():
                 return Rejects(dev, args.svup).run()
             except (UpdaterError, ClientIdExpired, RuntimeError) as exc:
                 print(f"error: {exc}", file=sys.stderr)
+                return 1
+        if args.command == "pair":
+            sessions = []
+            try:
+                return pair(dev, args, args.svup, sessions)
+            except (UpdaterError, ClientIdExpired, RuntimeError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                if sessions and not args.keep:
+                    sessions[-1].abort()
                 return 1
         session = Session(dev, args)
         try:

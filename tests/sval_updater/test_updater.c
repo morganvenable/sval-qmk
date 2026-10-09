@@ -763,6 +763,9 @@ static void test_flash(void) {
 #    include "test_commit.c"
 #endif
 
+// M2: the relay to the other half and its session (update_split.c).
+#include "test_relay.c"
+
 #ifdef SVAL_UPDATER_HOST_LIB
 // Entry points for tests/sval_updater/test_sval_update_tool.py (ctypes).
 void host_lib_reset(int commit_available) {
@@ -792,12 +795,44 @@ int host_commit_runs(void) {
 uint32_t host_commit_crc(void) {
     return commit_crc;
 }
+// M2: the simulated other half (test_session.c). on: presence pings, a left
+// half with a TrackPoint on the same release; both halves "reset into" what
+// they commit.
+void host_lib_split(int on) {
+    presence_sim         = on != 0;
+    auto_shadow          = on != 0;
+    slave_commit_resets  = on != 0;
+    master_commit_resets = on != 0;
+    last_ping_us         = 0;
+}
+int host_slave_commits(void) {
+    return slave_commit_runs;
+}
+uint32_t host_slave_commit_crc(void) {
+    return slave_commit_crc;
+}
+int host_master_reboots(void) {
+    return master_reboots;
+}
+uint32_t host_slave_fw(void) {
+    return slave_id.fw_version;
+}
+uint32_t host_master_fw(void) {
+    return master_id.fw_version;
+}
+int host_slave_state(void) {
+    return update_split_slave_state();
+}
+int host_link_paused(void) {
+    return link_paused;
+}
 #else
 int main(int argc, char **argv) {
 #ifdef SVAL_TEST_REAL_COMMIT
     (void)argc;
     (void)argv;
     test_commit();
+    test_relay_real_commit();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 #endif
@@ -811,6 +846,7 @@ int main(int argc, char **argv) {
     test_flash();
     if (argc > 1) test_cross(argv[1]);
     test_session();
+    test_relay();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

@@ -94,6 +94,7 @@ typedef enum {
     UPDATE_OP_REBIND    = 0x09,
     UPDATE_OP_TEST_HALT = 0x0A, // SVAL_UPDATE_TEST_HOOKS builds only
     UPDATE_OP_DIAG      = 0x0B, // measurements for the hardware tests (M1 #13)
+    UPDATE_OP_RELAY     = 0x0C, // M2: progress of a relay to the other half
 } update_op_t;
 
 // ---- status codes ------------------------------------------------------------------
@@ -135,6 +136,12 @@ typedef enum {
     UPDATE_STATE_VERIFIED           = 7,
     UPDATE_STATE_COMMITTING         = 8,
     UPDATE_STATE_ERROR              = 9,
+    // M2, a session for the other half (hand = the other side), on the half
+    // with USB only. The image is staged and verified here first (states 1-7),
+    // then:
+    UPDATE_STATE_RELAYING           = 10, // COMMIT accepted: relaying to the other half, which checks it itself
+    UPDATE_STATE_RELAYED            = 11, // the other half holds the image, verified; waiting for COMMIT
+    UPDATE_STATE_SUBSIDE_COMMITTING = 12, // the other half is committing; the link stays paused (R18)
 } update_state_t;
 
 // ---- the other half, as split presence shows it (M2, D17, V) -------------------------

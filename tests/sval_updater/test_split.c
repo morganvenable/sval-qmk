@@ -1,10 +1,11 @@
 // Copyright 2026 Morgan Venable
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Host tests for the updater's split link (M2a stage 1): the split pause
+// Host tests for the updater's split link layer: the split pause
 // (keyboards/svalboard/split_pause.c, D15), the KEYBOARD_UPDATE wire format and
-// page assembly (update_split_wire.c), presence with version and the mismatch
-// rules (D17, V), and the slave's request handler (update_split.c). Built by
+// page assembly, and presence with version and the mismatch rules (D17, V), all
+// in update_split_wire.c. The other half's session, its request handler and
+// the relay (update_split.c) are in test_relay.c. Built by
 // util/updater_test/run.sh under ASan and UBSan.
 
 #include <stdio.h>
@@ -12,7 +13,7 @@
 #include <string.h>
 #include "split_pause_host.h"
 #include "split_pause.h"
-#include "update_split.h"
+#include "update_split_wire.h"
 
 static int checks, failures;
 
@@ -229,24 +230,9 @@ static void test_pause(void) {
     pause_fresh();
 }
 
-// ---- update_split.c port --------------------------------------------------------------
+// ---- checksums and the git hash ---------------------------------------------------------
 
 static update_build_id_t my_id = {.fw_version = 2001, .git_hash = 0x3b2ca7e1, .git_dirty = false, .updater_proto = UPDATE_PROTOCOL_VERSION, .hand = UPDATE_HAND_RIGHT, .pointing_id = UPDATE_POINTING_PMW3389};
-static bool              port_updating;
-static int               port_info_calls;
-
-void update_split_port_build_id(update_build_id_t *id) {
-    *id = my_id;
-}
-uint8_t update_split_port_info_flags(void) {
-    port_info_calls++;
-    return 0x11;
-}
-bool update_split_port_updating(void) {
-    return port_updating;
-}
-
-// ---- checksums and the git hash ---------------------------------------------------------
 
 static void test_checks(void) {
     const uint8_t v[] = "123456789";
@@ -267,7 +253,6 @@ static void test_checks(void) {
 // ---- presence --------------------------------------------------------------------------
 
 static void test_presence(void) {
-    update_split_host_reset();
     CHECK_EQ(sizeof(update_presence_t), 17); // sizeof(presence_rpc_t), what the master reads
     update_build_id_t other = my_id;
     other.hand              = UPDATE_HAND_LEFT;
@@ -314,42 +299,8 @@ static void test_presence(void) {
     usplit_presence_encode(&p, &o, true);
     CHECK_EQ(p.flags, UPDATE_PRESENCE_FLAG_DIRTY | UPDATE_PRESENCE_FLAG_UPDATING);
     CHECK_EQ(usplit_presence_compare(&p, sizeof(p), &my_id, NULL), UPDATE_PRESENCE_MATCH);
-
-    // The slave fills the RPC response; the master reads it back.
-    uint8_t out[32];
-    memset(out, 0xEE, sizeof(out));
-    update_split_presence_fill(out, 16); // too short: untouched
-    for (int i = 0; i < 32; i++) CHECK_EQ(out[i], 0xEE);
-    port_updating = true;
-    update_split_presence_fill(out, 17);
-    port_updating = false;
-    for (int i = 17; i < 32; i++) CHECK_EQ(out[i], 0xEE); // nothing past the response
-    memcpy(&p, out, sizeof(p));
-    CHECK_EQ(p.flags, UPDATE_PRESENCE_FLAG_UPDATING);
-    CHECK_EQ(p.hand, my_id.hand);
-    // (a slave built for this same hand: the master sees SAME_HAND)
-    CHECK_EQ(update_split_presence(), UPDATE_PRESENCE_NONE);
-    CHECK(!update_split_mismatch());
-    update_split_presence_result(true, out, 17);
-    CHECK_EQ(update_split_presence(), UPDATE_PRESENCE_SAME_HAND);
-    CHECK(update_split_mismatch());
-    usplit_presence_encode(&p, &other, false);
-    update_split_presence_result(true, &p, 17);
-    CHECK_EQ(update_split_presence(), UPDATE_PRESENCE_MATCH);
-    CHECK(!update_split_mismatch());
-    update_split_presence_result(true, zeros, 17);
-    CHECK_EQ(update_split_presence(), UPDATE_PRESENCE_INVALID);
-    CHECK(update_split_mismatch());
-    update_split_presence_result(false, NULL, 0); // no answer: nothing to compare, no LED
-    CHECK_EQ(update_split_presence(), UPDATE_PRESENCE_NONE);
-    CHECK(!update_split_mismatch());
-    o = other;
-    o.fw_version = 2002;
-    usplit_presence_encode(&p, &o, false);
-    update_split_presence_result(true, &p, 17);
-    CHECK_EQ(update_split_presence(), UPDATE_PRESENCE_VERSION);
-    CHECK(update_split_mismatch());
 }
+
 
 // ---- KEYBOARD_UPDATE frames ------------------------------------------------------------
 
@@ -496,154 +447,12 @@ static void test_pages(void) {
     CHECK_EQ(usplit_pages_accept(&a, 0, img, 24, &done), UPDATE_OVERRUN);
 }
 
-// ---- the slave's handler ----------------------------------------------------------------
-
-static uint8_t seq;
-
-// One RPC: request frame in, response checked against (op, seq).
-static update_status_t rpc(uint8_t *req, uint8_t req_len, usplit_rsp_t *rs, uint8_t *out) {
-    uint8_t op = req[0], s = req[1];
-    memset(out, 0xEE, 40);
-    update_split_slave_rpc(req, req_len, out, USPLIT_MSG_MAX);
-    for (int i = USPLIT_MSG_MAX; i < 40; i++) CHECK_EQ(out[i], 0xEE); // never past out_len
-    return usplit_rsp_parse(out, usplit_rsp_len(op), op, s, rs);
-}
-
-static void test_slave(void) {
-    update_split_host_reset();
-    uint8_t      req[USPLIT_MSG_MAX], out[40], data[26] = {0};
-    usplit_rsp_t rs;
-    uint8_t      len;
-
-    // INFO: this half's build, the INFO flags.
-    len = usplit_req_build(req, USPLIT_OP_INFO, ++seq, NULL, 0);
-    port_info_calls = 0;
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(rs.status, UPDATE_OK);
-    CHECK_EQ(rs.state, UPDATE_STATE_IDLE);
-    CHECK_EQ(rs.payload[0], UPDATE_PROTOCOL_VERSION);
-    CHECK_EQ(rs.payload[1], UPDATE_HAND_RIGHT);
-    CHECK_EQ(rs.payload[2], UPDATE_POINTING_PMW3389);
-    CHECK_EQ(rs.payload[3] | rs.payload[4] << 8 | rs.payload[5] << 16 | (uint32_t)rs.payload[6] << 24, 2001);
-    CHECK_EQ(rs.payload[7] | rs.payload[8] << 8 | rs.payload[9] << 16 | (uint32_t)rs.payload[10] << 24, 0x3b2ca7e1);
-    CHECK_EQ(rs.payload[11], SVAL_UPDATE_STORAGE_FORMAT);
-    CHECK_EQ(rs.payload[12] | rs.payload[13] << 8, SVAL_UPDATE_SECURITY_EPOCH);
-    CHECK_EQ(rs.payload[14], 0x11);
-    CHECK_EQ(port_info_calls, 1);
-    // The same frame again (its answer was lost): the cached answer, not run again.
-    uint8_t first[USPLIT_MSG_MAX];
-    memcpy(first, out, USPLIT_MSG_MAX);
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK(memcmp(first, out, USPLIT_MSG_MAX) == 0);
-    CHECK_EQ(port_info_calls, 1);
-    // A new seq runs again.
-    len = usplit_req_build(req, USPLIT_OP_INFO, ++seq, NULL, 0);
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(port_info_calls, 2);
-
-    // STATUS and ABORT.
-    len = usplit_req_build(req, USPLIT_OP_STATUS, ++seq, NULL, 0);
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK(rs.status == UPDATE_OK && rs.payload_len == USPLIT_STATUS_PAYLOAD && rs.payload[0] == UPDATE_OK);
-    len = usplit_req_build(req, USPLIT_OP_ABORT, ++seq, NULL, 0);
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(rs.status, UPDATE_OK);
-
-    // Stage 1: BEGIN, PAGE, END and COMMIT are checked, then refused; nothing changes.
-    len = usplit_req_begin(req, ++seq, 0, data, 26);
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(rs.status, UPDATE_UNSUPPORTED);
-    len = usplit_req_page(req, ++seq, 0, data, 24);
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(rs.status, UPDATE_UNSUPPORTED);
-    len = usplit_req_build(req, USPLIT_OP_END, ++seq, NULL, 0);
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(rs.status, UPDATE_UNSUPPORTED);
-    len = usplit_req_commit(req, ++seq, 0x1234);
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(rs.status, UPDATE_UNSUPPORTED);
-    CHECK_EQ(update_split_slave_state(), UPDATE_STATE_IDLE);
-
-    // Same seq, different bytes (a new request that reused the seq): runs.
-    len = usplit_req_build(req, USPLIT_OP_INFO, seq, NULL, 0);
-    port_info_calls = 0;
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(port_info_calls, 1);
-
-    // A corrupted frame: answered INVALID (op and seq echoed, so the master
-    // can tell), never cached, and the good retry with the same seq then runs.
-    len = usplit_req_build(req, USPLIT_OP_INFO, ++seq, NULL, 0);
-    req[len - 1] ^= 1;
-    port_info_calls = 0;
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(rs.status, UPDATE_INVALID);
-    CHECK_EQ(port_info_calls, 0);
-    req[len - 1] ^= 1;
-    CHECK_EQ(rpc(req, len, &rs, out), UPDATE_OK);
-    CHECK_EQ(rs.status, UPDATE_OK);
-    CHECK_EQ(port_info_calls, 1);
-    // A PAGE that breaks the rules (crosses a page) with a good CRC: INVALID.
-    uint8_t pl[4 + 17] = {0xF0, 0, 0, 17};
-    uint8_t f[USPLIT_MSG_MAX] = {USPLIT_OP_PAGE, ++seq};
-    memcpy(f + 2, pl, sizeof(pl));
-    uint16_t crc = usplit_crc16(f, 2 + sizeof(pl));
-    f[2 + sizeof(pl)]     = crc & 0xFF;
-    f[2 + sizeof(pl) + 1] = crc >> 8;
-    CHECK_EQ(rpc(f, (uint8_t)(4 + sizeof(pl)), &rs, out), UPDATE_OK);
-    CHECK_EQ(rs.status, UPDATE_INVALID);
-
-    // An unknown op, or a frame too short to name one: nothing but zeros back.
-    uint8_t u[4] = {0x7F, 1, 0, 0};
-    crc  = usplit_crc16(u, 2);
-    u[2] = crc & 0xFF;
-    u[3] = crc >> 8;
-    memset(out, 0xEE, sizeof(out));
-    update_split_slave_rpc(u, 4, out, USPLIT_MSG_MAX);
-    for (int i = 0; i < USPLIT_MSG_MAX; i++) CHECK_EQ(out[i], 0);
-    update_split_slave_rpc(u, 0, out, USPLIT_MSG_MAX);
-    for (int i = 0; i < USPLIT_MSG_MAX; i++) CHECK_EQ(out[i], 0);
-    // An out buffer shorter than the response: zeros, never past it.
-    len = usplit_req_build(req, USPLIT_OP_INFO, ++seq, NULL, 0);
-    memset(out, 0xEE, sizeof(out));
-    update_split_slave_rpc(req, len, out, 8);
-    for (int i = 0; i < 8; i++) CHECK_EQ(out[i], 0);
-    for (int i = 8; i < 40; i++) CHECK_EQ(out[i], 0xEE);
-
-    // Random frames of every length: no crash, no write past out_len (ASan),
-    // and every answer is either zeros or a well-formed response.
-    uint32_t rng = 1;
-    for (int t = 0; t < 20000; t++) {
-        uint8_t in[USPLIT_MSG_MAX];
-        uint8_t l = (uint8_t)(t % (USPLIT_MSG_MAX + 1));
-        for (int i = 0; i < l; i++) {
-            rng   = rng * 1103515245u + 12345u;
-            in[i] = (uint8_t)(rng >> 16);
-        }
-        if (l >= 1 && t % 3 == 0) in[0] %= USPLIT_OP_COUNT; // mostly known ops
-        if (l >= 4 && t % 2 == 0) {                         // half with a good CRC
-            uint16_t c  = usplit_crc16(in, l - 2);
-            in[l - 2]   = c & 0xFF;
-            in[l - 1]   = c >> 8;
-        }
-        uint8_t o[USPLIT_MSG_MAX];
-        update_split_slave_rpc(in, l, o, USPLIT_MSG_MAX);
-        bool zero = true;
-        for (int i = 0; i < USPLIT_MSG_MAX; i++) zero &= o[i] == 0;
-        if (!zero) {
-            CHECK(l >= 2 && o[1] < USPLIT_OP_COUNT);
-            if (l >= 2 && o[1] < USPLIT_OP_COUNT) CHECK_EQ(usplit_rsp_parse(o, usplit_rsp_len(o[1]), o[1], o[2], &rs), UPDATE_OK);
-        }
-    }
-    CHECK_EQ(update_split_slave_state(), UPDATE_STATE_IDLE);
-}
-
 int main(void) {
     test_pause();
     test_checks();
     test_presence();
     test_wire();
     test_pages();
-    test_slave();
     printf("split tests: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

@@ -10,8 +10,9 @@
 // packet with value_data rewritten; value_data[0] is always an update_status_t.
 // Every op but INFO needs the client wrapper (UPDATE_INVALID otherwise, with no
 // state change), and every request starts with [hand]: this half's
-// (UPDATE_HAND_*), else UPDATE_UNSUPPORTED, since M1 has no split relay. INFO
-// also takes hand 0xFF for "this half". Multi-byte fields are little-endian.
+// (UPDATE_HAND_*), or the other half's (M2: see "The other half" below), else
+// UPDATE_UNSUPPORTED. INFO also takes hand 0xFF for "this half". Multi-byte
+// fields are little-endian.
 //
 //  op           request after [hand]             reply after [status]
 //  0x00 INFO     -                               state, protocol, slot base/4K u16, slot size/4K u16,
@@ -44,9 +45,38 @@
 //                                                size u16; longest updater_task() pass ms u16 and the
 //                                                state it began in u8. clear 1 restarts the pass
 //                                                maximum after replying. Any wrapped client (M1 #13).
+//  0x0C RELAY    -                               M2: the relay to the other half (update_split.h): phase
+//                                                (relay_phase_t), the other half's state and last error,
+//                                                bytes it acknowledged u24, image_len u24, its sectors
+//                                                erased u16 and to erase u16, retries u16, relay ms u32,
+//                                                flags (bit0 the link is paused), the relay's error, this
+//                                                half's session state. Any hand.
 //
 // The image CRC is CRC-32/MPEG-2 over image bytes [0x100, image_len): the
 // range the commit checks after copying (page 0 is written last).
+//
+// The other half (M2, store and forward, D14). With hand = the other side,
+// MANIFEST starts a session for the other half, on this half (the one with
+// USB, where the chord is made, D4). ARM checks the manifest against the
+// other half's side and pointing device by split presence (which must answer
+// MATCH or VERSION, else UNAVAILABLE) and this build's floors; BEGIN, CHUNK and
+// END stage and verify the image in this half's slot exactly as for this half.
+// Then:
+//   COMMIT in VERIFIED  -> RELAYING: the image goes to the other half from this
+//                          slot, which checks the signature and hash itself (D7)
+//   (relay done)        -> RELAYED: the other half holds the image, verified
+//   COMMIT in RELAYED   -> SUBSIDE_COMMITTING: the other half commits; the link
+//                          stays paused through its reset (R18); then IDLE
+// Both COMMITs carry the nonce and the image CRC. ABORT stops a relay up to the
+// second COMMIT. A relay failure latches ERROR with its status (UNAVAILABLE:
+// the other half stopped answering). While a session for one hand runs, the
+// session ops for the other hand get BUSY. INFO with the other hand asks the
+// other half (KEYBOARD_UPDATE INFO): the reply has INFO's layout with that
+// half's state, protocol, pointing ID, hand, fw version, storage format, epoch
+// and flags bits 0-4, no JEDEC ID (zeros) and no last error; with no answer it
+// is UNAVAILABLE with state 0xFF (as Scan Lab's relay). This half never
+// commits an image for the other hand: the session never reaches COMMITTING,
+// and the commit's step 0 would refuse its hand anyway.
 //
 // Sessions. MANIFEST from any wrapped client starts loading and ties the load
 // to that client. ARM, from the same client with all 172 bytes, checks the
@@ -80,6 +110,7 @@
 #include "update_gesture.h"
 #include "update_led.h"
 #include "update_commit.h"
+#include "update_split.h"
 #include "optional/monocypher-ed25519.h"
 
 #ifdef SVAL_UPDATER_HOST_TEST
@@ -113,6 +144,8 @@ typedef struct {
     uint32_t        work_ms; // start of image verify
     uint16_t        sig_ms, verify_ms, erase_ms_max;
     uint32_t        commit_due_ms;
+    bool            relay; // a session for the other half (M2)
+    update_device_t dev;   // relay: the other half, as ARM checked the manifest against it
 } session_t;
 
 static session_t         s;
@@ -164,7 +197,14 @@ static uint8_t self_hand(void) {
     return dev.hand;
 }
 
+// A relay to the other half stops with its session; once its COMMIT is out
+// the relay runs on by itself to the end of the hold (update_relay_abort).
+static void stop_relay(void) {
+    if (s.relay) update_relay_abort();
+}
+
 static void reset_session(void) {
+    stop_relay();
     update_gesture_disarm();
 #ifdef SVAL_UPDATE_TEST_HOOKS
     update_commit_test_halt(UPDATE_HALT_NONE, false);
@@ -175,10 +215,26 @@ static void reset_session(void) {
 }
 
 static update_status_t fail(update_status_t status) {
+    stop_relay();
     update_gesture_disarm();
     s.state      = UPDATE_STATE_ERROR;
     s.last_error = status;
     return status;
+}
+
+// The other half, for a session with its hand: its side and pointing device
+// by split presence, this build's floors (both halves run the same release,
+// V; the other half checks the manifest again itself, D7). Only a half that
+// answers presence as MATCH or VERSION can be updated through this one.
+static update_status_t other_device(update_device_t *dev) {
+    update_presence_t p;
+    uint8_t           st = update_split_other(&p);
+    if (st != UPDATE_PRESENCE_MATCH && st != UPDATE_PRESENCE_VERSION) return UPDATE_UNAVAILABLE;
+    update_device_self(dev);
+    if (p.hand == dev->hand) return UPDATE_UNAVAILABLE;
+    dev->hand        = p.hand;
+    dev->pointing_id = p.pointing_id;
+    return UPDATE_OK;
 }
 
 // The bound session, by client ID and (when given) nonce.
@@ -225,11 +281,37 @@ static update_status_t op_info(uint8_t *rsp) {
     return die_ok && !failing ? UPDATE_OK : UPDATE_UNAVAILABLE;
 }
 
-static update_status_t manifest_load(uint32_t client, const uint8_t *req) {
+// INFO for the other half, from it over KEYBOARD_UPDATE (see the top of this file).
+static update_status_t op_info_other(uint8_t *rsp) {
+    uint8_t         pl[USPLIT_INFO_PAYLOAD], state = 0;
+    update_status_t st = update_split_other_info(pl, &state);
+    if (st != UPDATE_OK) {
+        rsp[1] = 0xFF; // no answer
+        return st;
+    }
+    rsp[1] = state;
+    rsp[2] = pl[0];
+    put16(&rsp[3], SVAL_UPDATE_BASE / UPDATE_FLASH_SECTOR); // the same release on both halves (V)
+    put16(&rsp[5], SVAL_UPDATE_SIZE / UPDATE_FLASH_SECTOR);
+    put16(&rsp[7], SVAL_UPDATE_MAX_IMAGE / UPDATE_FLASH_SECTOR);
+    rsp[12] = pl[2];
+    rsp[13] = pl[1];
+    memcpy(&rsp[14], &pl[3], 4);
+    rsp[18] = pl[11];
+    memcpy(&rsp[19], &pl[12], 2);
+    rsp[21] = (pl[14] & 0x1F) | (split_mismatch() ? 0x20 : 0);
+    return (pl[14] & 0x01) && !(pl[14] & 0x02) ? UPDATE_OK : UPDATE_UNAVAILABLE;
+}
+
+static update_status_t manifest_load(uint32_t client, const uint8_t *req, bool to_other) {
     uint8_t off = req[1], n = req[2];
     if (s.state != UPDATE_STATE_IDLE && s.state != UPDATE_STATE_MANIFEST_LOADING) return UPDATE_BUSY;
     if (s.state == UPDATE_STATE_MANIFEST_LOADING && client != s.client) return UPDATE_OTHER_CLIENT;
     if (!update_flash_available()) return UPDATE_UNAVAILABLE;
+    if (to_other) {
+        update_device_t dev;
+        if (other_device(&dev) != UPDATE_OK) return UPDATE_UNAVAILABLE; // the other half must answer presence
+    }
     if (n == 0 || n > MANIFEST_DATA_MAX || off + n > UPDATE_SIGNED_MANIFEST_BYTES) return UPDATE_INVALID;
     // In order; offset 0 starts the load again.
     if (off != 0 && (s.state == UPDATE_STATE_IDLE || off != s.filled)) return UPDATE_OUT_OF_ORDER;
@@ -237,6 +319,7 @@ static update_status_t manifest_load(uint32_t client, const uint8_t *req) {
         reset_session();
         s.state  = UPDATE_STATE_MANIFEST_LOADING;
         s.client = client;
+        s.relay  = to_other;
     }
     memcpy(signed_manifest + off, &req[3], n);
     s.filled = off + n;
@@ -244,8 +327,8 @@ static update_status_t manifest_load(uint32_t client, const uint8_t *req) {
     return UPDATE_OK;
 }
 
-static update_status_t op_manifest(uint32_t client, const uint8_t *req, uint8_t *rsp) {
-    update_status_t st = manifest_load(client, req);
+static update_status_t op_manifest(uint32_t client, const uint8_t *req, uint8_t *rsp, bool to_other) {
+    update_status_t st = manifest_load(client, req, to_other);
     rsp[1]             = s.state == UPDATE_STATE_MANIFEST_LOADING ? s.filled : 0;
     return st;
 }
@@ -264,10 +347,15 @@ static update_status_t op_arm(uint32_t client, uint8_t *rsp) {
     // The fields now, so the user is never asked to approve an image this half
     // would refuse; the signature waits for BEGIN (it is the slow part).
     update_device_t dev;
-    update_device_self(&dev);
+    if (s.relay) {
+        if (other_device(&dev) != UPDATE_OK) return UPDATE_UNAVAILABLE; // refused: nothing changes
+    } else {
+        update_device_self(&dev);
+    }
     update_status_t st = update_manifest_check(MANIFEST, &dev);
     if (st != UPDATE_OK) return fail(st);
 
+    s.dev       = dev;
     s.image_len = MANIFEST->image_len;
     s.nonce     = updater_port_random32();
     s.bound     = true;
@@ -357,9 +445,26 @@ static update_status_t op_status(uint32_t client, uint8_t *rsp) {
     return UPDATE_OK;
 }
 
+// COMMIT in a session for the other half: the relay, then its commit.
+static update_status_t relay_commit(const uint8_t *req) {
+    if (s.state != UPDATE_STATE_VERIFIED && s.state != UPDATE_STATE_RELAYED) return UPDATE_INVALID;
+    if (get16(&req[5]) != (s.crc_body & 0xFFFF)) return UPDATE_BAD_HASH; // not the image that was verified
+    if (s.state == UPDATE_STATE_VERIFIED) {
+        // Staged and verified here; now from this slot to the other half. The
+        // link pauses at once; refused (still VERIFIED) if it is down.
+        if (!update_relay_start(signed_manifest, s.image_len, s.crc_body)) return UPDATE_UNAVAILABLE;
+        s.state = UPDATE_STATE_RELAYING;
+        return UPDATE_ACCEPTED;
+    }
+    if (!update_relay_commit()) return UPDATE_UNAVAILABLE;
+    s.state = UPDATE_STATE_SUBSIDE_COMMITTING;
+    return UPDATE_ACCEPTED;
+}
+
 static update_status_t op_commit(uint32_t client, const uint8_t *req) {
     update_status_t st = session(client, &req[1]);
     if (st != UPDATE_OK) return st;
+    if (s.relay) return relay_commit(req);
     if (s.state != UPDATE_STATE_VERIFIED) return UPDATE_INVALID;
     if (get16(&req[5]) != (s.crc_body & 0xFFFF)) return UPDATE_BAD_HASH; // not the image that was verified
     if (updater_port_settings_failing()) return UPDATE_UNAVAILABLE;
@@ -392,7 +497,7 @@ static update_status_t op_abort(uint32_t client, const uint8_t *req) {
 static update_status_t op_test_halt(uint32_t client, const uint8_t *req) {
     update_status_t st = session(client, &req[1]);
     if (st != UPDATE_OK) return st;
-    if (s.state != UPDATE_STATE_VERIFIED) return UPDATE_INVALID;
+    if (s.state != UPDATE_STATE_VERIFIED || s.relay) return UPDATE_INVALID;
     return update_commit_test_halt(req[5], req[6] != 0) ? UPDATE_OK : UPDATE_INVALID;
 }
 #endif
@@ -462,6 +567,30 @@ static update_status_t op_diag(const uint8_t *req, uint8_t *rsp) {
     return UPDATE_OK;
 }
 
+static update_status_t op_relay(uint32_t client, uint8_t *rsp) {
+    update_relay_info_t ri;
+    update_relay_info(&ri);
+    if (s.state != UPDATE_STATE_IDLE && client == s.client) s.op_ms = now_ms;
+    rsp[1] = ri.phase;
+    rsp[2] = ri.slave_state;
+    rsp[3] = ri.slave_error;
+    put24(&rsp[4], ri.acked);
+    put24(&rsp[7], ri.image_len);
+    put16(&rsp[10], ri.slave_erased);
+    put16(&rsp[12], ri.slave_to_erase);
+    put16(&rsp[14], ri.retries);
+    put32(&rsp[16], ri.elapsed_ms);
+    rsp[20] = ri.paused ? 0x01 : 0;
+    rsp[21] = ri.error;
+    rsp[22] = s.state;
+    return UPDATE_OK;
+}
+
+// The ops that act on a session for one hand (MANIFEST starts one).
+static bool session_op(uint8_t op) {
+    return op == UPDATE_OP_MANIFEST || op == UPDATE_OP_ARM || op == UPDATE_OP_BEGIN || op == UPDATE_OP_CHUNK || op == UPDATE_OP_END || op == UPDATE_OP_COMMIT || op == UPDATE_OP_TEST_HALT;
+}
+
 static update_status_t op_rebind(uint32_t client, const uint8_t *req) {
     if (!s.bound) return UPDATE_INVALID;
     if (get32(&req[1]) != s.nonce) return UPDATE_OTHER_CLIENT;
@@ -491,14 +620,22 @@ void updater_via_command(uint8_t *data, uint8_t length) {
 #else
     const bool test_halt_op = op == UPDATE_OP_TEST_HALT; // not in this build
 #endif
-    if (op > UPDATE_OP_DIAG || test_halt_op) {
+    uint8_t me       = self_hand();
+    bool    to_other = req[0] == (me ^ 1);
+    if (op > UPDATE_OP_RELAY || test_halt_op) {
         st = UPDATE_INVALID;
     } else if (op != UPDATE_OP_INFO && !wrapped) {
         st = UPDATE_INVALID; // unwrapped VIA reaches here too (sval.c); only INFO is open
-    } else if (req[0] != self_hand() && !(op == UPDATE_OP_INFO && req[0] == HAND_SELF)) {
-        st = UPDATE_UNSUPPORTED; // the other half: M2
-    } else if (s.state == UPDATE_STATE_COMMITTING && op != UPDATE_OP_INFO && op != UPDATE_OP_STATUS) {
+    } else if (req[0] != me && !to_other && !(op == UPDATE_OP_INFO && req[0] == HAND_SELF)) {
+        st = UPDATE_UNSUPPORTED;
+    } else if (to_other && (op == UPDATE_OP_TEST_HALT || op == UPDATE_OP_DIAG)) {
+        st = UPDATE_UNSUPPORTED; // this half's only
+    } else if ((s.state == UPDATE_STATE_COMMITTING || s.state == UPDATE_STATE_SUBSIDE_COMMITTING) && op != UPDATE_OP_INFO && op != UPDATE_OP_STATUS && op != UPDATE_OP_RELAY) {
         st = UPDATE_BUSY;
+    } else if (s.state != UPDATE_STATE_IDLE && session_op(op) && to_other != s.relay) {
+        st = UPDATE_BUSY; // a session for the other hand is running
+    } else if (op == UPDATE_OP_INFO && to_other) {
+        st = op_info_other(rsp); // M2: the other half answers
     } else {
         crumb_op(op, 0xFF); // 0xFF: inside the op
         switch (op) {
@@ -506,7 +643,7 @@ void updater_via_command(uint8_t *data, uint8_t length) {
                 st = op_info(rsp);
                 break;
             case UPDATE_OP_MANIFEST:
-                st = op_manifest(client, req, rsp);
+                st = op_manifest(client, req, rsp, to_other);
                 break;
             case UPDATE_OP_ARM:
                 st = op_arm(client, rsp);
@@ -537,6 +674,9 @@ void updater_via_command(uint8_t *data, uint8_t length) {
             case UPDATE_OP_DIAG:
                 st = op_diag(req, rsp);
                 break;
+            case UPDATE_OP_RELAY:
+                st = op_relay(client, rsp);
+                break;
             default: // UPDATE_OP_REBIND
                 st = op_rebind(client, req);
                 break;
@@ -552,7 +692,11 @@ void updater_via_command(uint8_t *data, uint8_t length) {
 
 static void verify_manifest(void) {
     update_device_t dev;
-    update_device_self(&dev);
+    if (s.relay) {
+        dev = s.dev; // the other half, as ARM found it
+    } else {
+        update_device_self(&dev);
+    }
     uint32_t        t0 = updater_port_now_ms();
     update_status_t st = update_manifest_check(MANIFEST, &dev);
     if (st == UPDATE_OK) st = update_manifest_signature(signed_manifest); // ~1.9 KiB of stack, one call
@@ -621,6 +765,19 @@ static update_led_mode_t led_mode(void) {
     uint32_t done_ms;
     switch (s.state) {
         case UPDATE_STATE_IDLE:
+            // The half without USB, in a session from the other half: the same
+            // colours (D24); back to normal when it ends or times out.
+            switch (update_split_slave_state()) {
+                case UPDATE_STATE_IDLE:
+                    break;
+                case UPDATE_STATE_ERROR:
+                    return UPDATE_LED_ERROR;
+                case UPDATE_STATE_COMMITTING:
+                    return UPDATE_LED_WRITING;
+                default:
+                    return UPDATE_LED_PROGRESS;
+            }
+            return split_mismatch() ? UPDATE_LED_ERROR : UPDATE_LED_NONE;
         case UPDATE_STATE_MANIFEST_LOADING:
             // A version mismatch with the other half shows the red error LED
             // on the half with USB until it is fixed (V).
@@ -628,7 +785,11 @@ static update_led_mode_t led_mode(void) {
         case UPDATE_STATE_ERROR:
             return UPDATE_LED_ERROR;
         case UPDATE_STATE_COMMITTING:
+        case UPDATE_STATE_SUBSIDE_COMMITTING:
             return UPDATE_LED_WRITING;
+        case UPDATE_STATE_RELAYING:
+        case UPDATE_STATE_RELAYED:
+            return UPDATE_LED_PROGRESS;
         default:
             break;
     }
@@ -645,7 +806,13 @@ void updater_task(void) {
     now_ms                 = updater_port_now_ms();
     uint32_t       pass_t0 = now_ms;
     update_state_t pass_st = s.state;
-    if (s.state >= UPDATE_STATE_MANIFEST_LOADING && s.state <= UPDATE_STATE_VERIFIED && now_ms - s.op_ms >= SVAL_UPDATE_SESSION_TIMEOUT_MS) {
+    // The relay (M2) runs before the session looks at it; once its COMMIT is
+    // out it runs to the end of its hold even if the session went away.
+    update_relay_task();
+    now_ms         = updater_port_now_ms();
+    bool hostbound = (s.state >= UPDATE_STATE_MANIFEST_LOADING && s.state <= UPDATE_STATE_VERIFIED) || s.state == UPDATE_STATE_RELAYING || s.state == UPDATE_STATE_RELAYED;
+    if (hostbound && now_ms - s.op_ms >= SVAL_UPDATE_SESSION_TIMEOUT_MS) {
+        // A host that went away before the other half's COMMIT stops the relay (D23).
         // A half-sent manifest was never shown to the user: just drop it.
         if (s.state == UPDATE_STATE_MANIFEST_LOADING) {
             reset_session();
@@ -667,7 +834,27 @@ void updater_task(void) {
         case UPDATE_STATE_VERIFYING_IMAGE:
             verify_image_step();
             break;
+        case UPDATE_STATE_RELAYING:
+        case UPDATE_STATE_RELAYED:
+        case UPDATE_STATE_SUBSIDE_COMMITTING: {
+            update_relay_info_t ri;
+            update_relay_info(&ri);
+            if (ri.phase == RELAY_FAILED) {
+                fail(ri.error);
+            } else if (s.state == UPDATE_STATE_RELAYING && ri.phase == RELAY_VERIFIED) {
+                s.state = UPDATE_STATE_RELAYED;
+            } else if (s.state == UPDATE_STATE_SUBSIDE_COMMITTING && ri.phase == RELAY_DONE) {
+                reset_session(); // the other half took COMMIT and reset (or never answered again: V)
+            } else if (ri.phase == RELAY_IDLE || ri.phase == RELAY_DONE) {
+                fail(UPDATE_INVALID); // cannot happen: the relay ended outside its session
+            }
+            break;
+        }
         case UPDATE_STATE_COMMITTING:
+            if (s.relay) {
+                fail(UPDATE_INVALID); // cannot happen: never this half's commit for the other hand's image
+                break;
+            }
             if ((int32_t)(now_ms - s.commit_due_ms) >= 0) {
                 // Image bytes in RAM are cleared before the reset (commit step
                 // 7, R23); these two are not needed any more.
@@ -692,7 +879,7 @@ void updater_task(void) {
 }
 
 bool updater_active(void) {
-    return s.state != UPDATE_STATE_IDLE;
+    return s.state != UPDATE_STATE_IDLE || update_split_slave_active() || update_relay_busy();
 }
 
 update_state_t updater_state(void) {
@@ -712,7 +899,6 @@ void updater_host_reset(void) {
 #    include "wait.h"
 #    include "client_wrapper.h"
 #    include "scanlab.h"
-#    include "update_split.h"
 #    include "hardware/structs/rosc.h"
 #    ifdef EEPROM_WEAR_LEVELING
 #        include "wear_leveling.h"

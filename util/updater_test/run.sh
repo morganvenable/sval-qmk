@@ -21,6 +21,7 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     "$tests/test_updater.c" \
     "$kb/updater/updater.c" "$kb/updater/update_gesture.c" \
     "$kb/updater/update_image.c" "$kb/updater/update_keys.c" \
+    "$kb/updater/update_split.c" "$kb/updater/update_split_wire.c" \
     "$kb/updater/vendor/monocypher.c" "$kb/updater/vendor/optional/monocypher-ed25519.c" \
     -o "$out/test_updater"
 "$out/test_updater" "$out/cross"
@@ -33,6 +34,7 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -shared -fPIC 
     "$tests/test_updater.c" \
     "$kb/updater/updater.c" "$kb/updater/update_gesture.c" \
     "$kb/updater/update_image.c" "$kb/updater/update_keys.c" \
+    "$kb/updater/update_split.c" "$kb/updater/update_split_wire.c" \
     "$kb/updater/vendor/monocypher.c" "$kb/updater/vendor/optional/monocypher-ed25519.c" \
     -o "$out/libupdater_host.so"
 python3 -I "$tests/test_sval_update_tool.py" "$out/libupdater_host.so" "$out/tool"
@@ -46,18 +48,19 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     "$tests/test_updater.c" \
     "$kb/updater/updater.c" "$kb/updater/update_gesture.c" \
     "$kb/updater/update_image.c" "$kb/updater/update_keys.c" \
+    "$kb/updater/update_split.c" "$kb/updater/update_split_wire.c" \
     "$kb/updater/vendor/monocypher.c" "$kb/updater/vendor/optional/monocypher-ed25519.c" \
     -o "$out/test_commit"
 "$out/test_commit"
 
-# M2: the split pause (kb/split_pause.c), the KEYBOARD_UPDATE wire format,
-# presence and the slave's request handler.
+# M2: the split pause (kb/split_pause.c), the KEYBOARD_UPDATE wire format and
+# page assembly. The other half's session and the relay (update_split.c) are
+# tested in the builds above, by test_relay.c, against the mock die.
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
     -DSVAL_UPDATER_HOST_TEST -include "$kb/config.h" \
     -I"$tests" -I"$kb" -I"$kb/updater" \
-    "$tests/test_split.c" "$kb/split_pause.c" \
-    "$kb/updater/update_split.c" "$kb/updater/update_split_wire.c" \
+    "$tests/test_split.c" "$kb/split_pause.c" "$kb/updater/update_split_wire.c" \
     -o "$out/test_split"
 "$out/test_split"
 

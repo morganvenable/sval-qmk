@@ -16,8 +16,10 @@
 #include "update_gesture.h"
 #include "update_led.h"
 #include "update_commit.h"
+#include "update_split.h"
 
 void updater_host_reset(void);
+void update_split_host_slave_reset(void);
 
 // ---- port and mocks ----------------------------------------------------------------------
 
@@ -42,15 +44,20 @@ uint32_t updater_port_random32(void) {
     port_rand = port_rand * 1664525u + 1013904223u;
     return port_rand ? port_rand : 1;
 }
+// The split simulation (M2, below) runs both halves in this one process:
+// sim_slave says whose code is running.
+static bool            sim_slave;
+static update_device_t slave_dev;
 void update_device_self(update_device_t *dev) {
-    *dev = self_dev;
+    *dev = sim_slave ? slave_dev : self_dev;
 }
 bool updater_port_scan_override(void) {
     return port_scan_override;
 }
 static uint8_t port_split_presence; // update_presence_status_t
+static bool    presence_sim;        // presence from the simulated pings (update_split.c) instead
 uint8_t updater_port_split_presence(void) {
-    return port_split_presence;
+    return presence_sim ? update_split_presence() : port_split_presence;
 }
 #define HOST_STACK_SIZE 0xAE0
 #define HOST_STACK_FREE 0x2A4
@@ -73,17 +80,215 @@ static bool            commit_avail;
 static int             commit_runs;
 static uint32_t        commit_crc, commit_len;
 static update_status_t commit_result;
+// The other half's commit, in the split simulation: either it refuses with
+// slave_commit_result, or (slave_commit_resets) it "resets into the new image":
+// the simulation reboots that half with the manifest's fw_version. The same
+// for this half's commit with master_commit_resets (sval_update.py pair).
+static int             slave_commit_runs;
+static uint32_t        slave_commit_crc, slave_commit_len;
+static update_status_t slave_commit_result = UPDATE_UNSUPPORTED;
+static bool            slave_commit_resets, slave_reset_pending, master_commit_resets, master_reset_pending;
+static uint32_t        slave_next_fw, master_next_fw;
 #ifndef SVAL_TEST_REAL_COMMIT
 bool update_commit_available(void) {
-    return commit_avail;
+    return sim_slave ? true : commit_avail;
 }
 update_status_t update_commit_run(const sval_update_manifest_t *m, uint32_t crc_body) {
+    if (sim_slave) {
+        slave_commit_runs++;
+        slave_commit_crc = crc_body;
+        slave_commit_len = m->image_len;
+        if (slave_commit_resets) {
+            slave_reset_pending = true;
+            slave_next_fw       = m->fw_version;
+        }
+        return slave_commit_resets ? UPDATE_UNSUPPORTED : slave_commit_result;
+    }
     commit_runs++;
     commit_crc = crc_body;
     commit_len = m->image_len;
+    if (master_commit_resets) {
+        master_reset_pending = true;
+        master_next_fw       = m->fw_version;
+    }
     return commit_result;
 }
 #endif
+
+// ---- the split link (M2): update_split.c's port and a simulated other half ----------------
+//
+// Both halves' code runs in this process. The other half's KEYBOARD_UPDATE
+// callback runs inside update_split_port_rpc() (as the SlaveThread would,
+// while the master waits), and its housekeeping (update_split_slave_task) in
+// pass(), after this half's. Both use the one mock die: in the relay tests
+// this half's slot is master_slot (a RAM copy), and the die's slot is the
+// other half's. Faults can be injected into every RPC.
+
+static update_build_id_t master_id, slave_id;
+static bool              link_up = true, link_paused, link_dead;
+static int               pause_calls, lock_depth, lock_errors, unlocks;
+static void (*unlock_hook)(int n); // after each unlock by the other half's housekeeping (a preemption point)
+static const uint8_t *master_slot;  // this half's slot for the relay; NULL: the die's
+static uint8_t        shadow[SVAL_UPDATE_MAX_IMAGE];
+static bool           auto_shadow; // the relay's pause takes a copy of the die's slot as this half's (tool tests)
+static struct {
+    uint32_t n;                                            // RPCs so far
+    uint32_t drop_req, drop_rsp, flip_req, flip_rsp, dup, replay, stale; // percent chance per RPC
+    uint32_t faults;                                       // faults injected
+} lk;
+static uint8_t  hist[8][USPLIT_MSG_MAX], hist_len[8]; // the last requests, for replays
+static uint32_t hist_n;
+static uint64_t last_ping_us;
+static uint64_t last_slave_rx_us; // when the other half last got a request
+#define SIM_RPC_US 600       // four transactions at 1 Mbaud, with the handshakes
+#define SIM_RPC_FAIL_US 20000 // a transaction that times out (SERIAL_USART_TIMEOUT)
+
+uint32_t update_split_port_now_ms(void) {
+    return (uint32_t)(sim_us / 1000);
+}
+void update_split_port_build_id(update_build_id_t *id) {
+    *id = sim_slave ? slave_id : master_id;
+}
+uint8_t update_split_port_info_flags(void) {
+    return 0x01 | (port_failing ? 0x02 : 0) | (update_key(UPDATE_KEY_TEST) ? 0x10 : 0);
+}
+bool update_split_port_updating(void) {
+    return sim_slave ? update_split_slave_active() : updater_active();
+}
+void update_split_port_lock(void) {
+    if (!sim_slave || lock_depth) lock_errors++; // only the other half's housekeeping takes it, never nested
+    lock_depth++;
+}
+void update_split_port_unlock(void) {
+    if (lock_depth != 1) lock_errors++;
+    lock_depth--;
+    unlocks++;
+    if (unlock_hook) unlock_hook(unlocks);
+}
+bool update_split_port_pause(bool on) {
+    if (sim_slave) return false;
+    if (on) {
+        if (!link_up || link_dead) return false; // sval_split_pause refuses with the link down
+        if (auto_shadow && !master_slot) {
+            // The relay pauses first: the image this half staged and verified
+            // becomes "its slot", and the die's slot the other half's.
+            memcpy(shadow, update_host_flash + SVAL_UPDATE_BASE, sizeof(shadow));
+            master_slot = shadow;
+        }
+        if (!link_paused) pause_calls++;
+        link_paused = true;
+    } else {
+        link_paused = false;
+    }
+    return true;
+}
+bool update_split_port_slot_read(uint32_t off, uint8_t *dst, uint32_t n) {
+    if (off % 4 || n % 4 || off > SVAL_UPDATE_SIZE || n > SVAL_UPDATE_SIZE - off) return false;
+    memcpy(dst, master_slot ? master_slot + off : update_host_flash + SVAL_UPDATE_BASE + off, n);
+    return true;
+}
+
+static bool chance(uint32_t pct) {
+    return pct && rnd() % 100 < pct;
+}
+
+// The other half's callback, as the SlaveThread runs it.
+static void slave_rpc(const uint8_t *in, uint8_t len, uint8_t *out, uint8_t out_len) {
+    bool was  = sim_slave;
+    sim_slave = true;
+    update_split_slave_rpc(in, len, out, out_len);
+    sim_slave = was;
+}
+
+bool update_split_port_rpc(const uint8_t *req, uint8_t req_len, uint8_t *rsp, uint8_t rsp_len) {
+    if (sim_slave || req_len > USPLIT_MSG_MAX || rsp_len > USPLIT_MSG_MAX) {
+        lock_errors++;
+        return false;
+    }
+    lk.n++;
+    sim_us += SIM_RPC_US;
+    if (!link_up || link_dead) {
+        sim_us += SIM_RPC_FAIL_US;
+        return false;
+    }
+    uint8_t in[USPLIT_MSG_MAX], out[USPLIT_MSG_MAX];
+    memcpy(in, req, req_len);
+    if (chance(lk.drop_req)) { // lost on the way: the other half never runs it
+        lk.faults++;
+        sim_us += SIM_RPC_FAIL_US;
+        return false;
+    }
+    if (chance(lk.replay) && hist_n) { // an older request arrives first (reordered)
+        lk.faults++;
+        uint32_t k = rnd() % (hist_n < 8 ? hist_n : 8);
+        slave_rpc(hist[k], hist_len[k], out, USPLIT_MSG_MAX);
+    }
+    bool stale = chance(lk.stale) && hist_n; // the buffer still held the last request (a short write)
+    if (stale) {
+        lk.faults++;
+        uint32_t k = (hist_n - 1) % 8;
+        memcpy(in, hist[k], hist_len[k]);
+        req_len = hist_len[k];
+    }
+    if (chance(lk.flip_req)) {
+        lk.faults++;
+        in[rnd() % req_len] ^= (uint8_t)(1u << (rnd() % 8));
+    }
+    last_slave_rx_us = sim_us;
+    slave_rpc(in, req_len, out, rsp_len);
+    if (chance(lk.dup)) { // delivered twice
+        lk.faults++;
+        slave_rpc(in, req_len, out, rsp_len);
+    }
+    if (!stale) {
+        memcpy(hist[hist_n % 8], req, req_len);
+        hist_len[hist_n % 8] = req_len;
+        hist_n++;
+    }
+    if (chance(lk.drop_rsp)) { // the answer is lost
+        lk.faults++;
+        sim_us += SIM_RPC_FAIL_US;
+        return false;
+    }
+    if (chance(lk.flip_rsp) && rsp_len) {
+        lk.faults++;
+        out[rnd() % rsp_len] ^= (uint8_t)(1u << (rnd() % 8));
+    }
+    memcpy(rsp, out, rsp_len);
+    return true;
+}
+
+// The other half reboots: its RAM state is gone (a power cut, or its commit).
+static int slave_reboots, master_reboots;
+static void slave_reboot(void) {
+    update_split_host_slave_reset();
+    slave_reboots++;
+}
+
+// The other half's housekeeping pass.
+static void slave_hk(void) {
+    sim_slave = true;
+    update_split_slave_task();
+    sim_slave = false;
+    if (slave_reset_pending) {
+        slave_reset_pending = false;
+        slave_reboot();
+        slave_id.fw_version = slave_next_fw;
+    }
+}
+
+// The 500 ms presence ping (svalboard.c), skipped while paused, with the
+// other half's real presence answer.
+static void presence_ping(void) {
+    uint8_t out[UPDATE_PRESENCE_BYTES];
+    bool    answered = link_up && !link_dead;
+    if (answered) {
+        sim_slave = true;
+        update_split_presence_fill(out, sizeof(out));
+        sim_slave = false;
+    }
+    update_split_presence_result(answered, out, sizeof(out));
+}
 
 // ---- driving it -------------------------------------------------------------------------
 
@@ -137,6 +342,17 @@ static void pass(void) {
     uint64_t       t0     = sim_us;
     updater_task();
     uint64_t dt = sim_us - t0;
+    if (master_reset_pending) { // this half "reset into its new image" (pair)
+        master_reset_pending = false;
+        updater_host_reset();
+        master_id.fw_version = master_next_fw;
+        master_reboots++;
+    }
+    slave_hk();
+    if (presence_sim && !link_paused && sim_us - last_ping_us >= 500000) {
+        last_ping_us = sim_us;
+        presence_ping();
+    }
     if (before == UPDATE_STATE_VERIFYING_MANIFEST) {
         if (dt > sig_pass_us) sig_pass_us = dt;
     } else if (dt > max_pass_us) {
@@ -288,6 +504,31 @@ static void fresh(uint32_t len) {
     port_failing       = false;
     port_scan_override = false;
     port_split_presence = UPDATE_PRESENCE_NONE;
+    // the split simulation: a left half with a TrackPoint, the same release
+    update_split_host_reset();
+    sim_slave         = false;
+    presence_sim      = false;
+    link_up           = true;
+    link_paused       = link_dead = false;
+    pause_calls       = lock_depth = lock_errors = unlocks = 0;
+    unlock_hook       = NULL;
+    master_slot       = NULL;
+    auto_shadow       = false;
+    memset(&lk, 0, sizeof(lk));
+    hist_n            = 0;
+    last_ping_us      = 0;
+    master_id         = (update_build_id_t){.fw_version = 2001, .git_hash = 0x3b2ca7e1, .updater_proto = UPDATE_PROTOCOL_VERSION, .hand = UPDATE_HAND_RIGHT, .pointing_id = UPDATE_POINTING_PMW3389};
+    slave_id          = master_id;
+    slave_id.hand     = UPDATE_HAND_LEFT;
+    slave_id.pointing_id = UPDATE_POINTING_TRACKPOINT;
+    slave_dev         = test_dev;
+    slave_dev.hand    = UPDATE_HAND_LEFT;
+    slave_dev.pointing_id = UPDATE_POINTING_TRACKPOINT;
+    slave_dev.security_epoch = 0;
+    slave_commit_runs = 0;
+    slave_commit_result = UPDATE_UNSUPPORTED;
+    slave_commit_resets = slave_reset_pending = master_commit_resets = master_reset_pending = false;
+    slave_reboots = master_reboots = 0;
     commit_avail  = false;
     commit_runs   = 0;
     commit_result = UPDATE_UNSUPPORTED;
@@ -318,11 +559,28 @@ static void test_session_info_and_wrapper(void) {
     req_hand = 0xFF;
     CHECK_EQ(send(0, UPDATE_OP_INFO, NULL, 0), UPDATE_OK);
     CHECK_EQ(rsp[13], UPDATE_HAND_RIGHT);
-    // the other half, or 0xFF for anything but INFO: UNSUPPORTED (M1 has no relay)
+    // 0xFF for anything but INFO, or a hand that is neither half: UNSUPPORTED
+    // (TEST_HALT is an unknown op, INVALID, in a build without the hooks)
+#ifdef SVAL_UPDATE_TEST_HOOKS
+    const update_status_t test_halt_unknown = UPDATE_UNSUPPORTED;
+#else
+    const update_status_t test_halt_unknown = UPDATE_INVALID;
+#endif
     CHECK_EQ(send(CLIENT_A, UPDATE_OP_STATUS, NULL, 0), UPDATE_UNSUPPORTED);
+    for (int h = 2; h < 0xFF; h += 37) {
+        req_hand = (uint8_t)h;
+        CHECK_EQ(send(0, UPDATE_OP_INFO, NULL, 0), UPDATE_UNSUPPORTED);
+        for (uint8_t op = UPDATE_OP_MANIFEST; op <= UPDATE_OP_RELAY; op++) CHECK_EQ(send(CLIENT_A, op, NULL, 0), op == UPDATE_OP_TEST_HALT ? test_halt_unknown : UPDATE_UNSUPPORTED);
+    }
+    // the other half (M2): TEST_HALT and DIAG are this half's only; a session
+    // for it needs its presence answer (UNAVAILABLE, nothing changes)
     req_hand = UPDATE_HAND_LEFT;
-    CHECK_EQ(send(0, UPDATE_OP_INFO, NULL, 0), UPDATE_UNSUPPORTED);
-    for (uint8_t op = UPDATE_OP_MANIFEST; op <= UPDATE_OP_REBIND; op++) CHECK_EQ(send(CLIENT_A, op, NULL, 0), UPDATE_UNSUPPORTED);
+    CHECK_EQ(send(CLIENT_A, UPDATE_OP_TEST_HALT, NULL, 0), test_halt_unknown);
+    CHECK_EQ(send(CLIENT_A, UPDATE_OP_DIAG, NULL, 0), UPDATE_UNSUPPORTED);
+    uint8_t m0[22] = {0, 20};
+    memcpy(m0 + 2, blob, 20);
+    CHECK_EQ(send(CLIENT_A, UPDATE_OP_MANIFEST, m0, sizeof(m0)), UPDATE_UNAVAILABLE);
+    CHECK_EQ(updater_state(), UPDATE_STATE_IDLE);
     req_hand = UPDATE_HAND_RIGHT;
 
     // every op but INFO refused without the client wrapper, with no state change
@@ -336,7 +594,7 @@ static void test_session_info_and_wrapper(void) {
     CHECK_EQ(send(0, UPDATE_OP_DIAG, NULL, 0), UPDATE_INVALID);
     // unknown ops, wrapped or not (TEST_HALT outside a session, or in a build without hooks)
     CHECK_EQ(send(CLIENT_A, 0x0A, NULL, 0), UPDATE_INVALID);
-    CHECK_EQ(send(CLIENT_A, 0x0C, NULL, 0), UPDATE_INVALID);
+    CHECK_EQ(send(CLIENT_A, 0x0D, NULL, 0), UPDATE_INVALID);
     CHECK_EQ(send(CLIENT_A, 0xFF, NULL, 0), UPDATE_INVALID);
     // VIA's save command on this channel is left alone (value byte 0 is still the request's hand)
     req_cmd = 0x09;

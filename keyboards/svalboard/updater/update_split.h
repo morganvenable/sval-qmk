@@ -4,14 +4,31 @@
 #pragma once
 
 // In-firmware updater, M2: the split link (plan docs/updater-plan.md, M2).
-// Presence with version (D17, V) and the KEYBOARD_UPDATE split RPC; the wire
-// format is in update_split_wire.h.
+// Presence with version (D17, V), the KEYBOARD_UPDATE split RPC (wire format
+// in update_split_wire.h), the other half's session (store and forward, D14),
+// and the relay that feeds it from the half with USB.
 //
-// M2a stage 1 (this file): presence, mismatch detection, and a slave-side
-// KEYBOARD_UPDATE handler that checks every request, answers INFO, STATUS and
-// ABORT, and answers retries from its cache. BEGIN, PAGE, END and COMMIT are
-// checked and then refused with UNSUPPORTED: the mailbox, programming and the
-// master's relay come in stage 2.
+// The half without USB (the slave) runs a session of its own:
+//
+//   IDLE -BEGIN fragments-> MANIFEST_LOADING -last fragment-> VERIFYING_MANIFEST
+//   -> ERASING -> RECEIVING -END-> VERIFYING_IMAGE -> VERIFIED -COMMIT-> COMMITTING
+//   (and ERROR, latched until ABORT or the 5 s timeout)
+//
+// The KEYBOARD_UPDATE callback runs in the SlaveThread, holding the split
+// shared-memory lock (platforms/chibios/drivers/serial_protocol.c). It answers
+// at once, programs one 256 B page when a page's last fragment arrives (R16),
+// and never does slow work. The slow work (the manifest and signature checks,
+// D7; the erase; the image SHA-512; the commit) runs in housekeeping
+// (update_split_slave_task), behind the master's pause (D15). The two meet in
+// a single-slot mailbox with a sequence number: the callback posts a job by
+// changing the state, and bumps the sequence number on every new session and
+// every cancel; housekeeping takes the lock to copy the job out and again to
+// post its result, which it drops if the sequence number moved meanwhile
+// (an ABORT or a new session won the race).
+//
+// The half with USB (the master) relays an image it has already staged and
+// verified in its own slot through the M1 path (updater.c), from flash, a
+// slice per main-loop pass (update_relay_*).
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -36,15 +53,83 @@ uint8_t update_split_presence(void);
 // the red error LED while the updater is idle, INFO flags bit5 (V).
 bool update_split_mismatch(void);
 
+// The other half's last presence answer (*p) and its status. Only MATCH and
+// VERSION describe a half that can be updated through this one.
+uint8_t update_split_other(update_presence_t *p);
+
 // ---- KEYBOARD_UPDATE, the half without USB ---------------------------------------------
 
 // The RPC callback body: one request frame in, one response frame out
-// (out_len bytes, zero-filled past the frame). Runs in the SlaveThread
-// (1 KiB stack) while the master waits; never touches flash.
+// (out_len bytes, zero-filled past the frame). Runs in the SlaveThread (1 KiB
+// stack) with the shared-memory lock held, while the master waits. The only
+// flash operation it makes is one page program, when a PAGE completes a page.
 void update_split_slave_rpc(const uint8_t *in, uint8_t in_len, uint8_t *out, uint8_t out_len);
 
-// update_state_t of the slave's split session (IDLE in stage 1).
+// Housekeeping (from updater_task, every pass, on either half; nothing to do
+// unless the slave session is active): the timeout and one slice of slow work.
+void update_split_slave_task(void);
+
+// update_state_t of the slave's session.
 uint8_t update_split_slave_state(void);
+bool    update_split_slave_active(void); // not IDLE: full clock, the updater's LEDs
+
+// ---- the relay, the half with USB --------------------------------------------------------
+
+typedef enum {
+    RELAY_IDLE = 0,
+    RELAY_START,       // pause the link, clear any old session on the other half
+    RELAY_MANIFEST,    // BEGIN: the signed manifest, in fragments
+    RELAY_ERASE_WAIT,  // the other half checks the signature and erases (paused)
+    RELAY_PAGES,       // PAGE: the image (the link runs: both halves type)
+    RELAY_END,         // END (paused)
+    RELAY_VERIFY_WAIT, // the other half verifies the image (paused)
+    RELAY_VERIFIED,    // the other half holds the verified image; kept alive until COMMIT
+    RELAY_COMMIT,      // COMMIT (paused)
+    RELAY_HOLD,        // paused while it commits and reboots (R18)
+    RELAY_PROBE,       // one STATUS after the hold: an answer from a half that did not reset is a failure
+    RELAY_DONE,
+    RELAY_FAILED,
+} relay_phase_t;
+
+// Starts relaying the image staged and verified in this half's slot.
+// signed_manifest is copied. The link is paused at once; false (and nothing
+// started) if it cannot be (the link is down).
+bool update_relay_start(const uint8_t *signed_manifest, uint32_t image_len, uint32_t crc_body);
+
+// One pass: at most SVAL_UPDATE_RELAY_PASS_MS of relay work, or one poll.
+void update_relay_task(void);
+
+// In RELAY_VERIFIED: pause and send COMMIT. False (nothing sent) otherwise, or
+// if the link cannot be paused.
+bool update_relay_commit(void);
+
+// Stops a relay before its COMMIT: one ABORT attempt to the other half (it
+// times out by itself if that is lost) and the link resumed. Once COMMIT was
+// sent it does nothing: the other half may be writing, and the relay ends by
+// itself after the hold. A finished relay (DONE, FAILED) keeps its record.
+void update_relay_abort(void);
+
+typedef struct {
+    uint8_t         phase;        // relay_phase_t
+    update_status_t error;        // why it failed (RELAY_FAILED)
+    uint8_t         slave_state;  // the other half's state and last error, from its last answer
+    uint8_t         slave_error;
+    uint32_t        acked;        // image bytes the other half has acknowledged
+    uint32_t        image_len;
+    uint16_t        slave_erased; // the other half's erase progress, in sectors
+    uint16_t        slave_to_erase;
+    uint16_t        retries;      // requests sent again for want of a valid answer
+    uint32_t        elapsed_ms;   // since the start (frozen once it ends)
+    bool            paused;       // the link is paused by the relay now
+} update_relay_info_t;
+
+void update_relay_info(update_relay_info_t *info);
+bool update_relay_busy(void); // between START and DONE/FAILED
+
+// The other half's INFO through KEYBOARD_UPDATE (at most two tries; refused
+// while a relay runs). UPDATE_OK with its 15 payload bytes and state, else
+// UPDATE_UNAVAILABLE (no answer) or UPDATE_BUSY.
+update_status_t update_split_other_info(uint8_t payload[USPLIT_INFO_PAYLOAD], uint8_t *state);
 
 #ifdef SVAL_UPDATER_HOST_TEST
 void update_split_host_reset(void);
@@ -56,6 +141,16 @@ void update_split_init(void);
 
 // ---- port (firmware at the end of update_split.c; the host tests supply their own) ----
 
-void    update_split_port_build_id(update_build_id_t *id);
-uint8_t update_split_port_info_flags(void); // INFO flags byte, see update_split_wire.h
-bool    update_split_port_updating(void);   // updater_active()
+void     update_split_port_build_id(update_build_id_t *id);
+uint8_t  update_split_port_info_flags(void); // INFO flags byte, see update_split_wire.h
+bool     update_split_port_updating(void);   // updater_active()
+uint32_t update_split_port_now_ms(void);
+// The split shared-memory lock: the slave's housekeeping takes it around its
+// mailbox copies (the callback already holds it).
+void update_split_port_lock(void);
+void update_split_port_unlock(void);
+// Master: one KEYBOARD_UPDATE RPC (transaction_rpc_exec); the split pause (D15).
+bool update_split_port_rpc(const uint8_t *req, uint8_t req_len, uint8_t *rsp, uint8_t rsp_len);
+bool update_split_port_pause(bool on);
+// Master: n bytes of this half's slot at off (whole words), read uncached.
+bool update_split_port_slot_read(uint32_t off, uint8_t *dst, uint32_t n);

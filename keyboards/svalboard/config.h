@@ -83,6 +83,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SVAL_UPDATE_CONFIRM_WINDOW_MS 30000 // from ARM; NOT_CONFIRMED after it
 #define SVAL_UPDATE_SESSION_TIMEOUT_MS 30000 // no op from the session for this long: TIMEOUT
 #define SVAL_UPDATE_LED_VAL 96               // LED brightness while the updater shows its states (D24)
+// M2, the relay to the other half (updater/update_split.c). The half without
+// USB drops a session after this long with no KEYBOARD_UPDATE traffic.
+#define SVAL_UPDATE_SPLIT_SLAVE_TIMEOUT_MS 5000
+// The half with USB: relay work per main-loop pass while the link runs (its
+// own keys keep scanning between passes), how long it retries a request with
+// no valid answer before the relay fails, how often it polls the other half
+// while that half erases or verifies, and how often it pings a verified other
+// half (so its timeout does not fire while the host decides to commit).
+#define SVAL_UPDATE_RELAY_PASS_MS 4
+#define SVAL_UPDATE_RELAY_LINK_TIMEOUT_MS 2000
+#define SVAL_UPDATE_RELAY_POLL_MS 20
+#define SVAL_UPDATE_RELAY_KEEPALIVE_MS 1000
+// After the other half accepts COMMIT, the link stays paused for its commit
+// (M1 #13: about 1-2 s from COMMIT to the reset) plus 2.5 s for its reboot
+// (R18: the 500 ms double-tap window and the 2 s USB detect).
+#define SVAL_UPDATE_SPLIT_COMMIT_MS 2000
+#define SVAL_UPDATE_SPLIT_REBOOT_MS 2500
 #if defined(SVAL_UPDATER) && defined(SVAL_KEYTEST)
 #    error "SVAL_UPDATER and SVAL_KEYTEST cannot be combined: keytest injects key events (R11)"
 #endif
