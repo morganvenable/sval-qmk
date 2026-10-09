@@ -234,6 +234,34 @@ Findings:
 
 **Exit:** a dry-run tag on the fork produces a signed `.svup` that the M1 tool accepts with the release key and refuses with the test key. The "last manual update" release notes are drafted, following the release wording rules.
 
+**M3 built, 2026-10-09 (everything but the outward steps).** See `docs/updater.md`, "Release signing".
+
+| Piece | As built |
+|---|---|
+| Keys (D30) | Two DRY RUN Ed25519 keypairs; private halves outside the repository (`~/m3-keys/` in WSL, mode 600). Public halves in `kb/updater/update_release_keys.h` (`SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 1`), the only file to change for the production keys. **Every** updater build accepts `key_id 1` and `2`, including `SVAL_UPDATE_TEST_KEY` builds (so a test board can take a signed release image); release builds have no test key. INFO flags bit6 says DRY RUN |
+| Build-info record | `sval_update_build_info` (28 B, `kb/updater/update_keys.h`) in every updater build: RELEASE, TEST_KEY, TEST_HOOKS, KEYTEST, HOST_BOOTLOADER and DRY RUN bits, release key slots, updater protocol, `SVAL_FW_VERSION`, the version string. `update_keys.c` also `#error`s on a release build with `SVAL_KEYTEST` or `SVAL_HOST_BOOTLOADER` |
+| `make_update.py` | `unsigned` (build job: raw image + unsigned manifest, no key), `sign` (signing job: key from a file or an environment variable; the refusals listed in `docs/updater.md`; sets `key_id` to the slot its key fills; checks its own signature), `verify` (offline check as a release, test or plain build). The manifest's version comes from the image's build-info record. A pure-Python Ed25519 verifier joins the signer |
+| Release CI | `release.yml`: version → 12 release updater builds (`build-firmware.yml` with `updater: true`) → lint → publish `.uf2` → sign (environment `release-signing`) and publish `.svup`. Dry-run tags are prereleases. Details in `docs/updater.md` |
+| Lint | `kb/tools/check_release_elf.py` (build-info record, the two key slots, no test key bytes, no test-hook, keytest or host-bootloader symbols) and `check_split_tables.py --golden kb/tools/split_table_golden.json` |
+| Version (proposed D32) | `kb/updater/fw_version.txt` (now 3), wired through `rules.mk` into `SVAL_FW_VERSION`; the tag is `SVAL_FW_VERSION_STRING`, readable through INFO page 1. `kb/tools/release_version.py` is the CI check |
+| Host tests | `test_release.c` (a release build's key set; optional `.svup` files through `SVAL_RELEASE_SVUPS`), `test_release_version.py`, and new cases in `test_make_update.py`, `test_updater.c` and `test_session.c`. `.github/workflows/updater-tests.yml` runs `run.sh` |
+| Release notes | `docs/updater-release-notes-draft.md` |
+| Fork setup (D31) | A runbook in `docs/updater.md`, "Fork setup and the dry run"; the main session runs it |
+
+**M3 local results, 2026-10-09** (WSL, Arm GNU 13.2.1; nothing on hardware, nothing pushed as a tag):
+
+| Check | Result |
+|---|---|
+| 12 default builds, `SKIP_GIT=yes`, `objcopy -O binary` | Byte-identical to `~/m1-baseline-bins`, with `SOURCE_DATE_EPOCH` pinned to the baseline's day: QMK's `command.c` embeds `__DATE__`, which is the only difference on another day |
+| 12 release updater builds (`SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes`) | All build; images 121,856-126,464 B; `check_ram_funcs.py` OK on all 12 (`update_commit.c` unchanged) |
+| Lint | `check_release_elf.py`: 12 of 12 pass; a test-key, a test-hooks and a plain updater build each fail with the expected reasons. A release build with `SVAL_HOST_BOOTLOADER=1` does not compile. P1: 36 of 36 pairings match, 12 of 12 match the golden table (15 transactions); default-build ELFs fail it (14 transactions, no keyboard RPC IDs) |
+| CI steps by hand | The version job against the fork's real releases (`vM3-dryrun1`: fw 3, previous vRC2 at 0, prerelease; `vLaunch3` refused for the DRY RUN keys), the build job's `unsigned` step, the lint job, the sign loop with the key in an environment variable, and the verify loop: 12 `.svup` files, all accepted by `verify --build release` |
+| End to end | A release image signed with DRY RUN key 1 and key 2: accepted by the C code of a release build (`test_release.c`, 15 files); the same image signed with the test key: refused (BAD_SIG) by a release build, accepted by a test build; a test-key signature relabelled `key_id 1`: refused; the signer refuses the test key and the test-key, test-hooks and plain updater builds |
+| Host tests | `util/updater_test/run.sh` passes under ASan and UBSan (make_update.py 149 checks, release_version.py 21, test_updater 255,380, sval_update.py 17,774, test_commit 1,120,565, split 639, release key set 20) |
+| Workflows | actionlint 1.7.7 with shellcheck: only info-level findings in steps that predate M3; yamllint clean apart from the existing indentation style |
+
+Not done here (the main session's outward steps, D31): the `release-signing` environment and secret, the dry-run tag and its run on GitHub, and the exit check on hardware (a test board on a release updater build takes the dry run's `.svup` with `sval_update.py` and refuses a test-key image).
+
 ### M4: Keybard UI (fork `morganvenable/keybard`, PR to `svalboard/keybard`)
 
 - New `src/services/updater.service.ts`, a sibling of `scanlab.service.ts`.
@@ -293,6 +321,20 @@ Your answers from the [decision page](https://claude.ai/artifact/WsV3uM75FY2iQ1p
 | D28 | Where the copy runs: in the running app from RAM (as built), after a reboot into an early-boot copier, or a permanent stage-1 bootloader that resumes after a power cut (outside review) | **Keep as built**, answered after the M1 hardware results |
 | M1-d | Storage-format floor after `kb/storage/` was removed | `SVAL_UPDATE_STORAGE_FORMAT = 2`, a plain number raised by hand when a release changes saved settings incompatibly; not tied to `EECONFIG_MAGIC_NUMBER` |
 
+### Answered for M3 (2026-10-09)
+
+| # | Question | Answer |
+|---|---|---|
+| D29 | Where the signing key lives in CI | A secret (`SVAL_UPDATE_SIGNING_KEY`) in a GitHub environment named `release-signing` that needs Morgan's approval for each run. The build jobs never see it; only a separate signing job in that environment does, and it signs only release keymaps (D22) with `flags.DIAGNOSTIC` clear, refusing anything else |
+| D30 | Keys for M3 | Throwaway DRY RUN keys in both release slots (`key_id 1`, `2`), compiled into release updater builds; the production keys are generated later and swapped in (the public keys in `kb/updater/update_release_keys.h`, and the secret). Release builds carry no test key. The swap is a one-file change, documented in `docs/updater.md` |
+| D31 | Fork setup | Done by the main session from the runbook in `docs/updater.md`: the environment, the secret, and a dry-run `v*` tag (such as `vM3-dryrun1`) whose release is a prerelease. Dry-run tags never produce a normal release |
+
+### Proposed, needs your confirmation
+
+| # | Proposal |
+|---|---|
+| D32 | **Version numbers.** Launch tags are names (`vLaunch2`), not numbers, so `SVAL_FW_VERSION` comes from a committed file, `kb/updater/fw_version.txt` (one integer; 3 now, so vLaunch and vLaunch2 count as 1 and 2), and the version string is the tag name (at most 16 characters). Raise the number in the commit you tag. Release CI fails if it is not greater than the number committed at the previous published release (the newest non-draft, non-prerelease release that is not this tag; a release from before the file existed counts as 0). Prereleases, including dry runs, are not compared, so they never use up a number. A tag containing `dryrun` or `dry-run` is a dry run: its release is a prerelease, and while the release keys are the DRY RUN keys every other tag is refused |
+
 ### Still open, by design
 
 | # | Decided when |
@@ -331,6 +373,9 @@ Your answers from the [decision page](https://claude.ai/artifact/WsV3uM75FY2iQ1p
 | R22 | Estimates wrong (HID and RPC round trips, erase time, verify ms) | Measured in M1 #13 and M2b. Plan revisited before M2 and M4 |
 | R23 | Stale double-tap magic: after the watchdog reset the new image finds `0xCAFEB0BA` in noinit RAM (old image bytes) and enters BOOTSEL. Deterministic for a given image pair | Zero the image buffers before the trigger (step 7). M1 #14 |
 | R24 | Peripherals keep state across the watchdog reset: external sensors stay powered (UNVERIFIED, datasheet only) | The new image initialises them as at power-up. M1 #4 and M2b check typing and pointing after an update with no power cycle |
+| R25 | The signing key leaks from CI | The key is only in the `release-signing` environment's secret; only the signing job runs in that environment, and each run needs approval (D29). The signing job runs the tag's own `make_update.py`, so approve only tags whose code you trust. A leaked key is retired by a release signed with the other slot that replaces it |
+| R26 | A normal release goes out signed with the DRY RUN keys, or a dry run becomes a normal release | Release CI refuses every non-dry-run tag while `SVAL_UPDATE_RELEASE_KEYS_DRY_RUN` is 1; dry-run tags are always published as prereleases (`release_version.py`, host-tested) |
+| R27 | A release ships a split table its other half cannot talk to | `check_split_tables.py` on every pairing of the release ELFs plus the committed golden table, in release CI before publishing |
 
 ---
 

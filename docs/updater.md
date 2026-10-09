@@ -3,8 +3,9 @@
 The updater lets a running Svalboard half replace its own firmware over USB,
 without BOOTSEL or a UF2 copy. It is compiled in only with `SVAL_UPDATER=yes`
 and is off in every default build. This page describes what is built today:
-milestone M1 (one half, over its own USB) and M2a (the half without USB,
-relayed through the half with USB; see "The other half" below). The design and its decisions are in
+milestone M1 (one half, over its own USB), M2a (the half without USB,
+relayed through the half with USB; see "The other half" below) and M3 (release
+signing and release CI; see "Release signing" below). The design and its decisions are in
 [updater-plan.md](updater-plan.md); code is in `keyboards/svalboard/updater/`
 (below, `kb/` is `keyboards/svalboard/`).
 
@@ -20,10 +21,20 @@ leaves a half-written image that the boot ROM would run.
 
 | Flag | Effect |
 |---|---|
-| `SVAL_UPDATER=yes` | The updater: VIA channel `0x55`, staging slot, commit routine, LED states. On its own it accepts no image until M3 adds the release keys |
-| `SVAL_UPDATE_TEST_KEY=yes` | Also accepts images signed with the TEST-ONLY key (`key_id 0`), whose seed is in the repository (`kb/tools/sval_update_TEST_ONLY.key`). Test boards only; the build prints a warning |
+| `SVAL_UPDATER=yes` | The updater: VIA channel `0x55`, staging slot, commit routine, LED states. Accepts images signed with either release key (`key_id 1`, `2`; `kb/updater/update_release_keys.h`) |
+| `SVAL_UPDATE_TEST_KEY=yes` | Also accepts images signed with the TEST-ONLY key (`key_id 0`), whose seed is in the repository (`kb/tools/sval_update_TEST_ONLY.key`). Test boards only; the build prints a warning. It still accepts the release keys, so a test board can take a signed release image |
 | `SVAL_UPDATE_TEST_HOOKS=yes` | Adds the `TEST_HALT` op and the commit halt points (hardware tests only). Implies `SVAL_UPDATE_TEST_KEY` |
-| `SVAL_UPDATE_RELEASE=yes` | Release updater build: DIAGNOSTIC images and `key_id 0` refused. Cannot be combined with the test key or test hooks |
+| `SVAL_UPDATE_RELEASE=yes` | Release updater build: DIAGNOSTIC images and `key_id 0` refused. Cannot be combined with the test key, test hooks, `SVAL_KEYTEST` or `SVAL_HOST_BOOTLOADER`. Release CI builds every release keymap this way |
+| `SVAL_FW_VERSION=N` | The numeric version (D17), reported by INFO and presence. Default: `kb/updater/fw_version.txt` (D32). The older `EXTRAFLAGS=-DSVAL_FW_VERSION=N` still works |
+| `SVAL_FW_VERSION_STRING=S` | The version string, at most 16 of `A-Z a-z 0-9 . _ + -` (INFO page 1). Default empty; release CI passes the tag |
+
+Every updater build carries a 28-byte build-info record,
+`sval_update_build_info` (`kb/updater/update_keys.h`): magic `SVBI`, which of
+the flags above it was built with, the number of release key slots, the
+updater protocol, `SVAL_FW_VERSION` and `SVAL_FW_VERSION_STRING`.
+`make_update.py` takes the manifest's version from it, its signer refuses an
+image whose record is not a clean release build, and the release lint reads
+it.
 
 `SVAL_UPDATER` cannot be combined with `SVAL_KEYTEST` (keytest injects key
 events, so a host could fake the confirmation chord). Never ship a build with
@@ -75,7 +86,7 @@ byte layouts are in the comment at the top of `kb/updater/updater.c`. In short:
 
 | Op | Request after `[hand]` | Reply after `[status]` / rule |
 |---|---|---|
-| `0x00 INFO` | - | state, protocol, slot base/size and max image (4 KiB units), JEDEC ID, pointing ID, hand, fw version, storage format, security epoch, flags (16 MiB die, settings writes failing, release build, test hooks, test key accepted, the other half's version differs), last error |
+| `0x00 INFO` | page (0, the default) | state, protocol, slot base/size and max image (4 KiB units), JEDEC ID, pointing ID, hand, fw version, storage format, security epoch, flags (16 MiB die, settings writes failing, release build, test hooks, test key accepted, the other half's version differs, bit6 the release keys are the DRY RUN keys), last error. Page 1 (M3, this half only): `1`, fw version u32, the 16-character version string from the build-info record. Other pages: INVALID |
 | `0x01 MANIFEST` | off, n ≤ 20, bytes | bytes filled, of 172 (108 B manifest then 64 B Ed25519 signature). In order; offset 0 restarts. Ties the load to this client |
 | `0x02 ARM` | - | nonce u32 and the first 4 bytes of SHA-512(manifest), which the host shows. Checks the manifest fields, binds the session to client ID + nonce, starts the 30 s chord window. BUSY, with nothing changed, while a Scan Lab sweep runs |
 | `0x03 BEGIN` | nonce | ACCEPTED once the chord is made: signature check, then the erase, one 4 KiB sector per main-loop pass |
@@ -252,13 +263,14 @@ LEDs turn magenta is a pass, and one after about 8 s is a failure.
 - **#6, epoch below:** the device floor is 0 by default, so build the test board
   with `EXTRAFLAGS=-DSVAL_UPDATE_SECURITY_EPOCH=1` and send an image made with
   `--epoch 0`.
-- **#6, `key_id 0` on a release-flagged build:** until M3 a release build has
-  no keys at all, so every `key_id` gets BAD_SIG, and a DIAGNOSTIC image is
-  refused for its key before its flag is looked at. On hardware this row only
-  shows that a release build accepts nothing; record it as such and repeat it
-  in M3. The host tests check the release rules themselves (`test_manifest_check`:
-  the test key, a RELEASE image with the test key, and DIAGNOSTIC with a release
-  key).
+- **#6, `key_id 0` on a release-flagged build:** in M1 a release build had no
+  keys at all, so this row only showed that it accepted nothing. Since M3 a
+  release build has the two release keys: repeat the row on hardware with a
+  release build (`SVAL_UPDATE_RELEASE=yes`), a test-key image (BAD_SIG) and a
+  `.svup` signed with a release key (accepted). The host tests check the
+  release rules themselves (`test_manifest_check`: the test key, a RELEASE
+  image with the test key, and DIAGNOSTIC with a release key; `test_release.c`:
+  a release build's key set).
 - **#13:** `sval_update.py diag` after a full update gives main's stack never
   used since boot (crt0 fills it with `0x55555555`; the count is a little
   optimistic if a used word holds the pattern) and the longest updater pass in
@@ -293,7 +305,7 @@ python3 -I keyboards/svalboard/tools/check_split_tables.py --dump BUILD.elf
 
 **Presence with version (D17).** The half without USB answers the existing
 500 ms presence ping (`KEYBOARD_SYNC_A`) with 17 bytes: magic `PV`, struct
-version 1, `fw_version` u32 (`SVAL_FW_VERSION`, 0 until M3), the first 8 hex
+version 1, `fw_version` u32 (`SVAL_FW_VERSION`: `kb/updater/fw_version.txt`), the first 8 hex
 digits of the git hash (0 for `SKIP_GIT` builds), updater protocol, hand,
 pointing ID, flags (bit0 dirty tree, bit1 updater active), a reserved 0 and a
 CRC-8 (`kb/updater/update_split_wire.h`). The half with USB compares it with
@@ -431,21 +443,191 @@ sends nothing if either would be refused; then it does the other half, then
 this half over USB (the chord twice, both on this half), waits for the board
 to come back, and requires presence to show the same release on both halves
 within 10 s and each half's fw to equal its manifest's (when both are set). `relay` prints the RELAY op;
-`info --other` asks the other half. Until M3 a build reports the
-`SVAL_FW_VERSION` it was compiled with (0 by default), which `make_update.py
---fw-version` does not set: for the version checks to mean anything, build
-with `EXTRAFLAGS=-DSVAL_FW_VERSION=N` and make the image with `--fw-version N`.
+`info --other` asks the other half; `info` also prints this half's version
+string (INFO page 1). A build reports the `SVAL_FW_VERSION` it was compiled
+with (`kb/updater/fw_version.txt` unless `make ... SVAL_FW_VERSION=N`), and
+`make_update.py` copies it from the image's build-info record into the
+manifest, so the two agree unless `--fw-version` says otherwise (which it
+refuses when the record has a nonzero number). For an A/B pair of test images
+build twice with `SVAL_FW_VERSION=2001` and `2002`.
+
+## Release signing (M3)
+
+**Keys (D30).** Two release key slots, `key_id 1` and `key_id 2`, whose public
+halves are in `kb/updater/update_release_keys.h`. Every updater build compiles
+both in; release builds have no test key. CI signs with one of them; the
+other is the spare, so a lost or retired key can be replaced by a release
+signed with the other. **M3 uses throwaway DRY RUN keys in both slots**
+(`SVAL_UPDATE_RELEASE_KEYS_DRY_RUN 1`); their private halves are kept outside
+the repository on one development machine. While they are in place, INFO
+flags bit6 is set and release CI refuses every tag that is not a dry run.
+
+**Swapping in the production keys** is a change to that one header plus the
+secret:
+
+1. On the signing machine, make two keys (each prints its public key):
+   `make_update.py --genkey prod-1.key`, `make_update.py --genkey prod-2.key`.
+2. Paste the two public keys into `update_release_keys.h` as `0x..` bytes, set
+   `SVAL_UPDATE_RELEASE_KEYS_DRY_RUN` to `0`, and remove the DRY RUN banner.
+   `make_update.py --print-release-keys` reads them back.
+3. Put the seed line of the key CI signs with (normally key 1) in the
+   `SVAL_UPDATE_SIGNING_KEY` secret of the `release-signing` environment, and
+   keep both private keys offline.
+
+Nothing else reads the keys from anywhere but the header. Boards on a release
+with the DRY RUN keys accept only DRY-RUN-signed images, so the first release
+with the production keys has to be installed by UF2 on them; dry-run tags are
+prereleases, so no user board should run one.
+
+**Versions (D17, proposed D32).** Launch tags are names (`vLaunch2`), so the
+number is committed in `kb/updater/fw_version.txt` and the version string is
+the tag name. Raise the number in the commit you tag. Release CI's first job
+(`kb/tools/release_version.py`) fails unless the tag is a valid version string
+(at most 16 of `A-Z a-z 0-9 . _ + -`) and the committed number is greater
+than the one committed at the previous published release: the newest release
+on the repository that is neither a draft nor a prerelease and is not this
+tag (a release from before the file existed counts as 0). Prereleases are not
+compared, so dry runs never use up a number. A tag whose name contains
+`dryrun` or `dry-run` (any case), such as `vM3-dryrun1`, is a dry run: its
+release is always a prerelease.
+
+**Release CI** (`.github/workflows/release.yml`, on `v*` tags):
+
+| Job | What it does |
+|---|---|
+| version | The check above. Outputs the version, the number and whether the release is a prerelease |
+| build | The 12 release keymap builds as **release updater builds** (`SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes SVAL_FW_VERSION_STRING=<tag>`), through `build-firmware.yml` with `updater: true`. Each runs `check_ram_funcs.py` and `make_update.py unsigned`, and uploads its `.uf2`, raw image, unsigned manifest and ELF. No build job can read the signing key |
+| lint | `check_release_elf.py` on the 12 ELFs: an updater build whose build-info record says RELEASE and nothing else, two release key slots holding the header's keys, no test key anywhere in the image, no test-hook, keytest or host-bootloader symbols. `check_split_tables.py --golden`: every left/right pairing has the same split message table, and every build's table equals `kb/tools/split_table_golden.json` |
+| publish | The `.uf2` files, to the tag's release (a prerelease for a dry run) |
+| sign | In the `release-signing` environment, which needs approval for each run (D29): `make_update.py sign` for each image, then `make_update.py verify --build release`; publishes `<build>_<tag>.svup` next to each `.uf2` |
+
+**This changes what release CI publishes:** every `.uf2` on a release is now an
+updater build, not a default build: images of 122-127 KB instead of 94-99 KB, far below the 1,408 KiB cap. A default
+`make` (no flags) is unchanged byte for byte. Halves running a default build
+cannot talk to halves running an updater build (see "One release on both
+halves"), so both halves must move to the same release, which they always do.
+
+**What the signer refuses** (`make_update.py sign`): a key that is the test
+key or neither slot of the header; a manifest that is not version 1, has
+flags other than exactly RELEASE (so no DIAGNOSTIC), a keymap other than
+`sval` or `blank`, an unknown hand or pointing device, another updater
+protocol or an older storage format; an image whose length or SHA-512 does
+not match the manifest or that fails the structure checks; an image without
+a build-info record, or whose record is not a release build, has the test
+key, test hooks, keytest or host bootloader, disagrees with the header on
+DRY RUN, or reports another version than the manifest; an image that does not
+contain each release key exactly once, or contains the test key; and a
+manifest whose version or number is not the tag's (`--expect-version`,
+`--expect-fw-version`). It then sets the manifest's `key_id` to the slot its
+key fills, signs, and checks the signature.
+
+**The golden split table** (`kb/tools/split_table_golden.json`) is the table of
+the M3 release updater builds: 15 transactions (QMK's 12, plus the three keyboard
+RPCs `KEYBOARD_SYNC_A`, `KEYBOARD_SYNC_B`, `KEYBOARD_UPDATE`), each with its
+buffer sizes and shared-memory offsets. A change to the split table in a
+release must regenerate it in the same commit, and the release notes must say
+that both halves need the new release:
+
+```
+python3 -I keyboards/svalboard/tools/check_split_tables.py \
+  --write-golden keyboards/svalboard/tools/split_table_golden.json BUILD.elf
+```
+
+**Signing locally**, the same two steps (the key file stays outside the
+repository):
+
+```
+T=svalboard/trackball/pmw3389/right
+F="SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes"
+make $T:sval $F SVAL_FW_VERSION_STRING=vM3-local
+N=svalboard_trackball_pmw3389_right_sval
+MU=keyboards/svalboard/tools/make_update.py
+python3 -I $MU unsigned $N.uf2 --kb $T --keymap sval --release \
+  --image-out $N.img --manifest-out $N.manifest
+python3 -I $MU sign --image $N.img --manifest $N.manifest \
+  -o $N.svup --key ~/m3-keys/dryrun-release-1.key
+python3 -I $MU verify $N.svup --build release
+```
+
+`make_update.py verify FILE.svup --build release|test|plain` checks a `.svup`
+offline as that kind of build would before erasing anything (signature with
+that build's keys, manifest rules, hash, structure). `util/updater_test/run.sh`
+with `SVAL_RELEASE_SVUPS="a.svup:ok b.svup:refused"` runs `.svup` files through
+the C code of a release build (`tests/sval_updater/test_release.c`).
+
+### Fork setup and the dry run (D31)
+
+For whoever sets up `morganvenable/sval-qmk` (not done by any workflow). Run
+the steps in order in one WSL shell: later steps use `R` and `MU` from
+earlier ones.
+
+1. The environment, with Morgan as required reviewer, tags only:
+
+   ```
+   R=morganvenable/sval-qmk
+   ID=$(gh api users/morganvenable -q .id)
+   E=repos/$R/environments/release-signing
+   echo '{"reviewers":[{"type":"User","id":'$ID'}],' > /tmp/env.json
+   echo '"prevent_self_review":false,' >> /tmp/env.json
+   echo '"deployment_branch_policy":{"protected_branches":false,' >> /tmp/env.json
+   echo '"custom_branch_policies":true}}' >> /tmp/env.json
+   gh api -X PUT $E --input /tmp/env.json
+   gh api -X POST $E/deployment-branch-policies -f name='v*' -f type=tag
+   ```
+
+   `prevent_self_review` is false because Morgan pushes the tag and approves
+   the run himself.
+
+2. The secret: the seed line of DRY RUN key 1, never echoed:
+
+   ```
+   cd ~/m3-keys
+   grep -v '^#' dryrun-release-1.key | gh secret set \
+     SVAL_UPDATE_SIGNING_KEY --env release-signing -R $R
+   ```
+
+3. The dry-run tag, on a commit of `feat/fw-updater` that is pushed:
+
+   ```
+   git -C ~/GitHub/sval-qmk tag vM3-dryrun1 origin/feat/fw-updater
+   git -C ~/GitHub/sval-qmk push origin vM3-dryrun1
+   ```
+
+   Approve the `sign` job when it waits (Actions, the run, Review deployments).
+
+4. Check the result:
+
+   ```
+   gh release view vM3-dryrun1 -R $R --json isPrerelease,assets
+   gh release download vM3-dryrun1 -R $R -p '*.svup' -D /tmp/m3dry
+   cd ~/GitHub/sval-qmk
+   MU=keyboards/svalboard/tools/make_update.py
+   for f in /tmp/m3dry/*.svup; do python3 -I $MU verify $f; done
+   ```
+
+   `isPrerelease` must be true, with 12 `.uf2` and 12 `.svup` files. The exit
+   check on hardware (M3 exit): a test board running a release updater build
+   of the dry run accepts its `.svup` with `sval_update.py update`, and refuses
+   a test-key image with BAD_SIG.
+
+A dry-run tag that fails part way can be deleted and pushed again under a new
+name (`vM3-dryrun2`); delete its prerelease too.
 
 ## Tools and tests
 
 - `kb/tools/make_update.py`: UF2 → `.svup` (manifest, signature, raw image). It
-  refuses malformed UF2s and images the device would refuse.
+  refuses malformed UF2s and images the device would refuse. `unsigned`,
+  `sign` and `verify` are the release steps (see "Release signing").
+- `kb/tools/release_version.py`: release CI's version check (D32).
+- `kb/tools/check_release_elf.py`: release CI's lint of the release ELFs.
 - `kb/tools/sval_update.py`: the host tool (`list`, `info [--other]`, `status`,
   `relay`, `diag`, `abort`, `update`, `pair`, `reject`). Close Keybard first: raw
   HID replies reach every open handle.
 - `kb/tools/check_ram_funcs.py BUILD.elf`: the RAM-code check above.
 - `kb/tools/check_split_tables.py`: the split-table check across left/right
-  pairings (P1), above.
+  pairings (P1), above, and against the golden table (`--golden`).
+- `.github/workflows/updater-tests.yml` runs `util/updater_test/run.sh` on
+  pushes and pull requests that touch the updater, its tools or its tests.
 - `util/updater_test/run.sh [UF2 ...]`: host tests under ASan and UBSan. They
   cover `make_update.py`, the manifest, image and crypto checks, the session state
   machine, `sval_update.py` against the C state machine, and the commit routine.
