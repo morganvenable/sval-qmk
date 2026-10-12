@@ -47,11 +47,10 @@ bool sval_hw_rev_is_flipfet(void) {
 #define SVALBOARD_VIA_CONFIG_OFFSET 0
 #define SVALBOARD_VIA_CONFIG_SIZE sizeof(saved_values_t)
 
-// Bump only when a saved_values field is reinterpreted without the struct
-// changing size (renamed, reordered or rescaled in place).
-#ifndef SVALBOARD_SAVED_VALUES_SCHEMA
-#    define SVALBOARD_SAVED_VALUES_SCHEMA 0
-#endif
+// Bump when a saved_values field is reinterpreted without the struct changing
+// size (renamed, reordered, rescaled, or newly honoured), and add the step that
+// upgrades the previous schema to saved_values_migrations[] below.
+#define SVALBOARD_SAVED_VALUES_SCHEMA 1
 
 // Magic bytes for EEPROM validation: a layout stamp over the saved_values
 // geometry, so pointer, layer-colour and scan settings reset only when they
@@ -64,12 +63,12 @@ bool sval_hw_rev_is_flipfet(void) {
 #define SVALBOARD_MAGIC_OFFSET (SVALBOARD_VIA_CONFIG_OFFSET + SVALBOARD_VIA_CONFIG_SIZE)
 
 #if VIA_ENABLE
-static void svalboard_get_magic(uint8_t *magic) {
+static void svalboard_get_magic_for(uint8_t *magic, uint32_t schema) {
     const uint32_t values[] = {
         SVALBOARD_VIA_CONFIG_OFFSET,
         SVALBOARD_VIA_CONFIG_SIZE,
         DYNAMIC_KEYMAP_LAYER_COUNT,
-        SVALBOARD_SAVED_VALUES_SCHEMA,
+        schema,
     };
     uint32_t stamp = layout_stamp(values, sizeof(values) / sizeof(values[0]));
     magic[0]       = 0xA5;
@@ -80,17 +79,22 @@ static void svalboard_get_magic(uint8_t *magic) {
     magic[5]       = stamp & 0xFF;
 }
 
-static bool svalboard_eeprom_is_valid(void) {
+// The schema the stored settings were saved under, or -1 if they don't match this
+// layout under any schema (fresh, or a different struct size or layer count).
+static int svalboard_eeprom_schema(void) {
     uint8_t stored[SVALBOARD_MAGIC_SIZE];
     uint8_t expected[SVALBOARD_MAGIC_SIZE];
     via_read_custom_config(stored, SVALBOARD_MAGIC_OFFSET, SVALBOARD_MAGIC_SIZE);
-    svalboard_get_magic(expected);
-    return memcmp(stored, expected, SVALBOARD_MAGIC_SIZE) == 0;
+    for (int schema = SVALBOARD_SAVED_VALUES_SCHEMA; schema >= 0; schema--) {
+        svalboard_get_magic_for(expected, schema);
+        if (memcmp(stored, expected, SVALBOARD_MAGIC_SIZE) == 0) return schema;
+    }
+    return -1;
 }
 
 void svalboard_eeprom_set_valid(void) {
     uint8_t magic[SVALBOARD_MAGIC_SIZE];
-    svalboard_get_magic(magic);
+    svalboard_get_magic_for(magic, SVALBOARD_SAVED_VALUES_SCHEMA);
     via_update_custom_config(magic, SVALBOARD_MAGIC_OFFSET, SVALBOARD_MAGIC_SIZE);
 }
 
@@ -98,7 +102,7 @@ void write_eeprom_kb(void) {
     via_update_custom_config(&global_saved_values, SVALBOARD_VIA_CONFIG_OFFSET, SVALBOARD_VIA_CONFIG_SIZE);
 }
 #else
-static bool svalboard_eeprom_is_valid(void) { return true; }
+static int svalboard_eeprom_schema(void) { return SVALBOARD_SAVED_VALUES_SCHEMA; }
 void svalboard_eeprom_set_valid(void) {}
 void write_eeprom_kb(void) {}
 #endif
@@ -138,14 +142,14 @@ void svalboard_saved_values_defaults(void) {
     global_saved_values.layer_colors[2] = HSV(0x95FFFF);  // Azure
     global_saved_values.layer_colors[3] = HSV(0x0BB0FF);  // Coral
     global_saved_values.layer_colors[4] = HSV(0x2BFFFF);  // Yellow
-    global_saved_values.layer_colors[5] = HSV(0x80FF80);  // Teal
+    global_saved_values.layer_colors[5] = HSV(0x80FFFF);  // Teal
     global_saved_values.layer_colors[6] = HSV(0x00FFFF);  // Red
     global_saved_values.layer_colors[7] = HSV(0x00FFFF);  // Red
     global_saved_values.layer_colors[8] = HSV(0xEAFFFF);  // Pink
-    global_saved_values.layer_colors[9] = HSV(0xBFFF80);  // Purple
+    global_saved_values.layer_colors[9] = HSV(0xBFFFFF);  // Purple
     global_saved_values.layer_colors[10] = HSV(0x0BB0FF); // Coral
     global_saved_values.layer_colors[11] = HSV(0x6AFFFF); // Spring Green
-    global_saved_values.layer_colors[12] = HSV(0x80FF80); // Teal
+    global_saved_values.layer_colors[12] = HSV(0x80FFFF); // Teal
     global_saved_values.layer_colors[13] = HSV(0x80FFFF); // Turquoise
     global_saved_values.layer_colors[14] = HSV(0x2BFFFF); // Yellow
     global_saved_values.layer_colors[15] = HSV(0xD5FFFF); // Magenta
@@ -164,10 +168,21 @@ void keyboard_pre_init_kb(void) {
     keyboard_pre_init_user();
 }
 
+// Schema 0 -> 1: firmware began honouring layer_colors[].val. Earlier firmware never
+// showed it and its defaults left layers 5, 9 and 12 at half, so start every layer full.
+static void migrate_layer_brightness(void) {
+    for (uint8_t i = 0; i < DYNAMIC_KEYMAP_LAYER_COUNT; i++) global_saved_values.layer_colors[i].val = 255;
+}
+
+// saved_values_migrations[n] upgrades settings saved under schema n to schema n + 1.
+static void (*const saved_values_migrations[SVALBOARD_SAVED_VALUES_SCHEMA])(void) = {
+    migrate_layer_brightness,
+};
+
 void read_eeprom_kb(void) {
-    // Check if EEPROM data is valid (matches current firmware version)
-    if (!svalboard_eeprom_is_valid()) {
-        // Fresh EEPROM - apply defaults
+    int schema = svalboard_eeprom_schema();
+    if (schema < 0) {
+        // Fresh EEPROM or an unrecognised layout - apply defaults
         svalboard_saved_values_defaults();
         write_eeprom_kb();
         svalboard_eeprom_set_valid();
@@ -175,6 +190,11 @@ void read_eeprom_kb(void) {
 #if VIA_ENABLE
         via_read_custom_config(&global_saved_values, SVALBOARD_VIA_CONFIG_OFFSET, SVALBOARD_VIA_CONFIG_SIZE);
 #endif
+        if (schema < SVALBOARD_SAVED_VALUES_SCHEMA) {
+            for (; schema < SVALBOARD_SAVED_VALUES_SCHEMA; schema++) saved_values_migrations[schema]();
+            write_eeprom_kb();
+            svalboard_eeprom_set_valid();
+        }
     }
     sval_active_layer = 0;
 }
