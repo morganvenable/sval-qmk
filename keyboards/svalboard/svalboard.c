@@ -48,7 +48,7 @@ bool sval_hw_rev_is_flipfet(void) {
 #define SVALBOARD_VIA_CONFIG_SIZE sizeof(saved_values_t)
 
 // Bump when a saved_values field is reinterpreted without the struct changing
-// size (renamed, reordered, rescaled, or newly honoured), and add the step that
+// size (renamed, reordered, rescaled, or newly honored), and add the step that
 // upgrades the previous schema to saved_values_migrations[] below.
 #define SVALBOARD_SAVED_VALUES_SCHEMA 1
 
@@ -171,7 +171,7 @@ void keyboard_pre_init_kb(void) {
 // Every layer's default brightness: half, the same on every layer.
 #define SVAL_LAYER_DEFAULT_VAL 0x80
 
-// Schema 0 -> 1: firmware began honouring layer_colors[].val. Earlier firmware never
+// Schema 0 -> 1: firmware began honoring layer_colors[].val. Earlier firmware never
 // showed it and its defaults left it mixed (layers 5, 9 and 12 at half, the rest full),
 // so start every layer at the default brightness.
 static void migrate_layer_brightness(void) {
@@ -186,7 +186,7 @@ static void (*const saved_values_migrations[SVALBOARD_SAVED_VALUES_SCHEMA])(void
 void read_eeprom_kb(void) {
     int schema = svalboard_eeprom_schema();
     if (schema < 0) {
-        // Fresh EEPROM or an unrecognised layout - apply defaults
+        // Fresh EEPROM or an unrecognized layout - apply defaults
         svalboard_saved_values_defaults();
         write_eeprom_kb();
         svalboard_eeprom_set_valid();
@@ -447,7 +447,7 @@ void sval_idle_status(sval_idle_status_t *st) {
     st->rgb_enabled   = rgblight_is_enabled();
 }
 
-// Brightness of the active layer's colour. Everything rgblight draws is scaled by it,
+// Brightness of the active layer's color. Everything rgblight draws is scaled by it,
 // so the layer's own V and the global brightness (RGB_VAI/RGB_VAD, idle dimming) both
 // apply: shown V = global V * layer V / 255. The master sets it on a layer change; the
 // other half gets it in the presence RPC.
@@ -487,7 +487,7 @@ void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen
     const presence_rpc_t *in = (const presence_rpc_t *)in_data;
     if (sval_layer_val != in->layer_val) {
         sval_layer_val = in->layer_val;
-        // The colour may not have changed, so rgblight's own sync won't redraw this half.
+        // The color may not have changed, so rgblight's own sync won't redraw this half.
         if (is_rgblight_initialized) rgblight_sethsv_noeeprom(rgblight_get_hue(), rgblight_get_sat(), rgblight_get_val());
     }
     global_saved_values.turbo_scan       = in->turbo_scan;
@@ -693,7 +693,7 @@ enum sval_via_value_id {
     // 32-47 are layer colors (id_layer0_color + layer): 2 bytes, hue and saturation
     id_layer0_val = 48,
     // 48-63 are layer brightness (id_layer0_val + layer): 1 byte. Kept apart from the
-    // colour because VIA's colour control sends H, S and a zeroed rest of the report.
+    // color because VIA's color control sends H, S and a zeroed rest of the report.
 };
 
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
