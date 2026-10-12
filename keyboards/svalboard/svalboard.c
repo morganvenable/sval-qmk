@@ -137,22 +137,22 @@ void svalboard_saved_values_defaults(void) {
     global_saved_values.scan_deep_clock_idx = 0;
 
     // Layer colors
-    global_saved_values.layer_colors[0] = HSV(0x55FFFF);  // Green
-    global_saved_values.layer_colors[1] = HSV(0x15FFFF);  // Orange
-    global_saved_values.layer_colors[2] = HSV(0x95FFFF);  // Azure
-    global_saved_values.layer_colors[3] = HSV(0x0BB0FF);  // Coral
-    global_saved_values.layer_colors[4] = HSV(0x2BFFFF);  // Yellow
-    global_saved_values.layer_colors[5] = HSV(0x80FFFF);  // Teal
-    global_saved_values.layer_colors[6] = HSV(0x00FFFF);  // Red
-    global_saved_values.layer_colors[7] = HSV(0x00FFFF);  // Red
-    global_saved_values.layer_colors[8] = HSV(0xEAFFFF);  // Pink
-    global_saved_values.layer_colors[9] = HSV(0xBFFFFF);  // Purple
-    global_saved_values.layer_colors[10] = HSV(0x0BB0FF); // Coral
-    global_saved_values.layer_colors[11] = HSV(0x6AFFFF); // Spring Green
-    global_saved_values.layer_colors[12] = HSV(0x80FFFF); // Teal
-    global_saved_values.layer_colors[13] = HSV(0x80FFFF); // Turquoise
-    global_saved_values.layer_colors[14] = HSV(0x2BFFFF); // Yellow
-    global_saved_values.layer_colors[15] = HSV(0xD5FFFF); // Magenta
+    global_saved_values.layer_colors[0] = HSV(0x55FF80);  // Green
+    global_saved_values.layer_colors[1] = HSV(0x15FF80);  // Orange
+    global_saved_values.layer_colors[2] = HSV(0x95FF80);  // Azure
+    global_saved_values.layer_colors[3] = HSV(0x0BB080);  // Coral
+    global_saved_values.layer_colors[4] = HSV(0x2BFF80);  // Yellow
+    global_saved_values.layer_colors[5] = HSV(0x80FF80);  // Teal
+    global_saved_values.layer_colors[6] = HSV(0x00FF80);  // Red
+    global_saved_values.layer_colors[7] = HSV(0x00FF80);  // Red
+    global_saved_values.layer_colors[8] = HSV(0xEAFF80);  // Pink
+    global_saved_values.layer_colors[9] = HSV(0xBFFF80);  // Purple
+    global_saved_values.layer_colors[10] = HSV(0x0BB080); // Coral
+    global_saved_values.layer_colors[11] = HSV(0x6AFF80); // Spring Green
+    global_saved_values.layer_colors[12] = HSV(0x80FF80); // Teal
+    global_saved_values.layer_colors[13] = HSV(0x80FF80); // Turquoise
+    global_saved_values.layer_colors[14] = HSV(0x2BFF80); // Yellow
+    global_saved_values.layer_colors[15] = HSV(0xD5FF80); // Magenta
 }
 
 // The stored keycodes were written under a different keycode numbering than
@@ -168,10 +168,14 @@ void keyboard_pre_init_kb(void) {
     keyboard_pre_init_user();
 }
 
+// Every layer's default brightness: half, the same on every layer.
+#define SVAL_LAYER_DEFAULT_VAL 0x80
+
 // Schema 0 -> 1: firmware began honouring layer_colors[].val. Earlier firmware never
-// showed it and its defaults left layers 5, 9 and 12 at half, so start every layer full.
+// showed it and its defaults left it mixed (layers 5, 9 and 12 at half, the rest full),
+// so start every layer at the default brightness.
 static void migrate_layer_brightness(void) {
-    for (uint8_t i = 0; i < DYNAMIC_KEYMAP_LAYER_COUNT; i++) global_saved_values.layer_colors[i].val = 255;
+    for (uint8_t i = 0; i < DYNAMIC_KEYMAP_LAYER_COUNT; i++) global_saved_values.layer_colors[i].val = SVAL_LAYER_DEFAULT_VAL;
 }
 
 // saved_values_migrations[n] upgrades settings saved under schema n to schema n + 1.
