@@ -38,4 +38,17 @@ The launch firmware speaks Sval protocol version 3:
 
 Check feature flags before using an extension, send one request at a time per connection, and check the client ID and command in every reply.
 
+## Pointing hardware
+
+`POINTING_HARDWARE` (`0x2C`) tells a host which side each half thinks it is, which trackball sensor its firmware drives, and which sensor actually answered. PMW3360 and PMW3389 need different firmware, and the wrong one leaves the trackball dead with no other sign, so a host can use this to name the right `.uf2`.
+
+- Discovery: GET_INFO byte 19 (the second feature byte), bit 1 (`sval_flag2_pointing_hardware`). Older firmware leaves it zero.
+- Request: `DF 2C`
+- Response: `DF 2C <format> <this half: 5 bytes> <other half: 5 bytes>`. `format` is `1`; `0` means the board has nothing to report. "This half" is the one plugged into USB.
+- Each half: `<flags> <built_for> <detected> <Product_ID> <Inverse_Product_ID>`.
+  - `flags`: bit 0 the block holds a report, bit 1 the half is the left half, bit 2 the sensor driver initialised.
+  - `built_for`: `0` not a trackball build, `1` PMW3360, `2` PMW3389.
+  - `detected`: `0` not checked, `1` PMW3360 (`42 BD`), `2` PMW3389 (`47 B8`), `3` no answer (`00 00` or `FF FF`), `4` some other ID.
+- The other half reports through the split link's half-second presence ping, so its block is zero while it is disconnected, for up to half a second after it connects, and when it runs firmware without this command.
+
 Packet formats: [client-ID protocol](../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [layer state](../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), [command definitions](../../../modules/svalboard/core/sval.h).

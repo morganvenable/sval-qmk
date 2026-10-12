@@ -429,6 +429,14 @@ void sval_rgb_idle_task(void) {
 
 __attribute__((weak)) void sval_pointer_rest_apply(void) {}
 __attribute__((weak)) void sval_pointer_status(sval_idle_status_t *st) { st->sensor_present = 0; }
+__attribute__((weak)) void sval_pointer_identity(sval_pointer_identity_t *id) {}
+
+// This half's side and pointing sensor.
+static void sval_local_pointer_identity(sval_pointer_identity_t *id) {
+    memset(id, 0, sizeof(*id));
+    sval_pointer_identity(id);
+    id->flags |= SVAL_POINTER_REPORTED | (is_keyboard_left() ? SVAL_POINTER_LEFT : 0);
+}
 
 void sval_idle_status(sval_idle_status_t *st) {
     memset(st, 0, sizeof(*st));
@@ -495,6 +503,13 @@ void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen
         sval_pointer_rest_apply();
     }
     global_saved_values.scan_deep_clock_idx = in->scan_deep_clock_idx;
+    // Tell the master this half's side and sensor (Sval 0x2C). Older masters ignore it.
+    if (out_data && out_buflen >= sizeof(presence_rsp_t)) {
+        presence_rsp_t *out = (presence_rsp_t *)out_data;
+        out->magic[0]       = SVAL_PRESENCE_RSP_MAGIC0;
+        out->magic[1]       = SVAL_PRESENCE_RSP_MAGIC1;
+        sval_local_pointer_identity(&out->pointer);
+    }
 }
 
 // Scan Lab requests from the master run here on the other half.
@@ -523,6 +538,21 @@ void keyboard_post_init_kb(void) {
 static bool is_connected = false;
 bool sval_other_half_connected(void) {
     return is_connected;
+}
+
+// The other half's pointer identity from its last ping reply (zero = not reported).
+static sval_pointer_identity_t other_pointer;
+
+// Sval POINTING_HARDWARE (0x2C) reply, after [0xDF] [0x2C]:
+// [format = 1] [this half: 5 bytes] [other half: 5 bytes], each a sval_pointer_identity_t.
+// The other half's block stays zero while it is disconnected or runs firmware without this.
+void sval_pointing_hardware_kb(uint8_t *out, uint8_t length) {
+    if (length < 1 + 2 * sizeof(sval_pointer_identity_t)) return;
+    sval_pointer_identity_t mine;
+    sval_local_pointer_identity(&mine);
+    out[0] = 1;
+    memcpy(&out[1], &mine, sizeof(mine));
+    if (is_connected) memcpy(&out[1 + sizeof(mine)], &other_pointer, sizeof(other_pointer));
 }
 
 // Custom USB wake handler for split keyboards with NO_USB_STARTUP_CHECK
@@ -563,8 +593,13 @@ void housekeeping_task_kb(void) {
                                      global_saved_values.scan_period_us, global_saved_values.scan_idle_period_ms, global_saved_values.scan_idle_after_ms,
                                      global_saved_values.scan_deep_after_s, global_saved_values.scan_deep_period_ms, global_saved_values.idle_flags,
                                      global_saved_values.scan_deep_clock_idx, sval_layer_val};
-            presence_rpc_t rpcin = {0};
-            if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rpc_t), &rpcin)) {
+            presence_rsp_t rpcin = {0};
+            if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rsp_t), &rpcin)) {
+                if (rpcin.magic[0] == SVAL_PRESENCE_RSP_MAGIC0 && rpcin.magic[1] == SVAL_PRESENCE_RSP_MAGIC1 && (rpcin.pointer.flags & SVAL_POINTER_REPORTED)) {
+                    other_pointer = rpcin.pointer;
+                } else {
+                    memset(&other_pointer, 0, sizeof(other_pointer));
+                }
                 if (!is_connected) {
                     is_connected = true;
                     sval_on_reconnect();

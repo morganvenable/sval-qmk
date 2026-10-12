@@ -173,7 +173,7 @@ uint8_t sval_get_feature_flags(void) {
 }
 
 uint8_t sval_get_feature_flags2(void) {
-    return sval_flag2_default_layer_set;
+    return sval_flag2_default_layer_set | sval_flag2_pointing_hardware;
 }
 
 // Storage functions - Tap Dance
@@ -723,6 +723,18 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             break;
         }
 
+        case sval_cmd_pointing_hardware: {
+            // Request:  [0xDF] [0x2C]
+            // Response: [0xDF] [0x2C] [format] [report...]
+            // format 0: the board has nothing to report. The keyboard defines the
+            // report (Svalboard: keyboards/svalboard/docs/protocol.md).
+            if (length > 2) {
+                memset(&data[2], 0, length - 2);
+                sval_pointing_hardware_kb(&data[2], length - 2);
+            }
+            break;
+        }
+
         case sval_cmd_layer_state_set: {
             // Request: [0xDF] [0x17] [state0] [state1] [state2] [state3]
             // Response: [0xDF] [0x17]
@@ -1019,6 +1031,8 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
 }
 
 __attribute__((weak)) void sval_host_packet_kb(void) {}
+
+__attribute__((weak)) void sval_pointing_hardware_kb(uint8_t *out, uint8_t length) {}
 
 // Override via_command_kb to intercept wrapper and Sval protocol
 bool via_command_kb(uint8_t *data, uint8_t length) {

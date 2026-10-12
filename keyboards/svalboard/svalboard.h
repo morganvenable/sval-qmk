@@ -68,6 +68,38 @@ typedef struct __attribute__((__packed__)) _presence_rpc_t {
     uint8_t  layer_val;           // brightness of the active layer's colour (see rgblight_hsv_to_rgb)
 } presence_rpc_t;
 
+// Which pointing sensor a half's firmware drives and which one answered, so a
+// host can say when the wrong trackball .uf2 was flashed (Sval 0x2C, docs/protocol.md).
+enum sval_pointer_sensor {
+    SVAL_SENSOR_NONE        = 0, // built_for: not a trackball build; detected: not checked
+    SVAL_SENSOR_PMW3360     = 1,
+    SVAL_SENSOR_PMW3389     = 2,
+    SVAL_SENSOR_NO_RESPONSE = 3, // detected only: Product_ID read back 0x00 or 0xFF
+    SVAL_SENSOR_UNKNOWN     = 4, // detected only: some other Product_ID
+};
+#define SVAL_POINTER_REPORTED 0x01 // this block holds a report
+#define SVAL_POINTER_LEFT     0x02 // the half is the left half (EE_HANDS)
+#define SVAL_POINTER_INIT_OK  0x04 // the sensor driver initialised
+typedef struct __attribute__((__packed__)) {
+    uint8_t flags;              // SVAL_POINTER_*
+    uint8_t built_for;          // enum sval_pointer_sensor
+    uint8_t detected;           // enum sval_pointer_sensor
+    uint8_t product_id;         // raw Product_ID register
+    uint8_t inverse_product_id; // raw Inverse_Product_ID register
+} sval_pointer_identity_t;
+// Weak (leaves it zeroed) without a PMW33xx driver; trackball builds fill
+// built_for, detected, the raw IDs and SVAL_POINTER_INIT_OK.
+void sval_pointer_identity(sval_pointer_identity_t *id);
+
+// The other half's reply to the master's KEYBOARD_SYNC_A ping. The magic tells
+// it apart from a stale RPC buffer left by firmware that doesn't fill it.
+#define SVAL_PRESENCE_RSP_MAGIC0 0x53 // 'S'
+#define SVAL_PRESENCE_RSP_MAGIC1 0x50 // 'P'
+typedef struct __attribute__((__packed__)) {
+    uint8_t                 magic[2];
+    sval_pointer_identity_t pointer;
+} presence_rsp_t;
+
 #define SVAL_TURBO_CHOICES 7
 
 // Hardware revision, read once from SVAL_HW_REV_PIN (internal pull-up; the

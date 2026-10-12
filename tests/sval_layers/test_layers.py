@@ -25,7 +25,7 @@ def harness():
     declarations = '\n'.join(re.findall(r'enum \w+\s*\{.*?\};', header, re.S))
     version = re.search(r'#define SVAL_PROTOCOL_VERSION[^\n]+', header).group()
     cases = ''
-    for command in ('get_info', 'layer_state_get', 'storage_reset_clear', 'default_layer_set'):
+    for command in ('get_info', 'layer_state_get', 'storage_reset_clear', 'default_layer_set', 'pointing_hardware'):
         start = source.index('        case sval_cmd_' + command + ':')
         end = source.index('\n        case ', start + 1)
         cases += source[start:end]
@@ -53,6 +53,11 @@ static bool sval_storage_write_failed(void) { return write_failed; }
 #define SVAL_STORAGE_RESET_OFFSET 0
 #define SVAL_STORAGE_RESET_SIZE 1
 static void sval_write_eeprom(uint16_t offset, const void *data, uint16_t size) { assert(offset == 0 && size == 1); storage_reset = *(const uint8_t *)data; }
+static uint8_t pointing_report_len;
+static void sval_pointing_hardware_kb(uint8_t *out, uint8_t length) {
+ for(int i=0;i<length;i++)assert(out[i]==0); // zeroed before the keyboard fills it
+ pointing_report_len=length; out[0]=1; out[1]=0x07; out[6]=0x01;
+}
 static uint8_t sent[32];
 static uint32_t timer_read32(void) { return 100; }
 static void host_raw_hid_send(uint8_t *p,uint8_t n) { assert(n==32); memcpy(sent,p,n); }
@@ -92,7 +97,7 @@ int main(void) {
 #endif
  assert(sent[20]==0 && sent[21]==0 && sent[22]==9);
  assert(sent[23]==0); // Storage was not reset.
- assert(sent[24]==sval_flag2_default_layer_set); // Second feature byte, after the storage flags.
+ assert(sent[24]==(sval_flag2_default_layer_set|sval_flag2_pointing_hardware)); // Second feature byte, after the storage flags.
  storage_reset=true;
  request(sval_cmd_get_info);
  assert(sent[23]==1);
@@ -138,6 +143,11 @@ int main(void) {
  assert(sent[7]==0 && saved_default_layer==0x8000);
  request_with(sval_cmd_default_layer_set,16); // No such layer: nothing changes.
  assert(sent[7]==1 && saved_default_layer==0x8000 && default_layer_state==0x8000);
+ // Pointing hardware: the keyboard fills a zeroed reply after the command byte.
+ assert(sval_cmd_pointing_hardware==0x2C && sval_flag2_pointing_hardware==0x02);
+ request(sval_cmd_pointing_hardware);
+ assert(pointing_report_len==25 && sent[7]==1 && sent[8]==0x07 && sent[13]==0x01);
+ for(int i=14;i<32;i++)assert(sent[i]==0);
 }
 '''
 

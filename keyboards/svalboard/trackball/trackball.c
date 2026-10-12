@@ -30,10 +30,41 @@ void sval_pointer_status(sval_idle_status_t *st) {
     if (last_motion & 0x08) st->sensor_mode |= 0x40;  // Lift_stat
 }
 
+// The chip's own ID, read after init whether or not init succeeded. PMW3360 and
+// PMW3389 need different SROM blobs, so firmware for one leaves the other dead;
+// these let a host name the right .uf2 (Sval 0x2C).
+static uint8_t sensor_product_id         = 0;
+static uint8_t sensor_inverse_product_id = 0;
+static bool    sensor_init_ok            = false;
+
 bool pointing_device_driver_init(void) {
     bool ok = pmw33xx_init(0);
+    sensor_product_id         = pmw33xx_read(0, REG_Product_ID);
+    sensor_inverse_product_id = pmw33xx_read(0, REG_Inverse_Product_ID);
+    sensor_init_ok            = ok;
     if (ok) sval_pointer_rest_apply();
     return ok;
+}
+
+void sval_pointer_identity(sval_pointer_identity_t *id) {
+#if defined(POINTING_DEVICE_IS_PMW3389)
+    id->built_for = SVAL_SENSOR_PMW3389;
+#else
+    id->built_for = SVAL_SENSOR_PMW3360;
+#endif
+    id->product_id         = sensor_product_id;
+    id->inverse_product_id = sensor_inverse_product_id;
+    // Datasheet signatures, as in drivers/sensors/pmw3360.c and pmw3389.c.
+    if (sensor_product_id == 0x42 && sensor_inverse_product_id == 0xBD) {
+        id->detected = SVAL_SENSOR_PMW3360;
+    } else if (sensor_product_id == 0x47 && sensor_inverse_product_id == 0xB8) {
+        id->detected = SVAL_SENSOR_PMW3389;
+    } else if ((sensor_product_id == 0x00 && sensor_inverse_product_id == 0x00) || (sensor_product_id == 0xFF && sensor_inverse_product_id == 0xFF)) {
+        id->detected = SVAL_SENSOR_NO_RESPONSE;
+    } else {
+        id->detected = SVAL_SENSOR_UNKNOWN;
+    }
+    if (sensor_init_ok) id->flags |= SVAL_POINTER_INIT_OK;
 }
 
 report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {

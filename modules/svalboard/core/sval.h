@@ -89,6 +89,7 @@ enum sval_command_id {
     sval_cmd_context_layer_clear  = 0x29,
     sval_cmd_storage_reset_clear  = 0x2A, // host has told the user about a storage reset (GET_INFO byte 18)
     sval_cmd_default_layer_set    = 0x2B, // advertised by sval_flag2_default_layer_set
+    sval_cmd_pointing_hardware    = 0x2C, // advertised by sval_flag2_pointing_hardware
     sval_cmd_error                = 0xFF,
 };
 
@@ -107,6 +108,7 @@ enum sval_feature_flags {
 // Older firmware leaves it zero.
 enum sval_feature_flags2 {
     sval_flag2_default_layer_set = (1 << 0), // 0x2B sets the saved default layer
+    sval_flag2_pointing_hardware = (1 << 1), // 0x2C reports each half's side and pointing sensor
 };
 
 // Keyboard definition chunk size (fits in 32-byte HID packet with header)
@@ -344,6 +346,10 @@ void sval_reload_labels(void);
 // Weak no-op in the module; a keyboard overrides it to notice host activity
 // (for example to leave a low-power idle while a config app is talking).
 void sval_host_packet_kb(void);
+
+// POINTING_HARDWARE (0x2C): the keyboard fills out[0..length-1] (already zeroed)
+// with its report. Weak no-op in the module; out[0] = 0 means nothing to report.
+void sval_pointing_hardware_kb(uint8_t *out, uint8_t length);
 
 void sval_keycode_down(uint16_t keycode);
 void sval_keycode_up(uint16_t keycode);
