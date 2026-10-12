@@ -415,9 +415,25 @@ void sval_idle_status(sval_idle_status_t *st) {
     st->rgb_enabled   = rgblight_is_enabled();
 }
 
+// Brightness of the active layer's colour. Everything rgblight draws is scaled by it,
+// so the layer's own V and the global brightness (RGB_VAI/RGB_VAD, idle dimming) both
+// apply: shown V = global V * layer V / 255. The master sets it on a layer change; the
+// other half gets it in the presence RPC.
+static uint8_t sval_layer_val       = 255;
+static bool    sval_layer_val_dirty = false;
+
+rgb_t rgblight_hsv_to_rgb(hsv_t hsv) {
+    hsv.v = (uint16_t)hsv.v * sval_layer_val / 255;
+    return hsv_to_rgb(hsv);
+}
+
 void sval_set_active_layer(uint32_t layer, bool save) {
     if (layer > 15) layer = 15;
     sval_active_layer = layer;
+    if (sval_layer_val != global_saved_values.layer_colors[layer].val) {
+        sval_layer_val       = global_saved_values.layer_colors[layer].val;
+        sval_layer_val_dirty = true; // tell the other half now rather than at the next ping
+    }
     // Layer callbacks first run from quantum_init(), before rgblight_init(). Right
     // after settings are initialized the RGB defaults are already enabled in RAM,
     // and driving the uninitialized LEDs blocks the first boot for good.
@@ -437,6 +453,11 @@ void sval_set_active_layer(uint32_t layer, bool save) {
 // RPC listener for split keyboard sync
 void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen, void* out_data) {
     const presence_rpc_t *in = (const presence_rpc_t *)in_data;
+    if (sval_layer_val != in->layer_val) {
+        sval_layer_val = in->layer_val;
+        // The colour may not have changed, so rgblight's own sync won't redraw this half.
+        if (is_rgblight_initialized) rgblight_sethsv_noeeprom(rgblight_get_hue(), rgblight_get_sat(), rgblight_get_val());
+    }
     global_saved_values.turbo_scan       = in->turbo_scan;
     global_saved_values.scan_prewait_us  = in->scan_prewait_us;
     global_saved_values.scan_postwait_us = in->scan_postwait_us;
@@ -512,11 +533,12 @@ void housekeeping_task_kb(void) {
     if (is_keyboard_master()) {
         sval_rgb_idle_task();
         static uint32_t last_ping = 0;
-        if (timer_elapsed(last_ping) > 500) {
+        if (sval_layer_val_dirty || timer_elapsed(last_ping) > 500) {
+            sval_layer_val_dirty = false;
             presence_rpc_t rpcout = {global_saved_values.turbo_scan, global_saved_values.scan_prewait_us, global_saved_values.scan_postwait_us,
                                      global_saved_values.scan_period_us, global_saved_values.scan_idle_period_ms, global_saved_values.scan_idle_after_ms,
                                      global_saved_values.scan_deep_after_s, global_saved_values.scan_deep_period_ms, global_saved_values.idle_flags,
-                                     global_saved_values.scan_deep_clock_idx};
+                                     global_saved_values.scan_deep_clock_idx, sval_layer_val};
             presence_rpc_t rpcin = {0};
             if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rpc_t), &rpcin)) {
                 if (!is_connected) {
@@ -609,7 +631,10 @@ enum sval_via_value_id {
     id_retro_tapping = 19,
     // 25-31 reserved
     id_layer0_color = 32,
-    // 32-47 are layer colors (id_layer0_color + layer)
+    // 32-47 are layer colors (id_layer0_color + layer): 2 bytes, hue and saturation
+    id_layer0_val = 48,
+    // 48-63 are layer brightness (id_layer0_val + layer): 1 byte. Kept apart from the
+    // colour because VIA's colour control sends H, S and a zeroed rest of the report.
 };
 
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
@@ -738,6 +763,13 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                             sval_set_active_layer(layer, false);
                         }
                     }
+                    if (*value_id >= id_layer0_val && *value_id < id_layer0_val + 16) {
+                        uint8_t layer = *value_id - id_layer0_val;
+                        global_saved_values.layer_colors[layer].val = value_data[0];
+                        if (layer == sval_active_layer) {
+                            sval_set_active_layer(layer, false);
+                        }
+                    }
                     break;
             }
             break;
@@ -837,6 +869,9 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                         uint8_t layer = *value_id - id_layer0_color;
                         value_data[0] = global_saved_values.layer_colors[layer].hue;
                         value_data[1] = global_saved_values.layer_colors[layer].sat;
+                    }
+                    if (*value_id >= id_layer0_val && *value_id < id_layer0_val + 16) {
+                        value_data[0] = global_saved_values.layer_colors[*value_id - id_layer0_val].val;
                     }
                     break;
             }

@@ -65,6 +65,7 @@ typedef struct __attribute__((__packed__)) _presence_rpc_t {
     uint16_t scan_deep_period_ms;
     uint8_t  idle_flags;
     uint8_t  scan_deep_clock_idx;
+    uint8_t  layer_val;           // brightness of the active layer's colour (see rgblight_hsv_to_rgb)
 } presence_rpc_t;
 
 #define SVAL_TURBO_CHOICES 7
