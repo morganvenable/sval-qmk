@@ -13,6 +13,7 @@
 #include <string.h>
 #include "update_flash.h"
 #include "identity.h" // IDENTITY_SECTOR_A
+#include "dev_reset.h" // DEV_RESET_SECTOR
 
 #ifdef SVAL_UPDATER_HOST_TEST
 #    include "update_flash_host.h" // tests/sval_updater: flash and ROM mocks
@@ -35,6 +36,8 @@ _Static_assert(SVAL_UPDATE_SIZE % UPDATE_FLASH_BLOCK == 0, "slot size is whole 6
 _Static_assert(SVAL_UPDATE_SIZE >= SVAL_UPDATE_MAX_IMAGE, "the slot holds the largest image");
 _Static_assert(SVAL_UPDATE_BASE >= SETTINGS_END, "slot starts after both settings copies");
 _Static_assert(SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE <= IDENTITY_SECTOR_A, "slot ends before the identity sectors");
+_Static_assert(SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE <= DEV_RESET_SECTOR, "slot ends before the dev reset sector (D37)");
+_Static_assert(DEV_RESET_SECTOR + 0x1000 <= IDENTITY_SECTOR_A, "the dev reset sector is below the identity sectors");
 _Static_assert(IDENTITY_SECTOR_A < FLASH_LEN, "identity is on the die");
 
 #define SLOT_END (SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE)

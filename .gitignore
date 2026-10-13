@@ -129,3 +129,6 @@ via.json
 vial.json
 /keyboards/**/keymaps/via/*
 /keyboards/**/keymaps/vial/*
+
+# The private dev keymap (util/sval_dev_flash.sh copies it in): never commit it
+keyboards/svalboard/keymaps/claussen/

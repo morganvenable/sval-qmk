@@ -99,7 +99,8 @@ XIP address is `0x10000000` plus the offset).
 | `0x160000`-`0x25FFFF` | Settings: QMK wear leveling, two copies of `0x80000` |
 | `0x260000`-`0x7FFFFF` | Free |
 | `0x800000`-`0x95FFFF` | Staging slot (`SVAL_UPDATE_BASE`, `SVAL_UPDATE_SIZE`) |
-| `0x960000`-`0xFFDFFF` | Free |
+| `0x960000`-`0xFFCFFF` | Free |
+| `0xFFD000`-`0xFFDFFF` | Reserved: dev builds' reset record (D37). Release builds never read or write it, and nothing else may use it |
 | `0xFFE000`-`0xFFFFFF` | Board identity, two 4 KiB sectors |
 
 Staging erases and programs only inside the slot. The commit erases and programs only inside

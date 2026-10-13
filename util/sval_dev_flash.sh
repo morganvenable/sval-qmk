@@ -83,7 +83,7 @@ for s in $sides; do
     cp "svalboard_${s}_$km.uf2" "$out/$name.uf2"
     python3 -I keyboards/svalboard/tools/make_update.py \
         "svalboard_${s}_$km.uf2" -o "$out/$name.svup" \
-        --kb "svalboard/$s" --keymap "$km" >/dev/null
+        --kb "svalboard/$s" --keymap "$km" --diagnostic >/dev/null  # release boards refuse it
     if [ "$km" = claussen ]; then
         python3 -I "$private/verify_keymap.py" keyboards/svalboard/tools \
             ".build/svalboard_${s}_$km.elf"
