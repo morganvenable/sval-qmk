@@ -23,6 +23,8 @@
 #define UPDATE_BUILD_KEYTEST 0x08         // SVAL_KEYTEST (never with the updater; listed for the lint)
 #define UPDATE_BUILD_HOST_BOOTLOADER 0x10 // SVAL_HOST_BOOTLOADER (Scan Lab reboot into BOOTSEL)
                                           // 0x20 reserved (was: dry-run keys)
+#define UPDATE_BUILD_NO_CHORD 0x40        // SVAL_UPDATE_NO_CHORD (dev builds: ARM needs no chord)
+#define UPDATE_BUILD_DEV_RESET 0x80       // SVAL_DEV_RESET_TOKEN (dev builds: settings reset once)
 
 typedef struct __attribute__((packed)) {
     char     magic[4];       // "SVBI"

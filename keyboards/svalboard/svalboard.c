@@ -15,6 +15,9 @@
 #include "sval.h"
 #include "pointing_motion.h" // after sval.h: needs the generated fragment ids
 #include "identity.h"
+#ifdef SVAL_DEV_RESET_TOKEN
+#    include "dev_reset.h"
+#endif
 #include "nvm_via.h"
 #ifdef SVAL_UPDATER
 #    include "updater/updater.h"
@@ -171,6 +174,9 @@ void via_keycodes_reset_kb(void) {
 // stored settings.
 void keyboard_pre_init_kb(void) {
     identity_init();
+#ifdef SVAL_DEV_RESET_TOKEN
+    dev_reset_pre_init();
+#endif
     keyboard_pre_init_user();
 }
 
@@ -519,6 +525,9 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void* in_data, uint8_t
 }
 
 void keyboard_post_init_kb(void) {
+#ifdef SVAL_DEV_RESET_TOKEN
+    dev_reset_post_init(); // the settings were reset in quantum_init()
+#endif
     read_eeprom_kb();
     sval_pointer_rest_apply(); // the sensor was initialised before the flags were read
     sval_sleep_gating_init();

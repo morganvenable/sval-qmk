@@ -264,6 +264,8 @@ def main():
     refuse_rel("a test-hooks build", "test hooks", release_img(flags=mu.BI_RELEASE | mu.BI_TEST_HOOKS))
     refuse_rel("a host-bootloader build", "HOST_BOOTLOADER", release_img(flags=mu.BI_RELEASE | mu.BI_HOST_BOOTLOADER))
     refuse_rel("a keytest build", "KEYTEST", release_img(flags=mu.BI_RELEASE | mu.BI_KEYTEST))
+    refuse_rel("a no-chord dev build", "NO_CHORD", release_img(flags=mu.BI_RELEASE | mu.BI_NO_CHORD))
+    refuse_rel("a dev reset build", "DEV_RESET", release_img(flags=mu.BI_RELEASE | mu.BI_DEV_RESET))
     refuse_rel("a non-release updater build", "not a release updater build", release_img(flags=0))
     refuse_rel("a record with a retired key flag", "reserved", release_img(flags=mu.BI_RELEASE | 0x20))
     refuse_rel("a record with reserved0 set", "reserved", release_img(reserved0=2))

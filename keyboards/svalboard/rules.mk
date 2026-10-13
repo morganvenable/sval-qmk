@@ -56,10 +56,13 @@ endif
 
 # In-firmware updater (docs/updater.md); opt in with -e SVAL_UPDATER=yes.
 # SVAL_UPDATE_TEST_HOOKS adds the commit halt points for hardware tests.
+# SVAL_UPDATE_NO_CHORD makes a dev build: every ARM counts as confirmed, so
+# updates need no chord (util/sval_dev_flash.sh). Never in a release.
 # SVAL_UPDATE_RELEASE makes a release updater build: images flagged DIAGNOSTIC
 # are refused, and test hooks, keytest and the host bootloader are not allowed.
 SVAL_UPDATER ?= no
 SVAL_UPDATE_TEST_HOOKS ?= no
+SVAL_UPDATE_NO_CHORD ?= no
 SVAL_UPDATE_RELEASE ?= no
 ifeq ($(strip $(SVAL_UPDATER)), yes)
   ifeq ($(strip $(SVAL_KEYTEST)), yes)
@@ -116,11 +119,32 @@ ifeq ($(strip $(SVAL_UPDATER)), yes)
     endif
     OPT_DEFS += -DSVAL_UPDATE_TEST_HOOKS
   endif
+  ifeq ($(strip $(SVAL_UPDATE_NO_CHORD)), yes)
+    ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
+      $(error SVAL_UPDATE_NO_CHORD cannot be part of a release build)
+    endif
+    OPT_DEFS += -DSVAL_UPDATE_NO_CHORD
+  endif
   ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
     OPT_DEFS += -DSVAL_UPDATE_RELEASE
   endif
 else
-  ifneq ($(filter yes,$(strip $(SVAL_UPDATE_TEST_HOOKS)) $(strip $(SVAL_UPDATE_RELEASE))),)
-    $(error SVAL_UPDATE_TEST_HOOKS and SVAL_UPDATE_RELEASE need SVAL_UPDATER=yes)
+  ifneq ($(filter yes,$(strip $(SVAL_UPDATE_TEST_HOOKS)) $(strip $(SVAL_UPDATE_RELEASE)) $(strip $(SVAL_UPDATE_NO_CHORD))),)
+    $(error SVAL_UPDATE_TEST_HOOKS, SVAL_UPDATE_RELEASE and SVAL_UPDATE_NO_CHORD need SVAL_UPDATER=yes)
   endif
+endif
+
+# Dev builds that reset stored settings once (dev_reset.c): -e SVAL_DEV_RESET_TOKEN=<1 to 8
+# hex digits, not 0>. The first boot that finds another token stored resets every
+# setting to the build's defaults; util/sval_dev_flash.sh picks a new token per
+# build. Never in a release.
+ifneq ($(strip $(SVAL_DEV_RESET_TOKEN)),)
+  ifneq ($(shell echo '$(strip $(SVAL_DEV_RESET_TOKEN))' | grep -Eix '[0-9a-f]{1,8}' | grep -Evx '0+' >/dev/null && echo ok),ok)
+    $(error SVAL_DEV_RESET_TOKEN '$(SVAL_DEV_RESET_TOKEN)' must be 1 to 8 hex digits, not 0)
+  endif
+  ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
+    $(error SVAL_DEV_RESET_TOKEN cannot be part of a release build)
+  endif
+  OPT_DEFS += -DSVAL_DEV_RESET_TOKEN=0x$(strip $(SVAL_DEV_RESET_TOKEN))u
+  SRC += dev_reset.c
 endif
