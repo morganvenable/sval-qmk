@@ -41,6 +41,15 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -shared -fPIC 
     -o "$out/libupdater_host.so"
 python3 -I "$tests/test_sval_update_tool.py" "$out/libupdater_host.so" "$out/tool"
 
+# Dev builds with no chord (SVAL_UPDATE_NO_CHORD): the same tool, no chord and
+# no question with --yes, for this half, the other half and pair.
+${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -shared -fPIC     -DSVAL_UPDATER_HOST_TEST -DSVAL_UPDATER_HOST_LIB -DSVAL_UPDATE_NO_CHORD -include "$kb/config.h"     -I"$tests" -I"$kb" -I"$kb/updater" -I"$kb/updater/vendor"     "$tests/test_updater.c"     "$kb/updater/updater.c" "$kb/updater/update_gesture.c"     "$kb/updater/update_image.c" "$kb/updater/update_build_info.c"     "$kb/updater/update_split.c" "$kb/updater/update_split_wire.c"     "$kb/updater/vendor/sha512.c"     -o "$out/libupdater_nochord.so"
+python3 -I "$tests/test_no_chord_tool.py" "$out/libupdater_nochord.so" "$out/nochord"
+
+# Dev builds that reset stored settings once (kb/dev_reset.c).
+${CC:-cc} -std=c11 -Wall -Wextra -Werror -O1 -g     -fsanitize=address,undefined -fno-sanitize-recover=all -DDEV_RESET_HOST_TEST     -I"$kb" "$tests/test_dev_reset.c" "$kb/dev_reset.c" -o "$out/test_dev_reset"
+"$out/test_dev_reset"
+
 # The commit routine (update_commit.c, included by test_commit.c) against the
 # same mock die, with mock registers, the test hooks and power cuts.
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
@@ -66,16 +75,17 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -Wno-unused-function -O1 -g \
     -o "$out/test_split"
 "$out/test_split"
 
-# Release builds: test hooks, keytest, the host bootloader and the bench
-# settings wipe cannot be compiled into one (update_build_info.c refuses).
-for flags in "-DSVAL_UPDATE_TEST_HOOKS" "-DSVAL_KEYTEST" "-DSVAL_HOST_BOOTLOADER=1" "-DSVAL_TEST_WIPE"; do
+# Release builds: test hooks, keytest, the host bootloader, the bench settings
+# wipe and the dev builds' no-chord updates and settings reset cannot be
+# compiled into one (update_build_info.c refuses).
+for flags in "-DSVAL_UPDATE_TEST_HOOKS" "-DSVAL_KEYTEST" "-DSVAL_HOST_BOOTLOADER=1" "-DSVAL_TEST_WIPE"     "-DSVAL_UPDATE_NO_CHORD" "-DSVAL_DEV_RESET_TOKEN=1u"; do
     if ${CC:-cc} -std=c11 -O1 -DINIT_EE_HANDS_LEFT -DSVAL_UPDATE_RELEASE $flags -include "$kb/config.h" \
         -I"$kb/updater" -I"$kb/updater/vendor" \
         -c "$kb/updater/update_build_info.c" -o "$out/bi.o" 2>/dev/null; then
         echo "FAIL: a release build compiled with $flags"; exit 1
     fi
 done
-echo "release builds: refuse test hooks, keytest, the host bootloader and SVAL_TEST_WIPE"
+echo "release builds: refuse test hooks, keytest, the host bootloader, SVAL_TEST_WIPE, SVAL_UPDATE_NO_CHORD and SVAL_DEV_RESET_TOKEN"
 
 # M3: a release build, against the real update_build_info.c and
 # update_image.c. SVAL_RELEASE_SVUPS, if set, adds .svup files to check as a

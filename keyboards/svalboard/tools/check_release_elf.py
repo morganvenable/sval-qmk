@@ -10,13 +10,15 @@ exits 1 on any failure:
   - it is an updater build: one sval_update_build_info record (updater/
     update_build_info.h) with magic SVBI and info_ver 3, and updater_task
     linked;
-  - the record says RELEASE, and none of TEST_HOOKS, KEYTEST or
-    HOST_BOOTLOADER; its reserved bits and bytes are 0; its updater protocol
+  - the record says RELEASE, and none of TEST_HOOKS, KEYTEST,
+    HOST_BOOTLOADER, NO_CHORD or DEV_RESET; its reserved bits and bytes are 0; its updater protocol
     is the tools'; it is a release build (D34): a known side, the auto
     pointing build (every driver) and the sval keymap;
   - no test hooks (update_commit_test_halt, op_test_halt, halt_point,
-    halt_fed), no SVAL_KEYTEST (keytest_task, keytest_command) and no
-    SVAL_HOST_BOOTLOADER (scanlab.c's reboot_pending, reboot_due_ms).
+    halt_fed), no SVAL_KEYTEST (keytest_task, keytest_command), no
+    SVAL_HOST_BOOTLOADER (scanlab.c's reboot_pending, reboot_due_ms), and
+    none of the dev builds' SVAL_UPDATE_NO_CHORD (update_no_chord) or
+    SVAL_DEV_RESET_TOKEN (sval_dev_reset_token).
 
 The symbol checks look at the ELF's own symbol table, independently of the
 build-info record, so a record that lies about the build is caught. The
@@ -42,6 +44,8 @@ FORBIDDEN = {
     "keytest_command": "SVAL_KEYTEST",
     "reboot_pending": "SVAL_HOST_BOOTLOADER",
     "reboot_due_ms": "SVAL_HOST_BOOTLOADER",
+    "update_no_chord": "SVAL_UPDATE_NO_CHORD (dev builds)",
+    "sval_dev_reset_token": "SVAL_DEV_RESET_TOKEN (dev builds)",
 }
 
 

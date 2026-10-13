@@ -214,6 +214,9 @@ def main():
         check("version-1" in str(exc), f"a version-1 .svup: {exc}")
     check(lib.host_state() == 0, "a version-1 .svup: nothing sent")
 
+    lib.host_lib_reset(0)
+    check(not su.decode_info(*FakeBoard().op(su.INFO))["no_chord"], "INFO: not a no-chord build")
+
     # the stub refuses COMMIT: exit 3, image staged and verified
     rc, board, _ = run_update(svup, commit_available=False)
     check(rc == 3, f"stub commit: exit {rc}")

@@ -599,6 +599,19 @@ start whichever module is attached (pointing ID 5). The per-module builds
 still build but are not released. `SVAL_TEST_WIPE` is for bench builds only:
 a release updater build refuses to compile with it.
 
+**Dev builds (D37).** For firmware work on the fork, never released.
+`SVAL_UPDATE_NO_CHORD=yes` makes every ARM count as confirmed, so updates need
+no chord (INFO flags bit 7). `SVAL_DEV_RESET_TOKEN=<hex>` resets stored settings
+once: the first boot that finds another token in the sector at 0xFFD000 (just
+below the identity sectors) resets them all, then records the token there.
+Builds without a token never look at it, so the next one keeps the settings,
+whatever was flashed before. `util/sval_dev_flash.sh SERIAL [left|right|both]
+[keep|claussen|blank]` builds and flashes these with no prompt (`--yes`): keep
+stores nothing new, claussen and blank reset once to their keymap. Release
+builds refuse both flags (rules.mk and `update_build_info.c`), and
+`check_release_elf.py` and `make_update.py --release` reject their build-info
+bits (0x40, 0x80) and symbols.
+
 **Versions (D17, D32).** Launch tags are names (`vLaunch2`), so the number is
 committed in `kb/updater/fw_version.txt` and the version string is the tag
 name. Raise the number in the commit you tag. Release CI's first job

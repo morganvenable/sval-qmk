@@ -23,7 +23,8 @@
 //                                                flags (bit0 die is 16 MiB, bit1 settings writes failing,
 //                                                bit2 release build, bit3 test hooks, bit4 reserved,
 //                                                bit5 the other half's version differs: see STATUS,
-//                                                bit6 reserved), last error; then (protocol 3) the
+//                                                bit6 reserved, bit7 a no-chord dev build:
+//                                                ARM needs no chord), last error; then (protocol 3) the
 //                                                largest CHUNK data u8 (CHUNK_DATA_MAX, 50), the
 //                                                largest MANIFEST piece u8 (MANIFEST_DATA_MAX, 52)
 //                                                and the raw HID report size u8 (RAW_EPSIZE, 64).
@@ -328,6 +329,9 @@ static update_status_t op_info(const uint8_t *req, uint8_t *rsp) {
     rsp[21] = (die_ok ? 0x01 : 0) | (failing ? 0x02 : 0) | (dev.release_build ? 0x04 : 0) | (split_mismatch() ? 0x20 : 0);
 #ifdef SVAL_UPDATE_TEST_HOOKS
     rsp[21] |= 0x08;
+#endif
+#ifdef SVAL_UPDATE_NO_CHORD
+    rsp[21] |= 0x80;
 #endif
     rsp[22] = s.last_error;
     info_sizes(rsp);
