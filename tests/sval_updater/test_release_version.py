@@ -51,13 +51,11 @@ def main():
     check(1 <= fw <= rv.MAX_FW, f"committed fw_version {fw}")
     check(not hasattr(rv, "mu"), "release_version.py has no key checks")
 
-    history = [("vLaunch", False, False, "2026-10-07T04:37:07Z"), ("vLaunch2", False, False, "2026-10-08T20:20:35Z"),
-               ("vRC2", False, True, "2026-10-09T00:00:00Z"), ("vDraft", True, False, "")]
+    history = [("vLaunch", False, False, "2026-10-07T04:37:07Z"), ("vLaunch2", False, False, "2026-10-08T20:20:35Z"), ("vRC2", False, True, "2026-10-09T00:00:00Z"), ("vDraft", True, False, "")]
 
     # a dry run: a prerelease, compared with vLaunch2 (before the updater: 0)
     rc, text, o = run(out, "vLaunch3-dryrun1", history, {})
-    check(rc == 0 and o == dict(version="vLaunch3-dryrun1", fw_version=str(fw), prerelease="true", previous="vLaunch2"),
-          f"dry run passes as a prerelease: {rc} {o} {text}")
+    check(rc == 0 and o == dict(version="vLaunch3-dryrun1", fw_version=str(fw), prerelease="true", previous="vLaunch2"), f"dry run passes as a prerelease: {rc} {o} {text}")
     for tag in ("vM3-DryRun2", "vdry-run", "vLaunch3-dryrun"):
         rc, _, o = run(out, tag, history, {})
         check(rc == 0 and o.get("prerelease") == "true", f"{tag} is a dry run")
@@ -75,8 +73,7 @@ def main():
     # the newest published non-prerelease counts, not a prerelease or draft, and not this tag itself
     rc, _, o = run(out, "vLaunch3", history + [("vLaunch3", False, False, "2026-12-01T00:00:00Z")], {"vLaunch2": fw - 1, "vLaunch3": fw})
     check(rc == 0 and o.get("previous") == "vLaunch2", f"this tag's own release is skipped: {o}")
-    rc, _, o = run(out, "vLaunch3", history + [("vLaunch3-dryrun1", False, True, "2026-11-01T00:00:00Z")],
-                   {"vLaunch3-dryrun1": fw + 9, "vLaunch2": fw - 1})
+    rc, _, o = run(out, "vLaunch3", history + [("vLaunch3-dryrun1", False, True, "2026-11-01T00:00:00Z")], {"vLaunch3-dryrun1": fw + 9, "vLaunch2": fw - 1})
     check(rc == 0 and o.get("previous") == "vLaunch2", f"a dry run's number is not compared: {o}")
     rc, _, o = run(out, "vLaunch3", history, {"vDraft": fw + 9, "vLaunch2": fw - 1})
     check(rc == 0, "a draft's number is not compared")

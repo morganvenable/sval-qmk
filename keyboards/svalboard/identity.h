@@ -32,11 +32,11 @@ typedef enum {
 // No identity flags are defined. Bits 0x01 and 0x02 were set by a Vial migration
 // that release candidates vRC1 and vRC2 ran; boards keep them, so never reuse them.
 
-void                identity_init(void); // safe to call repeatedly; loads once
-bool                identity_available(void);
-const uint8_t      *identity_serial(identity_serial_source_t *source);
-const char         *identity_name(void); // "" when unset
-identity_status_t   identity_set_name(const char *name, uint8_t len);
+void              identity_init(void); // safe to call repeatedly; loads once
+bool              identity_available(void);
+const uint8_t    *identity_serial(identity_serial_source_t *source);
+const char       *identity_name(void); // "" when unset
+identity_status_t identity_set_name(const char *name, uint8_t len);
 
 // Host access over VIA custom values (protocol in identity.c).
 #define IDENTITY_CHANNEL 0x49 // 'I'

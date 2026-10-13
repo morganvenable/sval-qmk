@@ -94,33 +94,28 @@ SET_VALUE = 0x07
 WRAPPER, VIA_PROTO, WRAPPER_ERROR = 0xDD, 0xFE, 0xFF
 HAND_SELF = 0xFF
 INFO, MANIFEST, ARM, BEGIN, CHUNK, END, STATUS, COMMIT, ABORT, REBIND, TEST_HALT, DIAG, RELAY = range(13)
-HALT_POINTS = {"invalidated": 1, "first-erase": 2, "mid-program": 3, "last-sector": 4, "page0": 5, "fault": 6,
-               "fault-erased": 7}
+HALT_POINTS = {"invalidated": 1, "first-erase": 2, "mid-program": 3, "last-sector": 4, "page0": 5, "fault": 6, "fault-erased": 7}
 # Protocol 3: one 64-byte report each way. The updater's value bytes are what is
 # left after the client wrapper's 6 bytes and VIA's 3 (updater.c); INFO reports
 # the piece sizes the board takes, which can be no larger than these.
 REPORT = 64
-VALUE_BYTES = REPORT - 6 - 3          # 55: [status] + 54 reply bytes
+VALUE_BYTES = REPORT - 6 - 3  # 55: [status] + 54 reply bytes
 MANIFEST_PIECE_MAX = VALUE_BYTES - 3  # 52, after [hand][off][n]
-CHUNK_PIECE_MAX = VALUE_BYTES - 5     # 50, after [hand][off u24][n]
+CHUNK_PIECE_MAX = VALUE_BYTES - 5  # 50, after [hand][off u24][n]
 # The other half is updated over the split cable, whose relay is the same in
 # protocols 2 and 3: a half on either can be updated through this one.
 OTHER_HALF_PROTOS = (2, 3)
 OLD_FIRMWARE = ("a board on updater protocol 2 (32-byte reports) does not answer this tool: update it with "
                 "the sval_update.py of its release, or copy the .uf2 in BOOTSEL mode")
 
-STATUS_NAMES = ["OK", "INVALID", "UNAVAILABLE", "FLASH_ERR", "ACCEPTED", "BUSY", "NOT_CONFIRMED", "WRONG_HW", "BAD_SIG",
-                "BAD_HASH", "BAD_IMAGE", "EPOCH", "OUT_OF_ORDER", "OVERRUN", "TOO_LARGE", "TIMEOUT", "OTHER_CLIENT",
-                "UNSUPPORTED", "STORAGE"]
-STATE_NAMES = ["IDLE", "MANIFEST_LOADING", "CONFIRM_WAIT", "VERIFYING_MANIFEST", "ERASING", "RECEIVING",
-               "VERIFYING_IMAGE", "VERIFIED", "COMMITTING", "ERROR", "RELAYING", "RELAYED", "SUBSIDE_COMMITTING"]
+STATUS_NAMES = ["OK", "INVALID", "UNAVAILABLE", "FLASH_ERR", "ACCEPTED", "BUSY", "NOT_CONFIRMED", "WRONG_HW", "BAD_SIG", "BAD_HASH", "BAD_IMAGE", "EPOCH", "OUT_OF_ORDER", "OVERRUN", "TOO_LARGE", "TIMEOUT", "OTHER_CLIENT", "UNSUPPORTED", "STORAGE"]
+STATE_NAMES = ["IDLE", "MANIFEST_LOADING", "CONFIRM_WAIT", "VERIFYING_MANIFEST", "ERASING", "RECEIVING", "VERIFYING_IMAGE", "VERIFIED", "COMMITTING", "ERROR", "RELAYING", "RELAYED", "SUBSIDE_COMMITTING"]
 OK, INVALID, ACCEPTED, NOT_CONFIRMED, BAD_HASH = 0, 1, 4, 6, 9
 OUT_OF_ORDER, OVERRUN, OTHER_CLIENT, UNSUPPORTED = 12, 13, 16, 17
 ST_IDLE, ST_MANIFEST_LOADING, ST_CONFIRM_WAIT, ST_RECEIVING, ST_VERIFIED, ST_ERROR = 0, 1, 2, 5, 7, 9
 ST_RELAYING, ST_RELAYED, ST_SUBSIDE_COMMITTING = 10, 11, 12
 # relay_phase_t (keyboards/svalboard/updater/update_split.h)
-RELAY_PHASES = ["idle", "start", "manifest", "checking and erasing", "sending", "end", "verifying", "verified",
-                "commit", "committing", "probe", "done", "failed", "aborting"]
+RELAY_PHASES = ["idle", "start", "manifest", "checking and erasing", "sending", "end", "verifying", "verified", "commit", "committing", "probe", "done", "failed", "aborting"]
 PRESENCE_NONE, PRESENCE_MATCH, PRESENCE_VERSION = 0, 1, 2
 HANDS = {0: "left", 1: "right"}
 POINTING = {v: k for k, v in make_update.POINTING.items()}
@@ -233,24 +228,39 @@ class Device:
         body = bytes([SET_VALUE, CHANNEL, op, hand]) + bytes(args)
         if len(body) > 3 + VALUE_BYTES:
             raise ValueError("updater request too long")
-        r = self._exchange(bytes([WRAPPER]) + cid + bytes([VIA_PROTO]) + body,
-                           lambda r: r[0] == WRAPPER and r[1:5] == cid and (r[5] == WRAPPER_ERROR or r[6:9] == body[:3]))
+        r = self._exchange(bytes([WRAPPER]) + cid + bytes([VIA_PROTO]) + body, lambda r: r[0] == WRAPPER and r[1:5] == cid and (r[5] == WRAPPER_ERROR or r[6:9] == body[:3]))
         if r[5] == WRAPPER_ERROR:
             raise ClientIdExpired(f"client wrapper error {r[6]} for client {cid.hex()}")
         return r[9], r[10:REPORT]
 
 
 def decode_info(st, r):
-    return dict(status=status_name(st), state=state_name(r[0]), protocol=r[1],
-                slot_base=f"{struct.unpack_from('<H', r, 2)[0] * 4096:#x}",
-                slot_size=f"{struct.unpack_from('<H', r, 4)[0] * 4096:#x}",
-                max_image=f"{struct.unpack_from('<H', r, 6)[0] * 4096:#x}",
-                jedec=r[8:11].hex(), pointing=POINTING.get(r[11], r[11]), hand=HANDS.get(r[12], r[12]),
-                hand_id=r[12], pointing_id=r[11], fw_version=struct.unpack_from("<I", r, 13)[0], storage_format=r[17],
-                security_epoch=struct.unpack_from("<H", r, 18)[0], flash_16mib=bool(r[20] & 1),
-                settings_writes_failing=bool(r[20] & 2), release_build=bool(r[20] & 4), test_hooks=bool(r[20] & 8),
-                other_half_mismatch=bool(r[20] & 32), no_chord=bool(r[20] & 0x80), last_error=status_name(r[21]),
-                chunk_max=r[22], manifest_max=r[23], report_bytes=r[24])
+    return dict(
+        status=status_name(st),
+        state=state_name(r[0]),
+        protocol=r[1],
+        slot_base=f"{struct.unpack_from('<H', r, 2)[0] * 4096:#x}",
+        slot_size=f"{struct.unpack_from('<H', r, 4)[0] * 4096:#x}",
+        max_image=f"{struct.unpack_from('<H', r, 6)[0] * 4096:#x}",
+        jedec=r[8:11].hex(),
+        pointing=POINTING.get(r[11], r[11]),
+        hand=HANDS.get(r[12], r[12]),
+        hand_id=r[12],
+        pointing_id=r[11],
+        fw_version=struct.unpack_from("<I", r, 13)[0],
+        storage_format=r[17],
+        security_epoch=struct.unpack_from("<H", r, 18)[0],
+        flash_16mib=bool(r[20] & 1),
+        settings_writes_failing=bool(r[20] & 2),
+        release_build=bool(r[20] & 4),
+        test_hooks=bool(r[20] & 8),
+        other_half_mismatch=bool(r[20] & 32),
+        no_chord=bool(r[20] & 0x80),
+        last_error=status_name(r[21]),
+        chunk_max=r[22],
+        manifest_max=r[23],
+        report_bytes=r[24]
+    )
 
 
 def piece_sizes(info):
@@ -351,24 +361,34 @@ def relay_phase_name(code):
 
 def decode_relay(st, r):
     """The RELAY op: the relay to the other half (M2)."""
-    return dict(status=status_name(st), phase=relay_phase_name(r[0]), phase_id=r[0], other_state=state_name(r[1]),
-                other_state_id=r[1], other_error=status_name(r[2]), other_error_id=r[2],
-                acked=r[3] | r[4] << 8 | r[5] << 16, image_len=r[6] | r[7] << 8 | r[8] << 16,
-                other_sectors_erased=struct.unpack_from("<H", r, 9)[0],
-                other_sectors_to_erase=struct.unpack_from("<H", r, 11)[0], retries=struct.unpack_from("<H", r, 13)[0],
-                relay_ms=struct.unpack_from("<I", r, 15)[0], link_paused=bool(r[19] & 1), unconfirmed=bool(r[19] & 2),
-                error=status_name(r[20]),
-                error_id=r[20], state=state_name(r[21]), state_id=r[21])
+    return dict(
+        status=status_name(st),
+        phase=relay_phase_name(r[0]),
+        phase_id=r[0],
+        other_state=state_name(r[1]),
+        other_state_id=r[1],
+        other_error=status_name(r[2]),
+        other_error_id=r[2],
+        acked=r[3] | r[4] << 8 | r[5] << 16,
+        image_len=r[6] | r[7] << 8 | r[8] << 16,
+        other_sectors_erased=struct.unpack_from("<H", r, 9)[0],
+        other_sectors_to_erase=struct.unpack_from("<H", r, 11)[0],
+        retries=struct.unpack_from("<H", r, 13)[0],
+        relay_ms=struct.unpack_from("<I", r, 15)[0],
+        link_paused=bool(r[19] & 1),
+        unconfirmed=bool(r[19] & 2),
+        error=status_name(r[20]),
+        error_id=r[20],
+        state=state_name(r[21]),
+        state_id=r[21]
+    )
 
 
 def decode_diag(st, r):
-    return dict(status=status_name(st), stack_unused=struct.unpack_from("<H", r, 0)[0],
-                stack_size=struct.unpack_from("<H", r, 2)[0], longest_pass_ms=struct.unpack_from("<H", r, 4)[0],
-                longest_pass_state=state_name(r[6]), **decode_crumbs(r))
+    return dict(status=status_name(st), stack_unused=struct.unpack_from("<H", r, 0)[0], stack_size=struct.unpack_from("<H", r, 2)[0], longest_pass_ms=struct.unpack_from("<H", r, 4)[0], longest_pass_state=state_name(r[6]), **decode_crumbs(r))
 
 
-OP_NAMES = ["INFO", "MANIFEST", "ARM", "BEGIN", "CHUNK", "END", "STATUS", "COMMIT", "ABORT", "REBIND", "TEST_HALT", "DIAG",
-            "RELAY"]
+OP_NAMES = ["INFO", "MANIFEST", "ARM", "BEGIN", "CHUNK", "END", "STATUS", "COMMIT", "ABORT", "REBIND", "TEST_HALT", "DIAG", "RELAY"]
 
 
 def decode_crumbs(r):
@@ -376,29 +396,37 @@ def decode_crumbs(r):
     if len(r) < 20:
         return {}
     f = r[7]
-    why = [n for b, n in ((1, "power-on/brown-out"), (2, "RUN pin"), (4, "debugger"), (8, "watchdog timer"),
-                          (16, "watchdog force")) if f & b] or ["none of POR/RUN/watchdog: software or core reset"]
+    why = [n for b, n in ((1, "power-on/brown-out"), (2, "RUN pin"), (4, "debugger"), (8, "watchdog timer"), (16, "watchdog force")) if f & b] or ["none of POR/RUN/watchdog: software or core reset"]
     out = dict(last_reset=why)
     if not f & 0x80:
         out["before_reset"] = "no breadcrumbs (first boot, power-on or RUN pin)"
         return out
     c1, c2, c3 = struct.unpack_from("<III", r, 8)
     op, state, st = c1 >> 24, (c1 >> 16) & 0xFF, (c1 >> 8) & 0xFF
-    out["before_reset"] = dict(
-        last_op=OP_NAMES[op] if op < len(OP_NAMES) else f"op {op}", state=state_name(state),
-        op_status="still inside the op" if st == 0xFF else status_name(st), op_count=c1 & 0xFF,
-        last_op_ms=c2, last_pass_ms=c3)
+    out["before_reset"] = dict(last_op=OP_NAMES[op] if op < len(OP_NAMES) else f"op {op}", state=state_name(state), op_status="still inside the op" if st == 0xFF else status_name(st), op_count=c1 & 0xFF, last_op_ms=c2, last_pass_ms=c3)
     return out
 
 
 def decode_status(st, r):
-    return dict(status=status_name(st), state=state_name(r[0]), state_id=r[0], staged=r[1] | r[2] << 8 | r[3] << 16,
-                image_len=r[4] | r[5] << 8 | r[6] << 16, sectors_erased=struct.unpack_from("<H", r, 7)[0],
-                sectors_to_erase=struct.unpack_from("<H", r, 9)[0], last_error=status_name(r[11]), last_error_id=r[11],
-                verify_ms=struct.unpack_from("<H", r, 14)[0],
-                erase_ms_max=struct.unpack_from("<H", r, 16)[0], crc_lo16=struct.unpack_from("<H", r, 18)[0],
-                chord_made=bool(r[20] & 1), session_bound=bool(r[20] & 2), settings_writes_failing=bool(r[20] & 4),
-                other_half=presence_name(r[21]), other_half_id=r[21])
+    return dict(
+        status=status_name(st),
+        state=state_name(r[0]),
+        state_id=r[0],
+        staged=r[1] | r[2] << 8 | r[3] << 16,
+        image_len=r[4] | r[5] << 8 | r[6] << 16,
+        sectors_erased=struct.unpack_from("<H", r, 7)[0],
+        sectors_to_erase=struct.unpack_from("<H", r, 9)[0],
+        last_error=status_name(r[11]),
+        last_error_id=r[11],
+        verify_ms=struct.unpack_from("<H", r, 14)[0],
+        erase_ms_max=struct.unpack_from("<H", r, 16)[0],
+        crc_lo16=struct.unpack_from("<H", r, 18)[0],
+        chord_made=bool(r[20] & 1),
+        session_bound=bool(r[20] & 2),
+        settings_writes_failing=bool(r[20] & 4),
+        other_half=presence_name(r[21]),
+        other_half_id=r[21]
+    )
 
 
 class Session:
@@ -493,8 +521,7 @@ class Session:
         target = self.other_half(m) if self.other else info
         if not confirmed:
             confirm_mismatches(image_mismatches(m, target), self.args)
-        print(f"image: {version!r} ({m['fw_version']}), {len(image)} B, flags {m['flags']:#x}"
-              + (f", for the other ({HANDS[self.hand]}) half" if self.other else ""))
+        print(f"image: {version!r} ({m['fw_version']}), {len(image)} B, flags {m['flags']:#x}" + (f", for the other ({HANDS[self.hand]}) half" if self.other else ""))
 
         t_start = time.monotonic()
         blob = manifest
@@ -510,8 +537,7 @@ class Session:
             raise UpdaterError(f"ARM: board's manifest hash {r[4:8].hex()} differs from this file's {mhash.hex()}")
         usb_half = info["hand"]
         print()
-        print(f"  MANIFEST HASH  {mhash.hex()}   ({version}, {len(image)} bytes"
-              + (f", for the {HANDS[self.hand]} half without USB)" if self.other else ")"))
+        print(f"  MANIFEST HASH  {mhash.hex()}   ({version}, {len(image)} bytes" + (f", for the {HANDS[self.hand]} half without USB)" if self.other else ")"))
         if not info["no_chord"]:
             print(f"  Check this matches what you expect, then confirm on the keyboard: hold Index South + Middle South")
             print(f"  for 1 second on the {usb_half} half, the one with USB (M and , on the right; C and V on the left).")
@@ -549,11 +575,15 @@ class Session:
         s = self.poll(lambda s: s["state_id"] == ST_VERIFIED, "verifying the image", 60)
         if s["crc_lo16"] != crc_body & 0xFFFF:
             raise UpdaterError(f"board's image CRC {s['crc_lo16']:#06x} differs from this file's {crc_body & 0xFFFF:#06x}")
-        summary = dict(transfer_s=round(t_sent - t_send, 2), total_s=round(time.monotonic() - t_start, 2),
-                       round_trips=self.dev.round_trips,
-                       mean_round_trip_ms=round(1000 * self.dev.round_trip_s / max(self.dev.round_trips, 1), 2),
-                       verify_ms=s["verify_ms"], erase_ms_max=s["erase_ms_max"],
-                       rebinds=self.renewals)
+        summary = dict(
+            transfer_s=round(t_sent - t_send, 2),
+            total_s=round(time.monotonic() - t_start, 2),
+            round_trips=self.dev.round_trips,
+            mean_round_trip_ms=round(1000 * self.dev.round_trip_s / max(self.dev.round_trips, 1), 2),
+            verify_ms=s["verify_ms"],
+            erase_ms_max=s["erase_ms_max"],
+            rebinds=self.renewals
+        )
         print("verified: " + json.dumps(summary))
         min_rebinds = getattr(self.args, "min_rebinds", 0) or 0
         if self.renewals < min_rebinds:
@@ -721,8 +751,7 @@ def pair(dev, args, paths, sessions):
     other = [(p, m) for p, m in images if m["hand"] == board ^ 1]
     this = [(p, m) for p, m in images if m["hand"] == board]
     if len(other) != 1 or len(this) != 1:
-        raise UpdaterError(f"pair needs one image for each half; this half is {HANDS.get(board, board)}, the images are for "
-                           + ", ".join(HANDS.get(m["hand"], str(m["hand"])) for _, m in images))
+        raise UpdaterError(f"pair needs one image for each half; this half is {HANDS.get(board, board)}, the images are for " + ", ".join(HANDS.get(m["hand"], str(m["hand"])) for _, m in images))
     # Both images are checked against both halves before anything is sent:
     # a refusal of the second image after the first half committed would
     # leave the halves on different releases.
@@ -802,7 +831,6 @@ class Rejects:
     """M1 #6, the protocol rows: each malformed or misdirected request must get
     its expected status and leave the state as it was (or latch ERROR, for an
     overrun). Two sessions, each confirmed with the chord; nothing is committed."""
-
     def __init__(self, dev, path):
         self.dev = dev
         manifest, self.image = make_update.parse_svup(Path(path).read_bytes())
@@ -819,8 +847,7 @@ class Rejects:
         ok = st == want and (state is None or s["state_id"] == state)
         self.passed += ok
         self.failed += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  {what}: {status_name(st)}, state {s['state']}"
-              + ("" if ok else f" (expected {status_name(want)}" + ("" if state is None else f", {state_name(state)}") + ")"))
+        print(f"  {'PASS' if ok else 'FAIL'}  {what}: {status_name(st)}, state {s['state']}" + ("" if ok else f" (expected {status_name(want)}" + ("" if state is None else f", {state_name(state)}") + ")"))
         return r
 
     def load(self, client):
@@ -938,16 +965,14 @@ def main():
     rj.add_argument("svup", type=Path, help="an image this half accepts")
     up = sub.add_parser("update")
     up.add_argument("svup", type=Path)
-    up.add_argument("--half", choices=("usb", "other"),
-                    help="the half to update (default: the image's own hand picks it); for an MCU moved between hands")
+    up.add_argument("--half", choices=("usb", "other"), help="the half to update (default: the image's own hand picks it); for an MCU moved between hands")
     up.add_argument("--yes", action="store_true", help="flash an image built for another hand or pointing device without asking")
     up.add_argument("--delay", type=float, default=0.0, help="seconds between chunks")
     up.add_argument("--rebind-every", type=float, default=50.0, help="renew the client ID and REBIND every S seconds (0: never)")
     up.add_argument("--min-rebinds", type=int, default=0, help="fail before COMMIT unless at least N renewals happened (M1 #16)")
     up.add_argument("--no-commit", action="store_true", help="stop once the image is verified")
     up.add_argument("--keep", action="store_true", help="on failure, leave the session for inspection instead of ABORTing")
-    up.add_argument("--halt", choices=sorted(HALT_POINTS, key=HALT_POINTS.get),
-                    help="test-hooks builds: stop the commit at this point for good (M1 #8-#10)")
+    up.add_argument("--halt", choices=sorted(HALT_POINTS, key=HALT_POINTS.get), help="test-hooks builds: stop the commit at this point for good (M1 #8-#10)")
     up.add_argument("--halt-unfed", action="store_true", help="with --halt: let the watchdog reset the board (M1 #9)")
     pr = sub.add_parser("pair", help="update both halves: the other one through this one, then this one (M2)")
     pr.add_argument("svup", type=Path, nargs=2, help="one image for each half, in any order")

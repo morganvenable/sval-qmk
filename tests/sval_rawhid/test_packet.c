@@ -15,15 +15,15 @@ static uint8_t      storage[BQ_BUFFER_SIZE(NBUF, EP)];
 static int          checks, failures;
 static unsigned int released;
 
-#define CHECK(c, ...)                         \
-    do {                                      \
-        checks++;                             \
-        if (!(c)) {                           \
-            failures++;                       \
-            printf("FAIL %d: ", __LINE__);    \
-            printf(__VA_ARGS__);              \
-            printf("\n");                     \
-        }                                     \
+#define CHECK(c, ...)                      \
+    do {                                   \
+        checks++;                          \
+        if (!(c)) {                        \
+            failures++;                    \
+            printf("FAIL %d: ", __LINE__); \
+            printf(__VA_ARGS__);           \
+            printf("\n");                  \
+        }                                  \
     } while (0)
 
 static void on_release(io_buffers_queue_t *q) {
@@ -64,7 +64,8 @@ int main(void) {
     CHECK(got == 32, "short packet keeps its length: %zu", got);
     CHECK(buf[0] == 0xDD && buf[31] == 0x11, "short packet copied");
     int padded = 1;
-    for (int i = 32; i < EP; i++) padded &= buf[i] == 0;
+    for (int i = 32; i < EP; i++)
+        padded &= buf[i] == 0;
     CHECK(padded, "the rest of the report is zeroed");
     CHECK(released == 1, "short packet's buffer freed: %u", released);
 
@@ -72,7 +73,8 @@ int main(void) {
     CHECK(ibq_take_packet_s(&q, buf, EP, &got), "second packet taken");
     CHECK(got == EP, "full packet length: %zu", got);
     int whole = buf[0] == 0xDD;
-    for (int i = 1; i < EP; i++) whole &= buf[i] == 0x22;
+    for (int i = 1; i < EP; i++)
+        whole &= buf[i] == 0x22;
     CHECK(whole, "full packet framed from its first byte");
     CHECK(!ibq_take_packet_s(&q, buf, EP, &got), "queue empty afterwards");
     CHECK(released == 2, "both buffers freed: %u", released);

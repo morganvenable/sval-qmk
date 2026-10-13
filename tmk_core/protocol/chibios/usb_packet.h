@@ -24,7 +24,7 @@ static inline bool ibq_take_packet_s(input_buffers_queue_t *ibqp, uint8_t *data,
     if (ibqGetFullBufferTimeoutS(ibqp, TIME_IMMEDIATE) != MSG_OK) {
         return false;
     }
-    size_t n = (size_t)(ibqp->top - ibqp->ptr);
+    size_t n  = (size_t)(ibqp->top - ibqp->ptr);
     *received = n;
     if (n > size) {
         n = size;

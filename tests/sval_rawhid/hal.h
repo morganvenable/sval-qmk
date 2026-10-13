@@ -17,7 +17,7 @@ typedef struct {
 #define MSG_TIMEOUT -1
 #define MSG_RESET -2
 #define TIME_IMMEDIATE ((sysinterval_t)0)
-#define TIME_INFINITE ((sysinterval_t)-1)
+#define TIME_INFINITE ((sysinterval_t) - 1)
 
 #define osalDbgCheck(c) assert(c)
 #define osalDbgAssert(c, r) assert(c)

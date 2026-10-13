@@ -56,11 +56,9 @@ def parse_version_file(text, where):
 
 def committed_at(tag):
     """The number committed at a tag, or 0 if the file did not exist there yet."""
-    p = subprocess.run(["git", "-C", str(REPO_ROOT), "show", f"refs/tags/{tag}:{VERSION_FILE}"],
-                       capture_output=True, text=True)
+    p = subprocess.run(["git", "-C", str(REPO_ROOT), "show", f"refs/tags/{tag}:{VERSION_FILE}"], capture_output=True, text=True)
     if p.returncode != 0:
-        exists = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
-                                capture_output=True, text=True)
+        exists = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"], capture_output=True, text=True)
         if exists.returncode != 0:
             raise ValueError(f"the previous release's tag {tag} is not in this checkout (fetch tags: fetch-depth 0)")
         return 0
@@ -71,9 +69,7 @@ def releases(repo, path):
     if path:
         text = Path(path).read_text()
     else:
-        text = subprocess.run(["gh", "api", "--paginate", f"repos/{repo}/releases", "--jq",
-                               '.[] | [.tag_name, .draft, .prerelease, .published_at] | @tsv'],
-                              capture_output=True, text=True, check=True).stdout
+        text = subprocess.run(["gh", "api", "--paginate", f"repos/{repo}/releases", "--jq", '.[] | [.tag_name, .draft, .prerelease, .published_at] | @tsv'], capture_output=True, text=True, check=True).stdout
     out = []
     for line in text.splitlines():
         if line.strip():

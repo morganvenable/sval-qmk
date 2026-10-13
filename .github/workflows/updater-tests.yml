@@ -2,7 +2,7 @@ name: Svalboard updater host tests
 
 # Host tests for the in-firmware updater (util/updater_test/run.sh: the state
 # machine, commit, relay, split link, raw HID framing and tools under ASan and
-# UBSan; no QMK build, no submodules), the settings storage tests
+# UBSan; no QMK build; only the ChibiOS submodule, for the raw HID framing test), the settings storage tests
 # (tests/sval_storage) and the wear-leveling gtests the storage relies on. Runs only when updater files change; tag pushes do
 # not run it (release.yml lints release builds itself).
 
@@ -74,6 +74,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: ChibiOS (raw HID framing test)
+      run: git submodule update --init --depth 1 lib/chibios
 
     - name: Host tests (ASan, UBSan)
       run: bash util/updater_test/run.sh
@@ -83,11 +88,13 @@ jobs:
 
   wear-leveling:
     runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli
 
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Wear-leveling gtests
       run: make test:wear_leveling_mirror test:wear_leveling_mirror_large test:wear_leveling_general

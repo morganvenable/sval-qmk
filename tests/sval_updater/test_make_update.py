@@ -74,16 +74,14 @@ def main():
     # The storage-format floor is kept in two places: the firmware's and the tool's must agree.
     cfg = (ROOT / "keyboards/svalboard/config.h").read_text()
     fw_fmt = re.search(r"^#define SVAL_UPDATE_STORAGE_FORMAT (\d+)", cfg, re.M)
-    check(fw_fmt is not None and int(fw_fmt.group(1)) == mu.STORAGE_FORMAT,
-          f"make_update.STORAGE_FORMAT {mu.STORAGE_FORMAT} == SVAL_UPDATE_STORAGE_FORMAT {fw_fmt and fw_fmt.group(1)}")
+    check(fw_fmt is not None and int(fw_fmt.group(1)) == mu.STORAGE_FORMAT, f"make_update.STORAGE_FORMAT {mu.STORAGE_FORMAT} == SVAL_UPDATE_STORAGE_FORMAT {fw_fmt and fw_fmt.group(1)}")
     check(mu.crc32_mpeg2(b"123456789") == 0x0376E6E7, "CRC-32/MPEG-2 check value")
     check(mu.crc32_mpeg2(BOOT2[:252]) == 0xD58F0B07, "real page 0 CRC d58f0b07")
     check(mu.boot2_valid(BOOT2), "real page 0 valid")
     check(mu.crc32_mpeg2(bytes(252)) == 0x7065399A and not mu.boot2_valid(bytes(256)), "zero page 7065399a, invalid")
     check(mu.crc32_mpeg2(b"\xff" * 252) == 0x0B8FD31A and not mu.boot2_valid(b"\xff" * 256), "erased page 0b8fd31a, invalid")
     check((mu.MANIFEST_VERSION, mu.UPDATER_PROTO, mu.MANIFEST_BYTES) == (2, 3, 108), "format 2, protocol 3: a 108-byte manifest")
-    check(not any(hasattr(mu, n) for n in ("sign", "verify", "SIG_BYTES", "release_keys", "TEST_KEY_FILE")),
-          "make_update.py has no signing left")
+    check(not any(hasattr(mu, n) for n in ("sign", "verify", "SIG_BYTES", "release_keys", "TEST_KEY_FILE")), "make_update.py has no signing left")
 
     # ---- a good build --------------------------------------------------------------------
     img = image(0x1800)
@@ -114,10 +112,7 @@ def main():
     check(f["version"] == b"M1-test-A".ljust(16, b"\0"), "version string")
     check(f["sha512"] == hashlib.sha512(img).digest(), "sha512")
     # round trip: the manifest rebuilt from the parsed fields is byte for byte the same
-    again = struct.pack(mu.MANIFEST_FMT, *(f[k] for k in ("magic", "manifest_ver", "reserved0", "hand", "pointing_id",
-                                                         "keymap_id", "flags", "security_epoch", "storage_format",
-                                                         "updater_proto", "image_len", "fw_version", "reserved",
-                                                         "version", "sha512")))
+    again = struct.pack(mu.MANIFEST_FMT, *(f[k] for k in ("magic", "manifest_ver", "reserved0", "hand", "pointing_id", "keymap_id", "flags", "security_epoch", "storage_format", "updater_proto", "image_len", "fw_version", "reserved", "version", "sha512")))
     check(again + body == data, ".svup round trip")
     again_path = tmp / "ok_basic_again.svup"
     rc, text = run(good, "-o", again_path, *common)
@@ -191,14 +186,12 @@ def main():
     refuse("reset vector in boot2", uf2(image(0x1800, reset=0x10000081)), needle="reset")
     refuse("RELEASE and DIAGNOSTIC", None, *common, "--release", "--diagnostic", needle="DIAGNOSTIC")
     refuse("RELEASE of a diagnostic keymap", None, *common, "--release", "--keymap", "scanlab", needle="release keymaps")
-    refuse("RELEASE of an image without a build-info record", None, *common, "--release", "--keymap", "sval",
-           needle="no build-info")
+    refuse("RELEASE of an image without a build-info record", None, *common, "--release", "--keymap", "sval", needle="no build-info")
     refuse("long version string", None, *common, "--version-string", "x" * 17, needle="16")
     refuse("unknown variant", None, "--kb", "svalboard/joystick/right", needle="variant")
     refuse("no side", None, "--version-string", "x", needle="--kb")
     refuse("--expect-* without --release", None, *common, "--expect-version", "x", needle="--release")
-    refuse("a bad image for release", uf2(image(0x1800, sp=0)), *common, "--release", "--keymap", "sval",
-           "--unsafe-allow-bad-image", needle="never --release")
+    refuse("a bad image for release", uf2(image(0x1800, sp=0)), *common, "--release", "--keymap", "sval", "--unsafe-allow-bad-image", needle="never --release")
     for gone in (("--key", "x"), ("--key-id", "1"), ("--signer", "pure"), ("--genkey", "x"), ("--print-public",)):
         rc, text = run(good, "-o", tmp / "gone.svup", *common, *gone)
         check(rc != 0 and "unrecognized arguments" in text, f"{gone[0]} is gone: {text.strip()[-80:]}")
@@ -214,11 +207,9 @@ def main():
     make("badimage_boot2.svup", *common, "--unsafe-allow-bad-image", expect="badimage", src=bad)
 
     # ---- the build-info record and --release ------------------------------------------------
-    def release_img(flags=mu.BI_RELEASE, fw=3, version=b"vM3-test", extra=b"", hand=1, pointing_id=5, keymap_id=1,
-                    info_ver=3, proto=3, reserved0=0):
+    def release_img(flags=mu.BI_RELEASE, fw=3, version=b"vM3-test", extra=b"", hand=1, pointing_id=5, keymap_id=1, info_ver=3, proto=3, reserved0=0):
         body = bytearray(image(0x1800))
-        rec = struct.pack(mu.BUILD_INFO_FMT, b"SVBI", info_ver, flags, reserved0, proto, fw, version.ljust(16, b"\0"),
-                          hand, pointing_id, keymap_id, 0)
+        rec = struct.pack(mu.BUILD_INFO_FMT, b"SVBI", info_ver, flags, reserved0, proto, fw, version.ljust(16, b"\0"), hand, pointing_id, keymap_id, 0)
         body[0x800:0x800 + len(rec)] = rec
         body[0xA00:0xA00 + len(extra)] = extra
         return bytes(body)
@@ -239,8 +230,7 @@ def main():
     if rc == 0:
         rm, rb = mu.parse_svup(r.read_bytes())
         f = mu.parse_manifest(rm)
-        check((f["reserved0"], f["flags"], f["fw_version"], f["keymap_id"], f["hand"], f["pointing_id"]) == (0, 1, 3, 1, 1, 5),
-              f"release manifest fields {f}")
+        check((f["reserved0"], f["flags"], f["fw_version"], f["keymap_id"], f["hand"], f["pointing_id"]) == (0, 1, 3, 1, 1, 5), f"release manifest fields {f}")
         check(mu.manifest_version(f) == "vM3-test" and rb == release_img(), "release: version from the record, raw image")
         for build in ("release", "plain"):
             rc, text = run("verify", r, "--build", build)
@@ -279,16 +269,13 @@ def main():
     refuse_rel("the wrong tag", "expected 'vLaunch9'", None, *rel_common, "--expect-version", "vLaunch9")
     refuse_rel("the wrong number", "expected 4", None, *rel_common, "--expect-fw-version", "4")
     refuse_rel("a blank-keymap image labeled sval", "keymap_id 1, the image was built with 2", release_img(keymap_id=2))
-    refuse_rel("an image built from another keymap", "not a release keymap build", release_img(keymap_id=0),
-               "--kb", "svalboard/right", "--keymap-id", "1", "--release")
+    refuse_rel("an image built from another keymap", "not a release keymap build", release_img(keymap_id=0), "--kb", "svalboard/right", "--keymap-id", "1", "--release")
     refuse_rel("a host-test record", "not a release keymap build", release_img(hand=0xFF, pointing_id=0xFF))
     # Gentle (D33), release or not: a --kb that is not the image's side or pointing device
     # (auto labeled as one module, a right image as left) is a warning the user confirms.
     # No answer (no terminal) or no writes nothing; y or --yes writes it as labeled.
     for args in (rel_common, ["--kb", "svalboard/right"]):
-        for kb, needle, hp in (("svalboard/left", "says side left (hand 0), but the image was built for right", (0, 5)),
-                               ("svalboard/trackball/pmw3389/right",
-                                "says pointing device pmw3389 (pointing_id 3), but the image was built for auto", (1, 3))):
+        for kb, needle, hp in (("svalboard/left", "says side left (hand 0), but the image was built for right", (0, 5)), ("svalboard/trackball/pmw3389/right", "says pointing device pmw3389 (pointing_id 3), but the image was built for auto", (1, 3))):
             for answer, extra, ok in (("", [], False), ("n\n", [], False), ("y\n", [], True), ("", ["--yes"], True)):
                 src = tmp / "mis.uf2"
                 src.write_bytes(uf2(release_img()))

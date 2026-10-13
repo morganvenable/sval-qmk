@@ -36,9 +36,9 @@
 
 _Static_assert(IDENTITY_SECTOR_A == 0x1000000u - 2 * FLASH_SECTOR_SIZE, "identity sector A is second-to-last");
 _Static_assert(IDENTITY_SECTOR_B == 0x1000000u - 1 * FLASH_SECTOR_SIZE, "identity sector B is last");
-#define IDENTITY_MAGIC 0x44495653u                              // "SVID"
+#define IDENTITY_MAGIC 0x44495653u // "SVID"
 #define IDENTITY_VERSION 1
-#define JEDEC_CAPACITY_16MB 0x18 // 2^24 bytes
+#define JEDEC_CAPACITY_16MB 0x18    // 2^24 bytes
 #define ERASE_BLOCK_SIZE (1u << 16) // as the SDK passes to the ROM: 64 KB block erase where aligned,
 #define ERASE_BLOCK_CMD 0xD8        // otherwise 4 KB sector erases
 
@@ -69,7 +69,7 @@ static uint32_t      boot2_copy[64];
 static uint8_t       page_buf[FLASH_PAGE_SIZE] __attribute__((aligned(4)));
 
 static void __no_inline_not_in_flash_func(identity_flash_write)(uint32_t offset, const uint8_t *page) {
-    rom_connect_internal_flash_fn connect = (rom_connect_internal_flash_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
+    rom_connect_internal_flash_fn connect  = (rom_connect_internal_flash_fn)rom_func_lookup_inline(ROM_FUNC_CONNECT_INTERNAL_FLASH);
     rom_flash_exit_xip_fn         exit_xip = (rom_flash_exit_xip_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_EXIT_XIP);
     rom_flash_range_erase_fn      erase    = (rom_flash_range_erase_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_ERASE);
     rom_flash_range_program_fn    program  = (rom_flash_range_program_fn)rom_func_lookup_inline(ROM_FUNC_FLASH_RANGE_PROGRAM);
@@ -85,8 +85,8 @@ static void __no_inline_not_in_flash_func(identity_flash_write)(uint32_t offset,
 }
 
 static uint8_t jedec_capacity(void) {
-    uint8_t tx[4] = {0x9F, 0, 0, 0}, rx[4] = {0};
-    uint32_t irq  = save_and_disable_interrupts();
+    uint8_t  tx[4] = {0x9F, 0, 0, 0}, rx[4] = {0};
+    uint32_t irq = save_and_disable_interrupts();
     flash_do_cmd(tx, rx, sizeof(tx));
     restore_interrupts(irq);
     return rx[3];
@@ -98,14 +98,14 @@ static uint32_t crc32(const uint8_t *p, size_t n) {
     uint32_t crc = 0xFFFFFFFFu;
     while (n--) {
         crc ^= *p++;
-        for (uint8_t b = 0; b < 8; b++) crc = (crc >> 1) ^ (0xEDB88320u & -(crc & 1));
+        for (uint8_t b = 0; b < 8; b++)
+            crc = (crc >> 1) ^ (0xEDB88320u & -(crc & 1));
     }
     return ~crc;
 }
 
 static bool record_valid(const identity_record_t *r) {
-    return r->magic == IDENTITY_MAGIC && r->version == IDENTITY_VERSION && r->length == sizeof(*r) && r->name_len <= IDENTITY_NAME_MAX_BYTES &&
-           r->crc == crc32((const uint8_t *)r, offsetof(identity_record_t, crc));
+    return r->magic == IDENTITY_MAGIC && r->version == IDENTITY_VERSION && r->length == sizeof(*r) && r->name_len <= IDENTITY_NAME_MAX_BYTES && r->crc == crc32((const uint8_t *)r, offsetof(identity_record_t, crc));
 }
 
 static const identity_record_t *record_at(uint32_t offset) {
@@ -115,8 +115,8 @@ static const identity_record_t *record_at(uint32_t offset) {
 static bool save(void) {
     if (!region_ok) return false;
     const identity_record_t *a = record_at(IDENTITY_SECTOR_A), *b = record_at(IDENTITY_SECTOR_B);
-    bool     a_ok = record_valid(a), b_ok = record_valid(b);
-    uint32_t newest = 0;
+    bool                     a_ok = record_valid(a), b_ok = record_valid(b);
+    uint32_t                 newest = 0;
     if (a_ok) newest = a->seq;
     if (b_ok && b->seq > newest) newest = b->seq;
     // Write over the older copy (or A when neither is valid).
@@ -173,7 +173,7 @@ void identity_init(void) {
 
     if (region_ok) {
         const identity_record_t *a = record_at(IDENTITY_SECTOR_A), *b = record_at(IDENTITY_SECTOR_B);
-        bool a_ok = record_valid(a), b_ok = record_valid(b);
+        bool                     a_ok = record_valid(a), b_ok = record_valid(b);
         if (a_ok || b_ok) {
             memcpy(&current, (a_ok && (!b_ok || a->seq >= b->seq)) ? a : b, sizeof(current));
         }
@@ -279,7 +279,7 @@ static uint32_t reboot_at;
 
 void identity_via_command(uint8_t *data, uint8_t length) {
     uint8_t  cmd = data[0], op = data[2];
-    uint8_t *v     = &data[3];
+    uint8_t *v = &data[3];
     if (length < 3 + 13) return;
     // Room for name bytes after [cmd][channel][op][status/offset][count].
     uint8_t chunk = length - 5 - (client_wrapper_in_via() ? CLIENT_WRAPPER_OVERHEAD : 0);

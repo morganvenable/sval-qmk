@@ -40,9 +40,9 @@ static bool write_record(uint32_t image, uint32_t flags) {
 // One boot of an image, as build_reset.c: pre-init decides, quantum_init
 // resets, post-init records. Returns the resets during this boot.
 static int boot(uint32_t image) {
-    int  before  = resets;
-    bool pending = build_reset_due(available, &sector, image);
-    notice       = !pending && build_reset_notice(&sector, image);
+    int  before   = resets;
+    bool pending  = build_reset_due(available, &sector, image);
+    notice        = !pending && build_reset_notice(&sector, image);
     record_failed = false;
     if (pending) {
         resets++;
@@ -62,7 +62,8 @@ static void host_clears(uint32_t image) {
 // Flash an image, then boot it n times; returns the resets this caused.
 static int flash(uint32_t image, int n) {
     int before = resets;
-    while (n--) boot(image);
+    while (n--)
+        boot(image);
     return resets - before;
 }
 
@@ -76,8 +77,8 @@ int main(void) {
     memcpy(b, a, sizeof(a));
     b[8] ^= 1;
     const uint32_t A = build_reset_hash(a, sizeof(a)), B = build_reset_hash(b, sizeof(b));
-    CHECK(A != B);                                 // a change in the trailing partial word counts
-    CHECK(A == build_reset_hash(a, sizeof(a)));    // the hash is stable
+    CHECK(A != B);                                  // a change in the trailing partial word counts
+    CHECK(A == build_reset_hash(a, sizeof(a)));     // the hash is stable
     CHECK(A != build_reset_hash(a, sizeof(a) - 1)); // and covers the length
 
     CHECK(!build_reset_matches(NULL, A));
@@ -86,16 +87,16 @@ int main(void) {
 
     // From Vial or vLaunch2 (no record yet): the first build resets once.
     CHECK(flash(A, 3) == 1);
-    CHECK(notice);                  // the host is told...
+    CHECK(notice); // the host is told...
     host_clears(A);
     CHECK(!notice);
     CHECK(flash(A, 2) == 0 && !notice); // ...once, and the same image again keeps settings
     CHECK(flash(B, 2) == 1);            // a different build: once
     CHECK(flash(B, 1) == 0 && notice);  // the notice waits for the host across boots
     host_clears(B);
-    CHECK(flash(A, 1) == 1);            // back to the earlier build: it is different from B
+    CHECK(flash(A, 1) == 1); // back to the earlier build: it is different from B
     other_firmware_runs();
-    CHECK(flash(A, 1) == 0);            // (vLaunch2 in between leaves A's record: see D39)
+    CHECK(flash(A, 1) == 0); // (vLaunch2 in between leaves A's record: see D39)
 
     // Garbage in the sector never counts as a record.
     build_reset_record_make(&sector, A, 0);

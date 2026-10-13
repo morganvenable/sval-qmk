@@ -308,7 +308,7 @@ void sval_eeprom_invalidate(void);
 // Keyboard hooks for GET_INFO byte 18 (weak, return 0) and for 0x2A.
 uint8_t sval_storage_flags_kb(void);
 void    sval_storage_reset_clear_kb(void);
-bool sval_storage_was_reset(void);
+bool    sval_storage_was_reset(void);
 // Whether, since this boot, storage could not be opened or a change could not be saved to flash.
 bool sval_storage_write_failed(void);
 

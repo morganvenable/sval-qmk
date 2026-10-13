@@ -1,7 +1,7 @@
 #include "svalboard.h"
 #include "pointing_detect.h"
 #if VIA_ENABLE
-#include "via.h"
+#    include "via.h"
 #endif
 #include "version.h"
 #include "layout_stamp.h"
@@ -28,16 +28,16 @@ _Static_assert(sizeof(presence_rsp_t) <= RPC_S2M_BUFFER_SIZE, "presence reply fi
 
 // USB remote wakeup status bit (from USB spec, not exported by QMK headers)
 #ifndef USB_GETSTATUS_REMOTE_WAKEUP_ENABLED
-#define USB_GETSTATUS_REMOTE_WAKEUP_ENABLED (2U)
+#    define USB_GETSTATUS_REMOTE_WAKEUP_ENABLED (2U)
 #endif
 
 saved_values_t global_saved_values;
-const int16_t mh_timer_choices[6] = { 200, 300, 400, 500, 800, -1 }; // -1 is infinite.
+const int16_t  mh_timer_choices[6] = {200, 300, 400, 500, 800, -1}; // -1 is infinite.
 
 uint8_t sval_active_layer = 0;
 
 static int8_t hw_rev_cache = -1;
-uint8_t sval_hw_rev(void) {
+uint8_t       sval_hw_rev(void) {
     if (hw_rev_cache < 0) {
 #if defined(SVAL_HW_REV_FORCE)
         hw_rev_cache = SVAL_HW_REV_FORCE;
@@ -109,32 +109,34 @@ void write_eeprom_kb(void) {
     via_update_custom_config(&global_saved_values, SVALBOARD_VIA_CONFIG_OFFSET, SVALBOARD_VIA_CONFIG_SIZE);
 }
 #else
-static bool svalboard_eeprom_is_valid(void) { return true; }
+static bool svalboard_eeprom_is_valid(void) {
+    return true;
+}
 void svalboard_eeprom_set_valid(void) {}
 void write_eeprom_kb(void) {}
 #endif
 
-#define HSV(c) (struct layer_hsv) { (c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF}
+#define HSV(c) (struct layer_hsv){(c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF}
 
 // Factory defaults for every saved keyboard setting, in RAM only.
 void svalboard_saved_values_defaults(void) {
     memset(&global_saved_values, 0, sizeof(global_saved_values));
 
-    global_saved_values.right_dpi_index = 3;
-    global_saved_values.left_dpi_index = 3;
-    global_saved_values.mh_timer_index = 3;
-    global_saved_values.left_scroll = true;
-    global_saved_values.auto_mouse = true;
-    global_saved_values.axis_scroll_lock = true;
-    global_saved_values.turbo_scan = 0;
-    global_saved_values.natural_scroll = false;
-    global_saved_values.left_automouse = true;
-    global_saved_values.right_automouse = true;
+    global_saved_values.right_dpi_index     = 3;
+    global_saved_values.left_dpi_index      = 3;
+    global_saved_values.mh_timer_index      = 3;
+    global_saved_values.left_scroll         = true;
+    global_saved_values.auto_mouse          = true;
+    global_saved_values.axis_scroll_lock    = true;
+    global_saved_values.turbo_scan          = 0;
+    global_saved_values.natural_scroll      = false;
+    global_saved_values.left_automouse      = true;
+    global_saved_values.right_automouse     = true;
     global_saved_values.automouse_threshold = 50;
-    global_saved_values.automouse_decay = 7;  // 70ms
+    global_saved_values.automouse_decay     = 7; // 70ms
     // Revision B settles more slowly; start it on explicit conservative timing.
-    global_saved_values.scan_prewait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_PREWAIT_US : 0;
-    global_saved_values.scan_postwait_us = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_POSTWAIT_US : 0;
+    global_saved_values.scan_prewait_us     = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_PREWAIT_US : 0;
+    global_saved_values.scan_postwait_us    = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_POSTWAIT_US : 0;
     global_saved_values.scan_period_us      = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_SCAN_PERIOD_US : 0;
     global_saved_values.scan_idle_period_ms = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_IDLE_PERIOD_MS : 0;
     global_saved_values.scan_idle_after_ms  = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_IDLE_AFTER_MS : 0;
@@ -144,16 +146,16 @@ void svalboard_saved_values_defaults(void) {
     global_saved_values.scan_deep_clock_idx = 0;
 
     // Layer colors
-    global_saved_values.layer_colors[0] = HSV(0x55FFFF);  // Green
-    global_saved_values.layer_colors[1] = HSV(0x15FFFF);  // Orange
-    global_saved_values.layer_colors[2] = HSV(0x95FFFF);  // Azure
-    global_saved_values.layer_colors[3] = HSV(0x0BB0FF);  // Coral
-    global_saved_values.layer_colors[4] = HSV(0x2BFFFF);  // Yellow
-    global_saved_values.layer_colors[5] = HSV(0x80FF80);  // Teal
-    global_saved_values.layer_colors[6] = HSV(0x00FFFF);  // Red
-    global_saved_values.layer_colors[7] = HSV(0x00FFFF);  // Red
-    global_saved_values.layer_colors[8] = HSV(0xEAFFFF);  // Pink
-    global_saved_values.layer_colors[9] = HSV(0xBFFF80);  // Purple
+    global_saved_values.layer_colors[0]  = HSV(0x55FFFF); // Green
+    global_saved_values.layer_colors[1]  = HSV(0x15FFFF); // Orange
+    global_saved_values.layer_colors[2]  = HSV(0x95FFFF); // Azure
+    global_saved_values.layer_colors[3]  = HSV(0x0BB0FF); // Coral
+    global_saved_values.layer_colors[4]  = HSV(0x2BFFFF); // Yellow
+    global_saved_values.layer_colors[5]  = HSV(0x80FF80); // Teal
+    global_saved_values.layer_colors[6]  = HSV(0x00FFFF); // Red
+    global_saved_values.layer_colors[7]  = HSV(0x00FFFF); // Red
+    global_saved_values.layer_colors[8]  = HSV(0xEAFFFF); // Pink
+    global_saved_values.layer_colors[9]  = HSV(0xBFFF80); // Purple
     global_saved_values.layer_colors[10] = HSV(0x0BB0FF); // Coral
     global_saved_values.layer_colors[11] = HSV(0x6AFFFF); // Spring Green
     global_saved_values.layer_colors[12] = HSV(0x80FF80); // Teal
@@ -203,24 +205,24 @@ void read_eeprom_kb(void) {
 }
 
 static const char YES[] = "yes";
-static const char NO[] = "no";
+static const char NO[]  = "no";
 
 const char *yes_or_no(int flag) {
     if (flag) {
-	return YES;
+        return YES;
     } else {
-	return NO;
+        return NO;
     }
 }
 
-const uint16_t dpi_choices[] = { 200, 400, 600, 800, 1200, 1600, 2400, 3200, 4800, 6400, 12000 }; // If we need more, add them.
-#define DPI_CHOICES_LENGTH (sizeof(dpi_choices)/sizeof(dpi_choices[0]))
+const uint16_t dpi_choices[] = {200, 400, 600, 800, 1200, 1600, 2400, 3200, 4800, 6400, 12000}; // If we need more, add them.
+#define DPI_CHOICES_LENGTH (sizeof(dpi_choices) / sizeof(dpi_choices[0]))
 extern bool is_mac;
 
 // Boost state lives in keymaps/keymap_support.c; surfaced here for output_keyboard_info.
 #include "axis_scale.h"
-extern uint8_t boost_hold_2, boost_hold_3, boost_hold_5;
-extern bool boost_toggle_2, boost_toggle_3, boost_toggle_5;
+extern uint8_t      boost_hold_2, boost_hold_3, boost_hold_5;
+extern bool         boost_toggle_2, boost_toggle_3, boost_toggle_5;
 extern axis_scale_t boost_x;
 
 void output_keyboard_info(void) {
@@ -230,54 +232,29 @@ void output_keyboard_info(void) {
     send_string(output_buffer);
     if (sval_storage_was_reset()) send_string("Settings were reset: storage could not be read. Reload your layout file.\n");
     if (sval_storage_write_failed()) send_string("Settings can't be saved right now: changes will be lost on restart. Unplug and reconnect, then check again.\n");
-    sprintf(output_buffer, "Left Ptr: Scroll %s, cpi: %d, Right Ptr: Scroll %s, cpi: %d\n",
-	    yes_or_no(global_saved_values.left_scroll), dpi_choices[global_saved_values.left_dpi_index],
-	    yes_or_no(global_saved_values.right_scroll), dpi_choices[global_saved_values.right_dpi_index]);
+    sprintf(output_buffer, "Left Ptr: Scroll %s, cpi: %d, Right Ptr: Scroll %s, cpi: %d\n", yes_or_no(global_saved_values.left_scroll), dpi_choices[global_saved_values.left_dpi_index], yes_or_no(global_saved_values.right_scroll), dpi_choices[global_saved_values.right_dpi_index]);
     send_string(output_buffer);
-    sprintf(output_buffer, "Axis Scroll Lock: %s (is Mac: %d), Natural Scroll: %s, Mouse Layer: %s (left: %s, right: %s), Mouse Layer Timeout: %d, Turbo Scan: %d\n",
-	    yes_or_no(global_saved_values.axis_scroll_lock),
-	    is_mac,
-	    yes_or_no(global_saved_values.natural_scroll),
-	    yes_or_no(global_saved_values.auto_mouse),
-	    yes_or_no(global_saved_values.left_automouse),
-	    yes_or_no(global_saved_values.right_automouse),
-	    mh_timer_choices[global_saved_values.mh_timer_index],
-	    global_saved_values.turbo_scan);
+    sprintf(output_buffer, "Axis Scroll Lock: %s (is Mac: %d), Natural Scroll: %s, Mouse Layer: %s (left: %s, right: %s), Mouse Layer Timeout: %d, Turbo Scan: %d\n", yes_or_no(global_saved_values.axis_scroll_lock), is_mac, yes_or_no(global_saved_values.natural_scroll), yes_or_no(global_saved_values.auto_mouse), yes_or_no(global_saved_values.left_automouse), yes_or_no(global_saved_values.right_automouse), mh_timer_choices[global_saved_values.mh_timer_index], global_saved_values.turbo_scan);
     send_string(output_buffer);
-    sprintf(output_buffer, "BOOST: hold[2,3,5]=%d,%d,%d  tg[2,3,5]=%d,%d,%d  mult=%d\n",
-            boost_hold_2, boost_hold_3, boost_hold_5,
-            boost_toggle_2, boost_toggle_3, boost_toggle_5,
-            boost_x.mult);
+    sprintf(output_buffer, "BOOST: hold[2,3,5]=%d,%d,%d  tg[2,3,5]=%d,%d,%d  mult=%d\n", boost_hold_2, boost_hold_3, boost_hold_5, boost_toggle_2, boost_toggle_3, boost_toggle_5, boost_x.mult);
     send_string(output_buffer);
     uint16_t pre, post;
     sval_scan_timing(&pre, &post);
-    sprintf(output_buffer, "HW rev: %s, Scan timing: pre %d us, post %d us (%s)\n",
-            sval_hw_rev_is_flipfet() ? "B (flipfet)" : "A",
-            pre, post,
-            (global_saved_values.scan_prewait_us || global_saved_values.scan_postwait_us) ? "explicit" : "turbo table");
+    sprintf(output_buffer, "HW rev: %s, Scan timing: pre %d us, post %d us (%s)\n", sval_hw_rev_is_flipfet() ? "B (flipfet)" : "A", pre, post, (global_saved_values.scan_prewait_us || global_saved_values.scan_postwait_us) ? "explicit" : "turbo table");
     send_string(output_buffer);
     uint32_t frame_us;
     uint16_t led_us;
     uint8_t  stage;
     sval_scan_stats(&frame_us, &led_us, &stage);
-    sprintf(output_buffer, "Scan period: %d us; light idle %d ms after %d ms; deep idle %d ms after %d s; measured frame %lu us, LED on %d us, stage %d\n",
-            global_saved_values.scan_period_us, global_saved_values.scan_idle_period_ms, global_saved_values.scan_idle_after_ms,
-            global_saved_values.scan_deep_period_ms, global_saved_values.scan_deep_after_s,
-            (unsigned long)frame_us, led_us, stage);
+    sprintf(output_buffer, "Scan period: %d us; light idle %d ms after %d ms; deep idle %d ms after %d s; measured frame %lu us, LED on %d us, stage %d\n", global_saved_values.scan_period_us, global_saved_values.scan_idle_period_ms, global_saved_values.scan_idle_after_ms, global_saved_values.scan_deep_period_ms, global_saved_values.scan_deep_after_s, (unsigned long)frame_us, led_us, stage);
     send_string(output_buffer);
-    sprintf(output_buffer, "Idle power: pointer rest %s, RGB dim %s, CPU sleep %s, low clock in deep idle %s (%d MHz), long naps %s; clock now %d MHz\n",
-            (global_saved_values.idle_flags & SVAL_IDLE_POINTER_REST) ? "on" : "off",
-            (global_saved_values.idle_flags & SVAL_IDLE_RGB_DIM) ? "on" : "off",
-            (global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) ? "on" : "off",
-            (global_saved_values.idle_flags & SVAL_IDLE_LOW_CLOCK) ? "on" : "off", sval_deep_clock_mhz(),
-            (global_saved_values.idle_flags & SVAL_IDLE_LONG_NAP) ? "on" : "off",
-            sval_clock_mhz());
+    sprintf(output_buffer, "Idle power: pointer rest %s, RGB dim %s, CPU sleep %s, low clock in deep idle %s (%d MHz), long naps %s; clock now %d MHz\n", (global_saved_values.idle_flags & SVAL_IDLE_POINTER_REST) ? "on" : "off", (global_saved_values.idle_flags & SVAL_IDLE_RGB_DIM) ? "on" : "off", (global_saved_values.idle_flags & SVAL_IDLE_CPU_SLEEP) ? "on" : "off", (global_saved_values.idle_flags & SVAL_IDLE_LOW_CLOCK) ? "on" : "off", sval_deep_clock_mhz(), (global_saved_values.idle_flags & SVAL_IDLE_LONG_NAP) ? "on" : "off", sval_clock_mhz());
     send_string(output_buffer);
 }
 
 const uint16_t sval_postwait_us[] = {90, 60, 45, 30, 25, 20, 15};
-const uint16_t sval_prewait_us[] = {90, 60, 45, 30, 25, 20, 15};
-#define TURBO_CHOICES_LENGTH (sizeof(sval_postwait_us)/sizeof(sval_postwait_us[0]))
+const uint16_t sval_prewait_us[]  = {90, 60, 45, 30, 25, 20, 15};
+#define TURBO_CHOICES_LENGTH (sizeof(sval_postwait_us) / sizeof(sval_postwait_us[0]))
 void change_turbo_scan(void) {
     if (global_saved_values.turbo_scan + 1 < TURBO_CHOICES_LENGTH) {
         global_saved_values.turbo_scan++;
@@ -367,7 +344,7 @@ bool sval_host_recent(void) {
 // ---- RGB idle dimming (master). Light idle divides the brightness, deep idle turns the
 // strip off; the first input restores it. Layer colour changes while dimmed keep using the
 // awake brightness so the dimmed value never reaches EEPROM.
-static uint8_t  rgb_idle_applied = 0;   // 0 awake, 1 dimmed, 2 off
+static uint8_t  rgb_idle_applied  = 0; // 0 awake, 1 dimmed, 2 off
 static uint32_t rgb_last_write_ms = 0;
 
 bool sval_rgb_idle_quiesced(void) {
@@ -375,8 +352,8 @@ bool sval_rgb_idle_quiesced(void) {
     if (!(global_saved_values.idle_flags & SVAL_IDLE_RGB_DIM)) return true;
     return rgb_idle_applied == 2 && timer_elapsed32(rgb_last_write_ms) > 5;
 }
-static uint8_t rgb_awake_val    = 0;
-static uint8_t rgb_dim_val      = 0;
+static uint8_t rgb_awake_val     = 0;
+static uint8_t rgb_dim_val       = 0;
 static bool    rgb_awake_enabled = false;
 
 uint8_t sval_rgb_awake_val(void) {
@@ -427,9 +404,13 @@ void sval_rgb_idle_task(void) {
 }
 
 __attribute__((weak)) void sval_pointer_rest_apply(void) {}
-__attribute__((weak)) void sval_pointer_status(sval_idle_status_t *st) { st->sensor_present = 0; }
-__attribute__((weak)) void sval_pointer_identity(sval_pointer_identity_t *id) {}
-__attribute__((weak)) uint8_t sval_pointer_own_bus(void) { return 0; }
+__attribute__((weak)) void sval_pointer_status(sval_idle_status_t *st) {
+    st->sensor_present = 0;
+}
+__attribute__((weak)) void    sval_pointer_identity(sval_pointer_identity_t *id) {}
+__attribute__((weak)) uint8_t sval_pointer_own_bus(void) {
+    return 0;
+}
 // Starts the driver for what the probe found; a build with every driver in uses it (pointing_auto).
 __attribute__((weak)) void sval_pointer_select(const sval_probe_result_t *found) {}
 
@@ -442,10 +423,10 @@ static sval_probe_result_t pointer_probe;
 
 static void sval_pointer_probe_task(void) {
     if (pointer_probed || timer_read32() < SVAL_POINTER_PROBE_AFTER_MS) return;
-    pointer_probed = true;
+    pointer_probed              = true;
     sval_pointer_identity_t own = {0};
     sval_pointer_identity(&own);
-    if (own.built_for != SVAL_SENSOR_NONE && own.detected == own.built_for) return; // its own module answered
+    if (own.built_for != SVAL_SENSOR_NONE && own.detected == own.built_for) return;       // its own module answered
     if (own.built_for != SVAL_SENSOR_NONE && own.detected == SVAL_SENSOR_UNKNOWN) return; // the trackball bus answered
     pointer_probe = sval_probe_pointers(sval_pointer_own_bus());
     sval_pointer_select(&pointer_probe);
@@ -494,11 +475,11 @@ void sval_set_active_layer(uint32_t layer, bool save) {
 }
 
 // RPC listener for split keyboard sync
-void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen, void* out_data) {
-    const presence_rpc_t *in = (const presence_rpc_t *)in_data;
-    global_saved_values.turbo_scan       = in->turbo_scan;
-    global_saved_values.scan_prewait_us  = in->scan_prewait_us;
-    global_saved_values.scan_postwait_us = in->scan_postwait_us;
+void kb_sync_listener(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
+    const presence_rpc_t *in                = (const presence_rpc_t *)in_data;
+    global_saved_values.turbo_scan          = in->turbo_scan;
+    global_saved_values.scan_prewait_us     = in->scan_prewait_us;
+    global_saved_values.scan_postwait_us    = in->scan_postwait_us;
     global_saved_values.scan_period_us      = in->scan_period_us;
     global_saved_values.scan_idle_period_ms = in->scan_idle_period_ms;
     global_saved_values.scan_idle_after_ms  = in->scan_idle_after_ms;
@@ -523,7 +504,7 @@ void kb_sync_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen
 }
 
 // Scan Lab requests from the master run here on the other half.
-static void scanlab_rpc_listener(uint8_t in_buflen, const void* in_data, uint8_t out_buflen, void* out_data) {
+static void scanlab_rpc_listener(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
     uint8_t req[SCANLAB_REQ_LEN] = {0};
     uint8_t rsp[SCANLAB_RSP_LEN] = {0};
     memcpy(req, in_data, in_buflen < SCANLAB_REQ_LEN ? in_buflen : SCANLAB_REQ_LEN);
@@ -550,7 +531,7 @@ void keyboard_post_init_kb(void) {
 }
 
 static bool is_connected = false;
-bool sval_other_half_connected(void) {
+bool        sval_other_half_connected(void) {
     return is_connected;
 }
 
@@ -590,9 +571,12 @@ static inline bool sval_pointer_for_hand(bool left, sval_pointer_identity_t *id,
 #    define SVAL_POINTER_SETTLED_MS (SVAL_POINTER_PROBE_AFTER_MS + 1000)
 uint8_t sval_fragment_detect(uint8_t instance_idx) {
     bool left;
-    if (instance_idx == SVAL_FRAGMENT_IDX_LEFT_POINTING) left = true;
-    else if (instance_idx == SVAL_FRAGMENT_IDX_RIGHT_POINTING) left = false;
-    else return SVAL_FRAGMENT_ID_NONE;
+    if (instance_idx == SVAL_FRAGMENT_IDX_LEFT_POINTING)
+        left = true;
+    else if (instance_idx == SVAL_FRAGMENT_IDX_RIGHT_POINTING)
+        left = false;
+    else
+        return SVAL_FRAGMENT_ID_NONE;
     sval_pointer_identity_t id;
     bool                    local;
     if (!sval_pointer_for_hand(left, &id, &local)) return SVAL_FRAGMENT_ID_NONE;
@@ -625,9 +609,9 @@ void sval_pointing_motion_kb(uint8_t *out, uint8_t length) {
     if (length < SVAL_MOTION_REPORT_LEN) return;
     sval_pointing_modes_t modes;
     sval_pointing_modes(&modes);
-    out[0] = SVAL_MOTION_FORMAT;
-    out[1] = modes.global_bits & 0x3F;
-    out[2] = sval_motion_elapsed(!motion_read_once, timer_elapsed32(motion_last_read));
+    out[0]           = SVAL_MOTION_FORMAT;
+    out[1]           = modes.global_bits & 0x3F;
+    out[2]           = sval_motion_elapsed(!motion_read_once, timer_elapsed32(motion_last_read));
     motion_last_read = timer_read32();
     motion_read_once = true;
     for (uint8_t hand = 0; hand < 2; hand++) {
@@ -688,7 +672,7 @@ void housekeeping_task_kb(void) {
 #ifdef SVAL_UPDATER
         if (!updater_active())
 #endif
-        sval_rgb_idle_task();
+            sval_rgb_idle_task();
         static uint32_t last_ping = 0;
 #ifdef SVAL_UPDATER
         // No presence ping while the split link is paused (D15); the first
@@ -697,11 +681,8 @@ void housekeeping_task_kb(void) {
 #else
         if (timer_elapsed(last_ping) > 500) {
 #endif
-            presence_rpc_t rpcout = {global_saved_values.turbo_scan, global_saved_values.scan_prewait_us, global_saved_values.scan_postwait_us,
-                                     global_saved_values.scan_period_us, global_saved_values.scan_idle_period_ms, global_saved_values.scan_idle_after_ms,
-                                     global_saved_values.scan_deep_after_s, global_saved_values.scan_deep_period_ms, global_saved_values.idle_flags,
-                                     global_saved_values.scan_deep_clock_idx};
-            presence_rsp_t rpcin = {0};
+            presence_rpc_t rpcout = {global_saved_values.turbo_scan, global_saved_values.scan_prewait_us, global_saved_values.scan_postwait_us, global_saved_values.scan_period_us, global_saved_values.scan_idle_period_ms, global_saved_values.scan_idle_after_ms, global_saved_values.scan_deep_after_s, global_saved_values.scan_deep_period_ms, global_saved_values.idle_flags, global_saved_values.scan_deep_clock_idx};
+            presence_rsp_t rpcin  = {0};
             if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rsp_t), &rpcin)) {
                 if (rpcin.magic[0] == SVAL_PRESENCE_RSP_MAGIC0 && rpcin.magic[1] == SVAL_PRESENCE_RSP_MAGIC1 && (rpcin.pointer.flags & SVAL_POINTER_REPORTED)) {
                     other_pointer = rpcin.pointer;
@@ -720,7 +701,7 @@ void housekeeping_task_kb(void) {
                     // staging its own update).
                     if (!updater_active())
 #endif
-                    sval_on_reconnect();
+                        sval_on_reconnect();
                 }
             } else {
 #ifdef SVAL_UPDATER
@@ -735,7 +716,7 @@ void housekeeping_task_kb(void) {
 
 void sval_on_reconnect(void) {
     // Reset colors, or it won't communicate the right color.
-    rgblight_sethsv_noeeprom(0, 0, rgblight_get_val()); //reuse existing val, so brightness doesn't reset
+    rgblight_sethsv_noeeprom(0, 0, rgblight_get_val()); // reuse existing val, so brightness doesn't reset
     sval_set_active_layer(sval_active_layer, true);
 }
 
@@ -752,63 +733,49 @@ void sval_on_reconnect(void) {
 // if you boot with the key pulled out, the eeprom gets cleared.
 
 void bootmagic_lite(void) {
-  // boo!
+    // boo!
 }
 #endif
 
-__attribute__((weak)) void recalibrate_pointer(void) {
-}
+__attribute__((weak)) void recalibrate_pointer(void) {}
 
-
-const char chordal_hold_layout[MATRIX_ROWS][MATRIX_COLS] PROGMEM =
-    LAYOUT(
-            'R', 'R', 'R', 'R', 'R', 'R',
-            'R', 'R', 'R', 'R', 'R', 'R',
-            'R', 'R', 'R', 'R', 'R', 'R',
-            'R', 'R', 'R', 'R', 'R', 'R',
-            'L', 'L', 'L', 'L', 'L', 'L',
-            'L', 'L', 'L', 'L', 'L', 'L',
-            'L', 'L', 'L', 'L', 'L', 'L',
-            'L', 'L', 'L', 'L', 'L', 'L',
-            '*', '*', '*', '*', '*', '*',
-            '*', '*', '*', '*', '*', '*'
-          );
+const char chordal_hold_layout[MATRIX_ROWS][MATRIX_COLS] PROGMEM = LAYOUT('R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'R', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', '*', '*', '*', '*', '*', '*', '*', '*', '*', '*', '*', '*');
 
 #if VIA_ENABLE
 // VIA custom keyboard value IDs (channel 1)
 enum sval_via_value_id {
-    id_left_dpi = 0,
-    id_left_scroll = 1,
-    id_right_dpi = 2,
-    id_right_scroll = 3,
-    id_automouse_enable = 4,
-    id_automouse_timeout = 5,
+    id_left_dpi            = 0,
+    id_left_scroll         = 1,
+    id_right_dpi           = 2,
+    id_right_scroll        = 3,
+    id_automouse_enable    = 4,
+    id_automouse_timeout   = 5,
     id_automouse_threshold = 6,
-    id_natural_scroll = 7,
-    id_axis_lock = 8,
-    id_turbo_scan = 9,
-    id_automouse_decay = 10,  // Accumulator decay time in 10ms units
-    id_left_automouse = 11,   // Left pointer movement activates the mouse layer
-    id_right_automouse = 12,  // Right pointer movement activates the mouse layer
-    id_scan_prewait_us = 13,  // u16: row-on settle time (0 = turbo table)
-    id_scan_postwait_us = 14, // u16: row-off recovery time (0 = turbo table)
-    id_hw_revision = 15,      // read-only: 0 = revision A, 1 = revision B (flipfet)
+    id_natural_scroll      = 7,
+    id_axis_lock           = 8,
+    id_turbo_scan          = 9,
+    id_automouse_decay     = 10, // Accumulator decay time in 10ms units
+    id_left_automouse      = 11, // Left pointer movement activates the mouse layer
+    id_right_automouse     = 12, // Right pointer movement activates the mouse layer
+    id_scan_prewait_us     = 13, // u16: row-on settle time (0 = turbo table)
+    id_scan_postwait_us    = 14, // u16: row-off recovery time (0 = turbo table)
+    id_hw_revision         = 15, // read-only: 0 = revision A, 1 = revision B (flipfet)
     // 16-19: tapping settings
-    id_scan_period_us = 20,       // u16: frame period while active (0 = unpaced)
-    id_scan_idle_period_ms = 21,  // u16: light idle frame period, ms (<= active = no change)
-    id_scan_idle_after_ms = 22,   // u16: light idle timeout since last matrix change, ms (0 = never)
-    id_scan_deep_after_s = 23,    // u16: deep idle timeout, seconds (0 = never)
-    id_scan_deep_period_ms = 24,  // u16: deep idle frame period, ms
-    id_idle_pointer_rest = 25,    // toggle: trackball sensor rest modes
-    id_idle_rgb_dim = 26,         // toggle: dim RGB in light idle, off in deep idle
-    id_idle_cpu_sleep = 27,       // toggle: sleep the core between paced frames
-    id_idle_low_clock = 28,       // toggle: 48 MHz system clock in deep idle
-    id_idle_long_nap = 29,        // toggle: long naps in deep idle
-    id_scan_deep_clock_idx = 30,  // u8 dropdown: deep-idle clock 0 = 48 MHz, 1 = 24 MHz, 2 = 12 MHz
-    id_tapping_term = 16,
-    id_permissive_hold = 17,
-    id_hold_on_other_key = 18,
-    id_retro_tapping = 19,
+    id_scan_period_us      = 20, // u16: frame period while active (0 = unpaced)
+    id_scan_idle_period_ms = 21, // u16: light idle frame period, ms (<= active = no change)
+    id_scan_idle_after_ms  = 22, // u16: light idle timeout since last matrix change, ms (0 = never)
+    id_scan_deep_after_s   = 23, // u16: deep idle timeout, seconds (0 = never)
+    id_scan_deep_period_ms = 24, // u16: deep idle frame period, ms
+    id_idle_pointer_rest   = 25, // toggle: trackball sensor rest modes
+    id_idle_rgb_dim        = 26, // toggle: dim RGB in light idle, off in deep idle
+    id_idle_cpu_sleep      = 27, // toggle: sleep the core between paced frames
+    id_idle_low_clock      = 28, // toggle: 48 MHz system clock in deep idle
+    id_idle_long_nap       = 29, // toggle: long naps in deep idle
+    id_scan_deep_clock_idx = 30, // u8 dropdown: deep-idle clock 0 = 48 MHz, 1 = 24 MHz, 2 = 12 MHz
+    id_tapping_term        = 16,
+    id_permissive_hold     = 17,
+    id_hold_on_other_key   = 18,
+    id_retro_tapping       = 19,
     // 25-31 reserved
     id_layer0_color = 32,
     // 32-47 are layer colors (id_layer0_color + layer)
@@ -816,11 +783,11 @@ enum sval_via_value_id {
 
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
     if (length >= 3 && data[1] == KEYTEST_CHANNEL) {
-#ifdef SVAL_KEYTEST
+#    ifdef SVAL_KEYTEST
         keytest_command(data, length);
-#else
+#    else
         data[0] = id_unhandled;
-#endif
+#    endif
         return;
     }
     // New VIA API: data[0]=command, data[1]=channel, data[2]=value_id, data[3+]=value_data
@@ -832,24 +799,24 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
         identity_via_command(data, length);
         return;
     }
-#ifdef SVAL_UPDATER
+#    ifdef SVAL_UPDATER
     if (data[1] == UPDATE_CHANNEL) {
         updater_via_command(data, length);
         return;
     }
-#endif
-    uint8_t command = data[0];
-    uint8_t *value_id = &data[2];
+#    endif
+    uint8_t  command    = data[0];
+    uint8_t *value_id   = &data[2];
     uint8_t *value_data = &data[3];
 
     switch (command) {
         case id_custom_set_value:
-#ifdef SVAL_TEST_HOOKS
+#    ifdef SVAL_TEST_HOOKS
             if (*value_id == 0xF2) { // test: pretend the keymap was written by an older keycode version
                 nvm_via_update_keycodes_version(value_data[0]);
                 break;
             }
-#endif
+#    endif
             switch (*value_id) {
                 case id_left_dpi:
                     if (value_data[0] < DPI_CHOICES_LENGTH) {
@@ -930,7 +897,10 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 case id_idle_low_clock:
                 case id_idle_long_nap: {
                     uint8_t bit = 1u << (*value_id - id_idle_pointer_rest);
-                    if (value_data[0]) global_saved_values.idle_flags |= bit; else global_saved_values.idle_flags &= ~bit;
+                    if (value_data[0])
+                        global_saved_values.idle_flags |= bit;
+                    else
+                        global_saved_values.idle_flags &= ~bit;
                     if (bit == SVAL_IDLE_POINTER_REST) sval_pointer_rest_apply();
                     break;
                 }
@@ -951,12 +921,12 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
             break;
 
         case id_custom_get_value:
-#ifdef SVAL_TEST_HOOKS
+#    ifdef SVAL_TEST_HOOKS
             if (*value_id == 0xF2) { // test: stored keycode version
                 value_data[0] = nvm_via_read_keycodes_version();
                 break;
             }
-#endif
+#    endif
             switch (*value_id) {
                 case id_left_dpi:
                     value_data[0] = global_saved_values.left_dpi_index;
