@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "usb_driver.h"
+#include "usb_packet.h"
 #include "util.h"
 
 /*===========================================================================*/
@@ -342,4 +343,15 @@ size_t usb_endpoint_out_receive_bytes(usb_endpoint_out_t *endpoint, uint8_t *dat
 
 bool usb_endpoint_out_receive(usb_endpoint_out_t *endpoint, uint8_t *data, size_t size, sysinterval_t timeout) {
     return usb_endpoint_out_receive_bytes(endpoint, data, size, timeout) == size;
+}
+
+// One whole USB packet, never part of one or two joined (usb_packet.h). Don't
+// mix with usb_endpoint_out_receive() on the same endpoint.
+bool usb_endpoint_out_receive_packet(usb_endpoint_out_t *endpoint, uint8_t *data, size_t size, size_t *received) {
+    osalDbgCheck((endpoint != NULL) && (data != NULL) && (size > 0U) && (received != NULL));
+
+    osalSysLock();
+    bool got = usbGetDriverStateI(endpoint->config.usbp) == USB_ACTIVE && ibq_take_packet_s(&endpoint->ibqueue, data, size, received);
+    osalSysUnlock();
+    return got;
 }

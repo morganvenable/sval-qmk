@@ -187,6 +187,9 @@ void via_qmk_led_matrix_get_value(uint8_t *data);
 void via_qmk_led_matrix_save(void);
 #endif
 
+// Bytes of the report a VIA command may use (keyboards that wrap VIA commands return less).
+uint8_t via_payload_length(uint8_t length);
+
 #if defined(AUDIO_ENABLE)
 void via_qmk_audio_command(uint8_t *data, uint8_t length);
 void via_qmk_audio_set_value(uint8_t *data);

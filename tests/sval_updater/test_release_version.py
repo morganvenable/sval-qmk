@@ -103,6 +103,14 @@ def main():
     rc, _, o = run(out, "vLaunch3-dryrun1", [], {})
     check(rc == 0 and o.get("previous") == "", "no previous release")
 
+    # stable tags are vLaunch<N> only; anything else would publish as the latest release
+    for tag in ("vLaunch10", "vLaunch3"):
+        rc, text, o = run(out, tag, history, {})
+        check(rc == 0 and o.get("prerelease") == "false", f"{tag} is a stable tag: {rc} {text}")
+    for tag in ("vLaunch2.3", "vLaunch3-rc1", "vLaunch", "vlaunch3", "vLaunch3a", "Launch3", "vtest", "v3", "vRC3"):
+        rc, text, o = run(out, tag, history, {})
+        check(rc == 1 and "stable firmware tags" in text and not o, f"non-stable tag {tag!r} refused: {text}")
+
     # tag names that cannot be a version string
     for tag in ("vLaunch2-with-a-long-name", "v Launch", "v/1"):
         rc, text, _ = run(out, tag + "-dryrun", history, {})

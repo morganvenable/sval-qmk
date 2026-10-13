@@ -38,6 +38,8 @@ permissions:
 
 jobs:
   version:
+    # Forks never publish firmware: every other job needs this one.
+    if: github.repository == 'svalboard/qmk'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}
@@ -48,6 +50,13 @@ jobs:
       with:
         fetch-depth: 0  # the previous release's tag
         persist-credentials: false
+
+    - name: Check the commit is on the svalboard branch
+      run: |
+        git merge-base --is-ancestor "$GITHUB_SHA" origin/svalboard || {
+          echo "::error::$GITHUB_REF_NAME names $GITHUB_SHA, which is not on the svalboard branch"
+          exit 1
+        }
 
     - name: Check the version (D32)
       id: check

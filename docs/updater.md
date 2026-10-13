@@ -58,7 +58,7 @@ python3 -I $MU $N.uf2 -o $N.svup --kb $K
 | `SVAL_UPDATER=yes` | The updater: VIA channel `0x55`, staging slot, commit routine, LED states |
 | `SVAL_UPDATE_TEST_HOOKS=yes` | Adds the `TEST_HALT` op and the commit halt points (hardware tests only) |
 | `SVAL_UPDATE_RELEASE=yes` | Release updater build: DIAGNOSTIC images refused. Cannot be combined with the test hooks, `SVAL_KEYTEST` or `SVAL_HOST_BOOTLOADER`. Release CI builds its two images this way (see "Releases") |
-| `SVAL_TEST_WIPE=yes` | Bench builds only, never released: a settings magic (`0xB1A0`) no release uses, so the first boot after flashing over other firmware resets every setting to the build's defaults |
+| `SVAL_TEST_WIPE=yes` | Bench builds only, never released: a settings magic (`0xB1A0`) no release uses. Every build now resets settings on its first boot anyway (D39); the wipe magic also resets when the same image is flashed over a normal one |
 | `SVAL_FW_VERSION=N` | The numeric version (D17), reported by INFO and presence. Default: `kb/updater/fw_version.txt` (D32). The older `EXTRAFLAGS=-DSVAL_FW_VERSION=N` still works |
 | `SVAL_FW_VERSION_STRING=S` | The version string, at most 16 of `A-Z a-z 0-9 . _ + -` (INFO page 1). Default empty; release CI passes the tag |
 
@@ -100,7 +100,7 @@ XIP address is `0x10000000` plus the offset).
 | `0x260000`-`0x7FFFFF` | Free |
 | `0x800000`-`0x95FFFF` | Staging slot (`SVAL_UPDATE_BASE`, `SVAL_UPDATE_SIZE`) |
 | `0x960000`-`0xFFCFFF` | Free |
-| `0xFFD000`-`0xFFDFFF` | Reserved: dev builds' reset record (D37). Release builds never read or write it, and nothing else may use it |
+| `0xFFD000`-`0xFFDFFF` | Build reset record (D39): the hash of the image the settings were last reset for. Nothing else may use it |
 | `0xFFE000`-`0xFFFFFF` | Board identity, two 4 KiB sectors |
 
 Staging erases and programs only inside the slot. The commit erases and programs only inside
@@ -600,18 +600,18 @@ start whichever module is attached (pointing ID 5). The per-module builds
 still build but are not released. `SVAL_TEST_WIPE` is for bench builds only:
 a release updater build refuses to compile with it.
 
+**Settings (D39).** The first boot of a different firmware build resets every stored setting to that build's defaults, on each half, whether it arrived through the updater or a `.uf2` (`kb/build_reset.c`; `keyboards/svalboard/docs/settings-storage.md`). Flashing the identical image keeps them. GET_INFO byte 18 bit 2 tells the host. Keybard and a command-line tool will save a `.svil` before flashing and load it afterwards (D35).
+
 **Dev builds (D37).** For firmware work on the fork, never released.
 `SVAL_UPDATE_NO_CHORD=yes` makes every ARM count as confirmed, so updates need
-no chord (INFO flags bit 7). `SVAL_DEV_RESET_TOKEN=<hex>` resets stored settings
-once: the first boot that finds another token in the sector at 0xFFD000 (just
-below the identity sectors) resets them all, then records the token there.
-Builds without a token never look at it, so the next one keeps the settings,
-whatever was flashed before. `util/sval_dev_flash.sh SERIAL [left|right|both]
-[keep|claussen|blank]` builds and flashes these with no prompt (`--yes`): keep
-stores nothing new, claussen and blank reset once to their keymap. Release
-builds refuse both flags (rules.mk and `update_build_info.c`), and
-`check_release_elf.py` and `make_update.py --release` reject their build-info
-bits (0x40, 0x80) and symbols.
+no chord (INFO flags bit 7). `SVAL_DEV_KEEP_SETTINGS=yes` skips the D39 reset
+on a new build and leaves the record alone, so settings carry over.
+`util/sval_dev_flash.sh SERIAL [left|right|both] [keep|claussen|blank]` builds
+and flashes these with no prompt (`--yes`): keep carries settings over,
+claussen and blank are ordinary builds that reset once to their keymap.
+Release builds refuse both flags (rules.mk, `build_reset.c` and
+`update_build_info.c`), and `check_release_elf.py` and `make_update.py
+--release` reject their build-info bits (0x40, 0x80) and symbols.
 
 **Versions (D17, D32).** Launch tags are names (`vLaunch2`), so the number is
 committed in `kb/updater/fw_version.txt` and the version string is the tag
@@ -623,6 +623,20 @@ a dry run or this tag (a release from before the file existed counts as 0).
 Dry runs are not compared, so they never use up a number. A tag whose name
 contains `dryrun` or `dry-run` (any case), such as `vLaunch3-dryrun1`, is a
 dry run: its release is always a prerelease.
+
+**Tag names (D38).** Release CI accepts only three kinds of tag: stable
+`vLaunch<N>` (`vLaunch3`), bleeding-edge `vNext<N>`, and dry runs. Every
+other `v*` tag is refused, since it would publish as the latest release.
+Point-release names such as `vLaunch2.3` belong to Keybard and Keybard Host
+releases only and are never tagged here. The tagged commit must be on the
+`svalboard` branch, and only `svalboard/qmk` publishes: on a fork the run
+stops at the first job.
+
+**Graduating a vNext (D38).** A stable release is a new build: raise
+`fw_version.txt` above every `vNext` before it, run a dry run, then tag
+`vLaunch<N>`. Never edit a `vNext` release into a non-prerelease by hand: it
+would become the latest release with a number the next stable tag must still
+exceed.
 
 **Bleeding edge (D36).** A `vNext` tag with a number, such as `vNext1`, is a
 bleeding-edge release, for use with next.keybard.svalboard.com. It is

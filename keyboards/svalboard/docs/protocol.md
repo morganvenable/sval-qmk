@@ -35,12 +35,13 @@ The launch firmware speaks Sval protocol version 3:
 - 32-bit macro offsets reach past 64 KiB.
 - 32-bit layer masks report active and default layers.
 - `GET_INFO` reports the protocol version, feature flags and the QMK keycode numbering the board uses.
+- `GET_INFO` byte 18 reports storage events: bit 0, settings were reset because storage could not be read; bit 1, a change could not be saved since this boot; bit 2, settings were reset to the build's defaults because a different firmware build was installed. Bits 0 and 2 stay set until the host sends `0x2A`. Older firmware never sets bit 2.
 
 Check feature flags before using an extension, send one request at a time per connection, and check the client ID and command in every reply.
 
 ## Pointing hardware
 
-`POINTING_HARDWARE` (`0x2C`) tells a host which side each half thinks it is, which pointing module its firmware drives, and which module actually answered. Each module needs its own firmware (and PMW3360 and PMW3389 trackballs need different firmware), and the wrong one leaves the module dead with no other sign, so a host can use this to name the right `.uf2`.
+`POINTING_HARDWARE` (`0x2C`) tells a host which side each half thinks it is, which pointing module its firmware drives, and which module actually answered. Released firmware drives whichever module is attached: one image per side, which probes for the module at startup (flags bit 3). The per-module builds (`svalboard/trackball/pmw3360`, `pmw3389`, `trackpoint`, `azoteq`) still build but are not released; on one of those the wrong module stays dead with no other sign, so a host can use this report to tell the user. On an auto build, `built_for` `0` with a module attached means the probe missed it: replugging the half probes again.
 
 - Discovery: GET_INFO byte 19 (the second feature byte), bit 1 (`sval_flag2_pointing_hardware`). Older firmware leaves it zero.
 - Request: `DF 2C`

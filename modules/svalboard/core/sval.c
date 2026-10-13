@@ -100,6 +100,12 @@ void sval_eeprom_invalidate(void) {
     sval_write_eeprom(SVAL_MAGIC_OFFSET, zero, SVAL_MAGIC_SIZE);
 }
 
+// Keyboard-level storage flags for GET_INFO byte 18, and their acknowledgement.
+__attribute__((weak)) uint8_t sval_storage_flags_kb(void) {
+    return 0;
+}
+__attribute__((weak)) void sval_storage_reset_clear_kb(void) {}
+
 bool sval_storage_was_reset(void) {
     uint8_t reset = 0;
     sval_read_eeprom(SVAL_STORAGE_RESET_OFFSET, &reset, SVAL_STORAGE_RESET_SIZE);
@@ -451,7 +457,9 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // host should ask the user to reload their layout, then send 0x2A.
             // Bit 1: since this boot, a change could not be saved to flash; the
             // board shows it but will lose it on restart. Clears on restart only.
-            data[18] = (sval_storage_was_reset() ? 1 : 0) | (sval_storage_write_failed() ? 2 : 0);
+            // Bit 2: settings were reset to this build's defaults because a
+            // different firmware build was installed; cleared by 0x2A.
+            data[18] = (sval_storage_was_reset() ? 1 : 0) | (sval_storage_write_failed() ? 2 : 0) | sval_storage_flags_kb();
             data[19] = sval_get_feature_flags2();
             break;
         }
@@ -461,6 +469,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Response: [0xDF] [0x2A]
             uint8_t reset = 0;
             sval_write_eeprom(SVAL_STORAGE_RESET_OFFSET, &reset, SVAL_STORAGE_RESET_SIZE);
+            sval_storage_reset_clear_kb();
             break;
         }
 

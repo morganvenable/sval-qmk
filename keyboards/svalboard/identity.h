@@ -37,15 +37,14 @@ bool                identity_available(void);
 const uint8_t      *identity_serial(identity_serial_source_t *source);
 const char         *identity_name(void); // "" when unset
 identity_status_t   identity_set_name(const char *name, uint8_t len);
-#ifdef SVAL_DEV_RESET_TOKEN
-// Dev reset builds (dev_reset.c): writes len bytes at the start of
-// DEV_RESET_SECTOR, erasing it first. False if the region is missing or the
-// bytes do not read back.
-bool identity_dev_reset_write(const void *data, uint32_t len);
-#endif
 
 // Host access over VIA custom values (protocol in identity.c).
 #define IDENTITY_CHANNEL 0x49 // 'I'
 enum { IDENTITY_OP_INFO = 0, IDENTITY_OP_NAME = 1, IDENTITY_OP_COMMIT = 2, IDENTITY_OP_REBOOT = 3 };
 void identity_via_command(uint8_t *data, uint8_t length);
 void identity_task(void); // from housekeeping: carries out a requested reboot
+
+// The build reset record (build_reset.c): writes len bytes at the start of
+// BUILD_RESET_SECTOR, erasing it first. False if the region is missing or the
+// bytes did not read back.
+bool identity_build_record_write(const void *data, uint32_t len);

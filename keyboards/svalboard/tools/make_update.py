@@ -64,10 +64,10 @@ BUILD_INFO_BYTES = 32
 BI_HOST_TEST = 0xFF  # hand and pointing_id of a host-test build
 assert struct.calcsize(BUILD_INFO_FMT) == BUILD_INFO_BYTES
 BI_RELEASE, BI_TEST_HOOKS, BI_KEYTEST, BI_HOST_BOOTLOADER = 0x01, 0x04, 0x08, 0x10
-BI_NO_CHORD, BI_DEV_RESET = 0x40, 0x80  # dev builds only
+BI_NO_CHORD, BI_DEV_KEEP = 0x40, 0x80  # dev builds only
 BI_RESERVED = 0x02 | 0x20  # protocol 1's key flags, retired
 BI_NOT_IN_RELEASE = {BI_TEST_HOOKS: "test hooks", BI_KEYTEST: "SVAL_KEYTEST", BI_HOST_BOOTLOADER: "SVAL_HOST_BOOTLOADER",
-                     BI_NO_CHORD: "SVAL_UPDATE_NO_CHORD", BI_DEV_RESET: "SVAL_DEV_RESET_TOKEN"}
+                     BI_NO_CHORD: "SVAL_UPDATE_NO_CHORD", BI_DEV_KEEP: "SVAL_DEV_KEEP_SETTINGS"}
 VERSION_RE = re.compile(r"^[A-Za-z0-9._+-]{0,16}$")
 
 # ---- image rules (update_image.c, config.h) ---------------------------------------

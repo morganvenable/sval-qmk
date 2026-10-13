@@ -15,9 +15,7 @@
 #include "sval.h"
 #include "pointing_motion.h" // after sval.h: needs the generated fragment ids
 #include "identity.h"
-#ifdef SVAL_DEV_RESET_TOKEN
-#    include "dev_reset.h"
-#endif
+#include "build_reset.h"
 #include "nvm_via.h"
 #ifdef SVAL_UPDATER
 #    include "updater/updater.h"
@@ -170,13 +168,22 @@ void via_keycodes_reset_kb(void) {
     sval_eeprom_invalidate();
 }
 
+// GET_INFO byte 18 (sval.c): bit 2, settings were reset because a different
+// firmware build was installed; bit 1 also covers a build record that could
+// not be saved, since the next boot then resets again.
+uint8_t sval_storage_flags_kb(void) {
+    return (build_reset_notice_pending() ? 4 : 0) | (build_reset_record_failed() ? 2 : 0);
+}
+
+void sval_storage_reset_clear_kb(void) {
+    build_reset_notice_clear();
+}
+
 // Runs after the EEPROM driver is up and before anything validates or resets
 // stored settings.
 void keyboard_pre_init_kb(void) {
     identity_init();
-#ifdef SVAL_DEV_RESET_TOKEN
-    dev_reset_pre_init();
-#endif
+    build_reset_pre_init(); // a different firmware build: reset stored settings
     keyboard_pre_init_user();
 }
 
@@ -525,9 +532,7 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void* in_data, uint8_t
 }
 
 void keyboard_post_init_kb(void) {
-#ifdef SVAL_DEV_RESET_TOKEN
-    dev_reset_post_init(); // the settings were reset in quantum_init()
-#endif
+    build_reset_post_init(); // the settings were reset in quantum_init()
     read_eeprom_kb();
     sval_pointer_rest_apply(); // the sensor was initialised before the flags were read
     sval_sleep_gating_init();

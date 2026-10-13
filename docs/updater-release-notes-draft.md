@@ -16,14 +16,18 @@ From this release on, Keybard can install new firmware for you over USB.
 
 ### Install this release
 
-1. Download the `.uf2` file for each half: one ending in `left`, one ending in
-   `right`, for the pointing device each half has (none, trackball,
-   TrackPoint or touchpad).
+1. Download the two `.uf2` files, one ending in `left` and one ending in
+   `right`. They work with any pointing module (none, trackball, TrackPoint
+   or touchpad), which each half detects when it starts.
 2. Put one half into bootloader mode (hold its BOOT button while plugging it
    in, or tap its reset button twice). A drive called `RPI-RP2` appears.
 3. Copy that half's `.uf2` onto the drive. The half restarts on its own.
 4. Do the same for the other half. **Both halves must run this release:** a
    half on this release cannot talk to a half on an older one.
+
+**Flashing resets your settings.** Each half starts from the default layout
+after new firmware. Export your layout in Keybard before you flash, and load
+it again afterwards.
 
 ### What's new compared with Svalboard's Vial firmware
 
@@ -36,12 +40,15 @@ From this release on, Keybard can install new firmware for you over USB.
   layout, `M` and `,` on the right, `V` and `C` on the left). The LEDs blink
   blue while it waits and flash white when it sees the keys.
 - **Checked before it is installed.** The keyboard checks that the firmware
-  arrived intact and was built for that hand and pointing device, and refuses
-  anything else. It does not check who built it: only approve updates you
-  started.
-- **Version check between halves.** If the two halves run different releases,
-  Keybard tells you and the LEDs on the half with USB blink red until both
-  match.
+  arrived intact. Keybard warns you if it was built for the other hand. It does
+  not check who built it: only approve updates you started.
+- **Version check between halves.** Once both halves run this release or
+  later, Keybard tells you when they differ and the LEDs on the half with USB
+  blink red until both match.
+- **One firmware for every pointing module.** After attaching or changing a
+  module, unplug and replug the keyboard. If you used a trackball, TrackPoint
+  or touchpad build before, select the keyboard again in Keybard; on Linux,
+  run the udev command Keybard shows.
 - **Your own builds work too.** Bootloader mode and a `.uf2` still work for
   any firmware, and the updater takes your own builds as well.
 - `<other changes in this release>`
@@ -61,8 +68,8 @@ Notes for whoever publishes this (delete before publishing):
 
 - Check the release's `.uf2` and `.svup` names against the list above before
   posting.
-- Say whether keymaps and settings carry over from the release people are
-  coming from; this draft makes no claim either way.
+- Settings reset on every new build (D39); the install steps say so. Keep
+  that line until Keybard saves and restores the layout around flashing.
 - The approval chord and LED colors are from `docs/updater.md` (D4, D24); if
   either changes before the release, update the text.
 - The in-Keybard update flow is milestone M4 (Keybard UI). Until it ships, the

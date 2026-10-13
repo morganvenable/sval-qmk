@@ -2,7 +2,9 @@
 """Svalboard in-firmware updater, host side: the half with USB over USB (M1),
 and the other half through it over the split link (M2).
 
-Needs hidapi (the 'hid' module) and a board running an SVAL_UPDATER=yes build.
+Needs hidapi (pip install hidapi) and a board running an SVAL_UPDATER=yes build.
+On Linux it uses hidapi's hidraw backend, which reports usage pages (the
+default libusb backend does not, so it would find no board).
 Close other configuration clients (Keybard) first: raw HID replies go to every
 open handle.
 
@@ -148,14 +150,29 @@ class ClientIdExpired(RuntimeError):
     pass
 
 
-def devices():
+HID_HELP = ("needs hidapi (pip install hidapi); on Linux it uses hidapi's hidraw backend, "
+            "which reports usage pages, and needs read/write access to /dev/hidraw*")
+
+
+def hid_backend(platform=sys.platform):
+    # The hidapi wheel's default Linux backend is libusb, which reports no usage
+    # pages (so the filter below matches nothing) and can detach the kernel
+    # keyboard driver. Use hidraw there, as Keybard Host does.
+    if platform.startswith("linux"):
+        import hidraw
+        return hidraw
     import hid
+    return hid
+
+
+def devices():
+    hid = hid_backend()
     return [d for d in hid.enumerate() if d.get("usage_page") == 0xFF61 and d.get("usage") == 0x62]
 
 
 class Device:
     def __init__(self, serial=None):
-        import hid
+        hid = hid_backend()
         matches = [d for d in devices() if serial is None or d.get("serial_number") == serial]
         if len(matches) != 1:
             raise RuntimeError(f"Expected one Svalboard, found {len(matches)}; use --serial (see list)")
@@ -905,7 +922,7 @@ class Rejects:
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(epilog=HID_HELP, description=__doc__.split("\n\n")[0])
     ap.add_argument("--serial", help="exact device serial from list")
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("list")

@@ -522,8 +522,14 @@ void send_raw_hid(uint8_t *data, uint8_t length) {
 
 void raw_hid_task(void) {
     uint8_t buffer[RAW_EPSIZE];
-    while (receive_report(USB_ENDPOINT_OUT_RAW, buffer, sizeof(buffer))) {
-        raw_hid_receive(buffer, sizeof(buffer));
+    size_t  received;
+    // One report per USB packet. A shorter packet comes from a host sized for
+    // a smaller endpoint (32-byte reports to a 64-byte board): it is dropped
+    // whole, so the reports after it stay framed.
+    while (usb_endpoint_out_receive_packet(&usb_endpoints_out[USB_ENDPOINT_OUT_RAW], buffer, sizeof(buffer), &received)) {
+        if (received == sizeof(buffer)) {
+            raw_hid_receive(buffer, sizeof(buffer));
+        }
     }
 }
 

@@ -189,19 +189,17 @@ void identity_init(void) {
 
 // ---- public API ------------------------------------------------------------------
 
-#ifdef SVAL_DEV_RESET_TOKEN
-#    include "dev_reset.h"
-bool identity_dev_reset_write(const void *data, uint32_t len) {
+#include "build_reset.h"
+bool identity_build_record_write(const void *data, uint32_t len) {
     identity_init();
     if (!region_ok || len > sizeof(page_buf)) return false;
     memset(page_buf, 0xFF, sizeof(page_buf));
     memcpy(page_buf, data, len);
     uint32_t irq = save_and_disable_interrupts();
-    identity_flash_write(DEV_RESET_SECTOR, page_buf);
+    identity_flash_write(BUILD_RESET_SECTOR, page_buf);
     restore_interrupts(irq);
-    return memcmp((const void *)(XIP_NOCACHE_NOALLOC_BASE + DEV_RESET_SECTOR), data, len) == 0;
+    return memcmp((const void *)(XIP_NOCACHE_NOALLOC_BASE + BUILD_RESET_SECTOR), data, len) == 0;
 }
-#endif
 
 bool identity_available(void) {
     identity_init();

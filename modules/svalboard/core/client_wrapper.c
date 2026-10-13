@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "client_wrapper.h"
+#include "via.h"
 #include "sval.h"
 #include "raw_hid.h"
 #include "host.h"
@@ -49,6 +50,12 @@ bool client_wrapper_valid_id(uint32_t id) {
 
 bool client_wrapper_in_via(void) {
     return wrapper_pending;
+}
+
+// A wrapped VIA command and its reply lose the 6-byte wrapper header (raw_hid_send
+// below), so VIA's buffer commands must fit in what is left.
+uint8_t via_payload_length(uint8_t length) {
+    return wrapper_pending && length > 6 ? length - 6 : length;
 }
 
 #ifdef CLIENT_WRAPPER_ID_GETTER

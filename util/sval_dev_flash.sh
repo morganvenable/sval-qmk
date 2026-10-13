@@ -12,8 +12,10 @@
 #   keep      the private claussen keymap; stored settings are kept
 #   claussen  the same, and stored settings reset once to the claussen layout
 #   blank     the blank keymap, and stored settings reset once to it
-# A reset happens on the first boot of that build only (dev_reset.c): the next
-# keep flash keeps the settings again.
+# claussen and blank are ordinary builds: like every build, each resets stored
+# settings on its first boot (build_reset.c, D39); flashing the same file again
+# does not. keep builds (SVAL_DEV_KEEP_SETTINGS) skip that, so the next keep
+# flash keeps the settings again.
 #
 # Files live under $SVAL_HOME (default /mnt/c/Users/$USER/Svalboard):
 #   layouts/private/claussen/keymap/  the private keymap (gen_keymap.py), never
@@ -65,13 +67,8 @@ fi
 commit=$(git rev-parse --short=10 HEAD)
 flags=(SVAL_UPDATER=yes SVAL_UPDATE_NO_CHORD=yes)
 flags+=(SVAL_FW_VERSION_STRING="dev-$commit")
-if [ "$mode" != keep ]; then
-    token=00000000
-    while [ "$token" = 00000000 ]; do
-        token=$(od -An -N4 -tx4 /dev/urandom | tr -d ' \n')
-    done
-    flags+=(SVAL_DEV_RESET_TOKEN="$token")
-    echo "reset token $token"
+if [ "$mode" = keep ]; then
+    flags+=(SVAL_DEV_KEEP_SETTINGS=yes)
 fi
 
 svups=()

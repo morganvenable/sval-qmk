@@ -327,6 +327,20 @@ __attribute__((weak)) bool via_command_kb(uint8_t *data, uint8_t length) {
     return false;
 }
 
+// Bytes of the report the VIA command and its reply may use. A keyboard that
+// wraps VIA commands in its own header (via_command_kb) returns less.
+__attribute__((weak)) uint8_t via_payload_length(uint8_t length) {
+    return length;
+}
+
+// The host's size byte for a buffer get/set, clamped to what fits after
+// [command id][offset hi][offset lo][size]: never read or write past the report.
+static uint16_t via_buffer_size(uint8_t requested, uint8_t length) {
+    uint8_t payload = via_payload_length(length);
+    uint8_t room    = payload > 4 ? payload - 4 : 0;
+    return requested > room ? room : requested;
+}
+
 void raw_hid_receive(uint8_t *data, uint8_t length) {
     uint8_t *command_id   = &(data[0]);
     uint8_t *command_data = &(data[1]);
@@ -481,13 +495,13 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
         }
         case id_dynamic_keymap_macro_get_buffer: {
             uint16_t offset = (command_data[0] << 8) | command_data[1];
-            uint16_t size   = command_data[2]; // size <= 28
+            uint16_t size   = via_buffer_size(command_data[2], length);
             dynamic_keymap_macro_get_buffer(offset, size, &command_data[3]);
             break;
         }
         case id_dynamic_keymap_macro_set_buffer: {
             uint16_t offset = (command_data[0] << 8) | command_data[1];
-            uint16_t size   = command_data[2]; // size <= 28
+            uint16_t size   = via_buffer_size(command_data[2], length);
             dynamic_keymap_macro_set_buffer(offset, size, &command_data[3]);
             break;
         }
@@ -501,13 +515,13 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
         }
         case id_dynamic_keymap_get_buffer: {
             uint16_t offset = (command_data[0] << 8) | command_data[1];
-            uint16_t size   = command_data[2]; // size <= 28
+            uint16_t size   = via_buffer_size(command_data[2], length);
             dynamic_keymap_get_buffer(offset, size, &command_data[3]);
             break;
         }
         case id_dynamic_keymap_set_buffer: {
             uint16_t offset = (command_data[0] << 8) | command_data[1];
-            uint16_t size   = command_data[2]; // size <= 28
+            uint16_t size   = via_buffer_size(command_data[2], length);
             dynamic_keymap_set_buffer(offset, size, &command_data[3]);
             break;
         }

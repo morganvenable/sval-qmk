@@ -10,7 +10,7 @@ WS2812_DRIVER   = vendor
 
 CUSTOM_MATRIX = lite
 
-SRC += axis_scale.c matrix.c scanlab.c power.c identity.c pointing_detect.c
+SRC += axis_scale.c matrix.c scanlab.c power.c identity.c pointing_detect.c build_reset.c
 
 # Settings start at 0x160000; keep firmware below them.
 LDFLAGS += -Wl,-T,keyboards/svalboard/flash_reservation.ld
@@ -134,17 +134,13 @@ else
   endif
 endif
 
-# Dev builds that reset stored settings once (dev_reset.c): -e SVAL_DEV_RESET_TOKEN=<1 to 8
-# hex digits, not 0>. The first boot that finds another token stored resets every
-# setting to the build's defaults; util/sval_dev_flash.sh picks a new token per
-# build. Never in a release.
-ifneq ($(strip $(SVAL_DEV_RESET_TOKEN)),)
-  ifneq ($(shell echo '$(strip $(SVAL_DEV_RESET_TOKEN))' | grep -Eix '[0-9a-f]{1,8}' | grep -Evx '0+' >/dev/null && echo ok),ok)
-    $(error SVAL_DEV_RESET_TOKEN '$(SVAL_DEV_RESET_TOKEN)' must be 1 to 8 hex digits, not 0)
-  endif
+# Dev builds that keep stored settings across flashes (build_reset.c, D37):
+# -e SVAL_DEV_KEEP_SETTINGS=yes skips the reset on the first boot of a new build
+# and leaves the record alone, so util/sval_dev_flash.sh keep can iterate on a
+# board's own settings. Never in a release.
+ifeq ($(strip $(SVAL_DEV_KEEP_SETTINGS)), yes)
   ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
-    $(error SVAL_DEV_RESET_TOKEN cannot be part of a release build)
+    $(error SVAL_DEV_KEEP_SETTINGS cannot be part of a release build)
   endif
-  OPT_DEFS += -DSVAL_DEV_RESET_TOKEN=0x$(strip $(SVAL_DEV_RESET_TOKEN))u
-  SRC += dev_reset.c
+  OPT_DEFS += -DSVAL_DEV_KEEP_SETTINGS
 endif
