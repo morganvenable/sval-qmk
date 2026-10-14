@@ -396,8 +396,28 @@ static int replay(const char *path, const char *owners) {
     return 0;
 }
 
+// The Keybard / CLI path end to end: a SET over 0x2E with remapped outputs
+// (a macro, a plain key) is what the recognizer then types.
+static void test_set_outputs_are_emitted(void) {
+    fresh(TG_OPT_SPAN);
+    tg_config_t c; tg_defaults(&c);
+    c.owners = TG_OWN_SWIPE_FW | TG_OWN_PINCH_FW | TG_OPT_SPAN;
+    c.keycodes[TG_SWIPE_LEFT] = 0x7702; // QK_MACRO + 2
+    c.keycodes[TG_PINCH_OUT] = 0x0004; // KC_A
+    uint8_t buf[59] = {1, TG_PAYLOAD_VERSION, TG_PAYLOAD_SIZE};
+    tg_encode(&c, buf + 3);
+    tg_command(buf, sizeof(buf));
+    CHECK(buf[1] == 0 && tg_running());
+    swipe3(1, -22, 0, 10);
+    CHECK(n_emitted == 1 && emitted[0] == 0x7702);
+    lift(); n_emitted = 0;
+    pinch_frames(15, 25, 9, 31, 12, false);
+    CHECK(n_emitted == 2 && emitted[0] == 0x0004 && emitted[1] == 0x0004);
+}
+
 int main(int argc, char **argv) {
     if (argc >= 3 && !strcmp(argv[1], "--replay")) return replay(argv[2], argc > 3 ? argv[3] : NULL);
+    test_set_outputs_are_emitted();
     test_windows_owner_is_inert();
     test_swipe_directions();
     test_settle_and_staggered_landing();
