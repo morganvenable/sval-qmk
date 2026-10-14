@@ -7,8 +7,20 @@ import math
 from collections import Counter
 
 
+MERGE_MS=150  # cross-pad contacts join one Windows gesture only if they land this close together
+
+
 class UnifiedPad:
-    def __init__(self, backend=None, gap_mm=0, flips=((False,False),(False,False)), clock=None):
+    """One Windows touchpad from both pads.
+
+    Ownership rules from the firmware's touch gesture settings (configure()):
+    a frame flagged 0x40 means the firmware claimed the gesture, so Windows
+    loses the contacts (destroy and recreate, no fake tap) until all-up; with
+    the swipe owned by the firmware, touches of swipe_fingers or more never
+    reach Windows; and a contact landing on the other pad more than MERGE_MS
+    after the touch began is held back, unless the always-merge option is set.
+    """
+    def __init__(self, backend=None, gap_mm=0, flips=((False,False),(False,False)), clock=None, merge_ms=MERGE_MS):
         import time
         if not math.isfinite(gap_mm) or not 0<=gap_mm<=50: raise ValueError('Gap must be 0–50 mm')
         self.backend, self.gap, self.flips = backend, round(gap_mm*100), flips
@@ -17,9 +29,19 @@ class UnifiedPad:
         self.samples={};self.ready=False;self.points={};self.reason='Lift all fingers on both pads to arm'
         self.cancellations=0;self.faults=Counter();self.gaps=0;self.identities={};self.next_id=1
         self.origin=None;self.metrics=None;self.last_output=None;self.last_tick=None
+        self.merge_window=merge_ms/1000;self.always_merge=False;self.withhold_fingers=None;self.span=True
+        self.session_pads=set();self.session_start=None;self.held=set()
+        self.claims=0;self.withheld=0;self.owners='every gesture: Windows'
 
-    def cancel(self,reason):
-        self.faults[reason]+=1
+    def configure(self,config):
+        """config: gesture_config.GestureConfig from the firmware, or None (old firmware: Windows owns all)."""
+        self.always_merge=bool(config and config.host_always_merge)
+        self.span=bool(config is None or config.span_pads)
+        self.withhold_fingers=config.swipe_fingers if config and config.firmware_swipe else None
+        self.owners=config.summary() if config else 'every gesture: Windows (firmware has no gesture settings)'
+
+    def cancel(self,reason,fault=True):
+        if fault:self.faults[reason]+=1
         if self.points:
             self.cancellations+=1
             if self.backend:self.backend.cancel()
@@ -46,14 +68,32 @@ class UnifiedPad:
                     reason='Contact continuity lost'
         # A flagged frame explains its epoch change: report one cause, not a
         # fictitious second MCU restart. Preserve all flag bits in raw logs.
-        if frame.flags&0x7f:
+        if frame.flags&0x3f:
             reason=', '.join(label for bit,label in (
                 (1,'Palm detected'),(2,'Sensor contact limit'),
                 (4,'Sensor acquisition invalid'),(8,'Sensor reset / calibration'),
-                (16,'Stream discontinuity'),(32,'Split snapshot stale'),
-                (64,'Unknown frame fault')) if frame.flags&bit)
+                (16,'Stream discontinuity'),(32,'Split snapshot stale')) if frame.flags&bit)
         if reason:self.cancel(('Left: ' if frame.pad==0 else 'Right: ')+reason)
+        elif frame.flags&0x40:
+            # Firmware claimed this gesture: one owner, so Windows lets go now.
+            if self.ready:
+                self.claims+=1;self.cancel('Firmware gesture',fault=False)
+            self.reason='Firmware gesture · lift all fingers to rearm'
         self.samples[frame.pad]=(frame,now)
+
+    def merge(self,raw,now):
+        """Hold back a contact that lands on the other pad too late to be part of this touch."""
+        if not raw:
+            self.session_pads=set();self.session_start=None;self.held=set();return raw
+        for key in sorted(raw,key=lambda k:k[0]):
+            if key in self.identities or key in self.held:continue
+            pad=key[0]
+            if not self.session_pads:self.session_pads={pad};self.session_start=now
+            elif pad in self.session_pads:pass
+            elif self.always_merge or now-self.session_start<=self.merge_window:self.session_pads.add(pad)
+            else:self.held.add(key)
+        self.held&=set(raw)
+        return {k:v for k,v in raw.items() if k not in self.held}
 
     @staticmethod
     def contact_ids(frame):
@@ -62,7 +102,7 @@ class UnifiedPad:
     def raw_points(self):
         result={}
         for pad,(frame,_) in self.samples.items():
-            if frame.flags&0x7f:continue
+            if frame.flags&0x3f:continue
             for key,(x,y) in frame.himetric().items():
                 if self.flips[pad][0]:x=4300-x
                 if self.flips[pad][1]:y=4000-y
@@ -88,7 +128,13 @@ class UnifiedPad:
         if not self.ready:
             if any(f.mask for f in frames):return None
             self.ready=True;self.reason='Ready · one continuous pad'
-        raw=self.raw_points()
+        raw=self.merge(self.raw_points(),now)
+        if self.withhold_fingers:
+            counts=Counter(key[0] for key in raw)
+            fingers=len(raw) if self.span else max(counts.values(),default=0)
+            if fingers>=self.withhold_fingers:
+                self.withheld+=1
+                self.cancel(f'{fingers}-finger swipe belongs to the firmware',fault=False);return None
         if len(raw)>5:
             self.cancel('Six or more contacts exceed the Windows five-contact limit');return None
         # Stable synthetic IDs are independent of both source lifetime-ID spaces.

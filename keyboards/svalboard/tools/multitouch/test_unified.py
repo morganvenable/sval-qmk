@@ -1,6 +1,7 @@
 import unittest
 from transport import Frame
 from unified import UnifiedPad
+from gesture_config import GestureConfig
 
 
 def f(pad,seq,points=(),epoch=1,flags=0):
@@ -76,5 +77,57 @@ class Tests(unittest.TestCase):
     def test_source_sequence_wrap(self):
         self.pad.samples={0:(f(0,65535),0),1:(f(1,65535),0)}
         self.send(f(0,0,[(1,100,100)]),f(1,0));self.assertTrue(self.pad.ready)
+
+
+class OwnershipTests(unittest.TestCase):
+    """One owner per gesture: firmware claims, swipe withholding and the cross-pad merge rule."""
+    def setUp(self):
+        self.now=0;self.backend=Backend();self.pad=UnifiedPad(self.backend,clock=lambda:self.now)
+        self.pad.feed(f(0,0));self.pad.feed(f(1,0));self.pad.tick();self.seq=0
+    def send(self,a=(),b=(),flags=(0,0),dt=.01):
+        self.now+=dt;self.seq+=1
+        self.pad.feed(f(0,self.seq,a,flags=flags[0]));self.pad.feed(f(1,self.seq,b,flags=flags[1]));return self.pad.tick()
+    def test_claim_cancels_windows_once_and_rearms_at_all_up(self):
+        self.send([(1,500,500),(2,900,500)])
+        n=len(self.backend.frames)
+        self.send([(1,450,500),(2,950,500)],flags=(0x40,0x40))
+        self.assertEqual(self.backend.cancels,1);self.assertEqual(self.pad.claims,1)
+        self.assertEqual(sum(self.pad.faults.values()),0)
+        self.send([(1,400,500),(2,1000,500)],flags=(0x40,0x40))
+        self.assertEqual(len(self.backend.frames),n);self.assertEqual(self.pad.claims,1)
+        self.assertFalse(self.pad.ready)
+        self.send();self.assertTrue(self.pad.ready)
+    def test_firmware_swipe_is_withheld_from_windows(self):
+        self.pad.configure(GestureConfig(swipe_owner='firmware'))
+        self.send([(1,500,500),(2,900,500)])
+        self.assertEqual(len(self.backend.frames[-1]),2)
+        self.send([(1,500,500),(2,900,500),(3,1300,500)])
+        self.assertFalse(self.pad.ready);self.assertEqual(self.pad.withheld,1)
+        n=len(self.backend.frames)
+        self.send([(1,400,500),(2,800,500)]);self.assertEqual(len(self.backend.frames),n)
+        self.send();self.assertTrue(self.pad.ready)
+    def test_windows_swipe_passes_three_fingers(self):
+        self.pad.configure(GestureConfig())
+        p=self.send([(1,500,500),(2,900,500),(3,1300,500)]);self.assertEqual(len(p),3)
+    def test_late_cross_pad_contact_is_held_back(self):
+        p=self.send([(1,500,500)]);self.assertEqual(len(p),1)
+        for _ in range(20):p=self.send([(1,520,500)])
+        p=self.send([(1,540,500)],[(1,500,500)]);self.assertEqual(len(p),1)  # resting finger on the other pad
+        self.assertEqual(list(p.values())[0][0],round(540*4300/2048))
+        p=self.send([(1,540,500),(2,900,500)],[(1,500,500)]);self.assertEqual(len(p),2)  # same pad still joins
+        p=self.send(b=[(1,500,500)]);self.assertEqual(p,{})  # the held contact stays held
+        p=self.send();p=self.send(b=[(1,500,500)]);self.assertEqual(len(p),1)  # a new touch starts on that pad
+    def test_cross_pad_within_window_and_always_merge(self):
+        self.send([(1,500,500)])
+        for _ in range(10):self.send([(1,500,500)])  # 100 ms later: inside the 150 ms window
+        p=self.send([(1,500,500)],[(1,500,500)]);self.assertEqual(len(p),2)
+        self.send();self.pad.configure(GestureConfig(host_always_merge=True))
+        self.send([(1,500,500)])
+        for _ in range(30):self.send([(1,500,500)])
+        p=self.send([(1,500,500)],[(1,500,500)]);self.assertEqual(len(p),2)
+    def test_one_pad_firmware_swipe_counts_per_pad(self):
+        self.pad.configure(GestureConfig(swipe_owner='firmware',span_pads=False))
+        p=self.send([(1,500,500),(2,900,500)],[(1,500,500)]);self.assertEqual(len(p),3)
+        self.assertTrue(self.pad.ready)
 
 if __name__=='__main__':unittest.main()

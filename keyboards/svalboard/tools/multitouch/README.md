@@ -1,3 +1,115 @@
+# Unified touchpad on a typing board (experimental build)
+
+Both Azoteq pads act as one 86 x 40 mm Windows touchpad, on a Svalboard that
+still types. This is a hacker build: working, hackable and documented beat
+polished. The design and its bends are in the handoff's `DESIGN.md`; the wire
+formats are in [protocol.md](../../docs/protocol.md) ("Touch gestures").
+
+## Who delivers what
+
+| Feature | Unified mode (this lab running, REAL input on) | Normal mode (no host) |
+|---|---|---|
+| Three-finger swipe | `swipe_owner`: Windows' own gesture (default), or the firmware recognizer typing a keycode | Firmware, if `swipe_owner` = firmware |
+| Pinch zoom | `pinch_owner`: Windows (default), or the firmware typing Ctrl+wheel steps | Firmware, if `pinch_owner` = firmware |
+| Two-finger scroll | `scroll_owner`: Windows (default, with inertia), or the chip's own wheel | Chip |
+| Tap, tap-and-drag, two-finger tap, cursor | Windows | Chip |
+| Mouse-layer keys and clicks | Firmware mousekeys | Firmware |
+| Auto mouse layer | Firmware, from one-finger contact movement | Firmware, from pad motion |
+
+Windows delivers every feature from the injected input; the firmware adds a
+second, tunable owner for swipe and pinch, a chip scroll owner, auto mouse in
+unified mode, and gestures with no host at all. Exactly one owner handles each
+gesture: the lab sets Windows' `panEnabled` and `zoomEnabled` to match the
+owners for the session (and `allowActiveWhenMousePresent`, without which the
+synthetic pad is dead), and restores them afterward, also after a crash, at
+the next start (`--no-manage-windows-settings` turns this off).
+
+## Build (WSL), both halves
+
+```sh
+make svalboard/azoteq/left:sval SVAL_UPDATER=yes SVAL_AZOTEQ_UNIFIED=yes SVAL_FW_VERSION=2310 SVAL_FW_VERSION_STRING=cyrus-mt-dev1 -j8
+make svalboard/azoteq/right:sval SVAL_UPDATER=yes SVAL_AZOTEQ_UNIFIED=yes SVAL_FW_VERSION=2310 SVAL_FW_VERSION_STRING=cyrus-mt-dev1 -j8
+```
+
+`SVAL_AZOTEQ_UNIFIED=yes` turns on the contact stream and the split contact
+transport on a real keymap, with the matrix scanning keys. Release builds
+refuse it. Both halves need these matching images: the split transaction table
+gains `KEYBOARD_MT`, so a half with other firmware can't talk to them.
+
+## Run (Windows)
+
+```sh
+python unified_lab.py --serial USB_SERIAL_OF_THE_PLUGGED_IN_HALF --log session.jsonl
+```
+
+Tick **Enable REAL Windows touchpad input**. Lift every finger once to arm.
+The owners line shows what the firmware says and what Windows was set to.
+
+Change owners, outputs and thresholds with Keybard's experimental "Touch
+gestures" panel, or from the command line; the board saves them, and a
+running lab follows within two seconds:
+
+```sh
+python touch_gestures_cli.py --serial SERIAL get
+python touch_gestures_cli.py --serial SERIAL set swipe_owner=firmware swipe_repeat_mm=10
+python touch_gestures_cli.py --serial SERIAL set scroll_owner=chip pinch_owner=firmware
+python touch_gestures_cli.py --serial SERIAL status --watch
+```
+
+## How ownership works
+
+- **Firmware claim.** When the firmware recognizes a swipe or pinch it owns,
+  it sets frame flag `0x40` on both pads until every finger is up. The lab
+  then destroys and recreates the synthetic device (no release, so no fake
+  tap) and sends nothing until all-up. In normal mode the claim holds back
+  both chips' mouse output instead.
+- **Swipe withholding.** With `swipe_owner` = firmware, any touch with
+  `swipe_fingers` or more contacts never reaches Windows, so Windows can't
+  start its own three-finger gesture.
+- **Pinch leak (a known bend).** A firmware pinch can't be told from a scroll
+  until the fingers move, so Windows (or the chip) may scroll for a frame or two
+  (10-20 ms) before the claim. With the chip scroll owner, the chip's wheel is
+  held for `TG_PINCH_HOLD_MS` (60) after a second finger lands; a pinch drops it.
+- **Cross-pad merge.** A contact landing on the other pad more than 150 ms
+  after the touch began is held back, so a finger resting on one pad doesn't
+  turn pointing into scrolling. Payload bit 4 merges always.
+- **Leaving unified mode** (STOP, the lease running out, the lab closing):
+  chip output stays off until both pads report all fingers up (5 s at most).
+
+## Firmware recognizer (`azoteq/touch_gestures.c`)
+
+- Swipe: `swipe_fingers` contacts for `settle_ms` arm it. The contacts'
+  centroid is tracked, rebased whenever the set of contacts changes (a landing
+  or lift is not travel), with a dropped contact held at its last position for
+  `TG_DROP_GRACE_MS` (30). `swipe_mm` of travel within `swipe_window`, with the
+  main axis `swipe_ratio` times the other, fires the direction's keycode and
+  locks it. The gesture continues while `sustain_min` contacts remain;
+  `swipe_repeat_mm` above 0 fires again for every that many mm further along
+  the locked axis (reverse travel does nothing).
+- Pinch: two contacts whose distance changes by `pinch_start_mm`, more than
+  1.5 times the centroid's travel, start it; then one step per `pinch_step_mm`.
+  It stays a pinch until all-up.
+- Compile-time knobs at the top of `touch_gestures.h`: drop grace, pinch hold,
+  staleness, per-pad flips.
+- Offline tuning: `trace_from_log.py session.jsonl > s.trace`, then run the
+  host test binary with `--replay s.trace 0e` (see the script's docstring).
+
+## Tests
+
+`util/test_multitouch_split.sh` runs the split stream test, the recognizer
+test (`tests/sval_touch_gestures`, synthetic traces including a finger dropping
+out mid-swipe), the I2C abort test and these Python tests.
+
+## Not done yet
+
+- The suspected latched BUTTON1 after a chip tap (`azoteq.c`) is not changed:
+  it waits for a tap test on the Mule in normal mode.
+- The pad read stall (about 10 ms with three fingers) is accepted until it is
+  measured with keys on. The cheap fix is a 15-20 ms report period.
+- A native Windows Precision Touchpad in firmware (DESIGN.md section 8).
+
+---
+
 # Unified two-hand touchpad (current experiment)
 
 Run `unified_lab.py --serial EXACT_RIGHT_USB_SERIAL --log NEW_FILE.jsonl` with
@@ -40,10 +152,10 @@ injecting. Mode 1 remains rejected for the old single-pad injector. STOP or the
 keymaps, the inert physical matrix, and no-chord updates. The split wire layout
 is unchanged from the preceding pair firmware.
 
-The app renews its wrapper identity every 45 seconds: it closes the synthetic
-device, releases/reacquires capture, and waits for all-up again. This can
-interrupt a gesture spanning renewal; seamless ownership transfer is future
-work. The checkbox does not persist across launches. Close releases capture;
+The app renews the lease every 100 ms, and every 60 seconds it moves the lease
+to a fresh wrapper identity with a plain renew (op 2, same token, old ID in
+bytes 10-13), so a gesture in progress is never cut off. The checkbox does not
+persist across launches. Close releases capture;
 on errors it disables the checkbox and firmware's watchdog handles host loss.
 Ordinary mouse output remains active in preview mode.
 

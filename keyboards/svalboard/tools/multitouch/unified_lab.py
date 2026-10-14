@@ -10,6 +10,9 @@ import traceback
 from transport import Assembler,HidDispatcher,StreamClient
 from capture import open_device
 from unified import UnifiedPad
+import gesture_config
+
+REBIND_S=60  # wrapper IDs last two minutes; the lease moves to a fresh one well before
 
 
 def main():
@@ -18,6 +21,8 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--serial',required=True);p.add_argument('--log',type=Path)
     p.add_argument('--smoke',action='store_true',help='Close after two seconds; no real input')
+    p.add_argument('--no-manage-windows-settings',action='store_true',
+                   help="Leave Windows' touchpad pan/zoom settings alone (by default they follow the firmware's owners for the session)")
     args=p.parse_args();log=args.log.open('x',encoding='utf-8') if args.log else None
     root=tk.Tk();root.title('Unified touchpad · two hands, one surface');root.geometry('1040x825+70+30')
     ttk.Label(root,text='Two touchpads → one multitouch surface',font=('Segoe UI',22)).pack(pady=14)
@@ -25,6 +30,7 @@ def main():
     real=tk.BooleanVar(value=False);gap=tk.DoubleVar(value=0);flips=[tk.BooleanVar(value=False) for _ in range(4)]
     input_error=tk.StringVar(value='')
     status=tk.StringVar(value='Connecting…');details=tk.StringVar(value='');mode_label=tk.StringVar(value='PREVIEW ONLY · ordinary mouse output remains active')
+    owners_label=tk.StringVar(value='Gesture owners: reading the firmware…')
     row=ttk.Frame(root);row.pack(pady=12)
     real_button=ttk.Checkbutton(row,text='Enable REAL Windows touchpad input',variable=real)
     real_button.pack(side='left',padx=12)
@@ -33,6 +39,7 @@ def main():
     for i,text in enumerate(('Flip left X','Flip left Y','Flip right X','Flip right Y')):
         ttk.Checkbutton(orient,text=text,variable=flips[i]).pack(side='left',padx=12)
     ttk.Label(root,textvariable=mode_label,wraplength=1000).pack(pady=8)
+    ttk.Label(root,textvariable=owners_label,wraplength=1000).pack()
     ttk.Label(root,textvariable=input_error,foreground='#b03020',wraplength=1000).pack()
     surface=tk.Canvas(root,width=960,height=320,bg='#101c29',highlightthickness=0);surface.pack()
     ttk.Label(root,textvariable=status,font=('Segoe UI',15),wraplength=1000).pack(pady=10)
@@ -53,7 +60,7 @@ def main():
     for v in flips:v.trace_add('write',configure)
     gapbox.config(command=configure);gapbox.bind('<Return>',configure);gapbox.bind('<FocusOut>',configure)
     def publish(item):
-        if item[0] in ('fallback','error'):
+        if item[0] in ('fallback','error','owners'):
             alerts.put(item);return
         if display.full():
             try:display.get_nowait()
@@ -61,9 +68,29 @@ def main():
         display.put_nowait(item)
     def worker():
         device=dispatcher=client=backend=None;active=False;config=None;model=None
-        counts=[0,0];last_log=0
+        counts=[0,0];last_log=0;gestures=None;owner_bits=None
+        settings=None
+        if not args.no_manage_windows_settings:
+            try:
+                from windows_settings import SessionSettings
+                settings=SessionSettings(log=lambda m:publish(('owners',None,m)))
+                settings.recover()
+            except Exception as exc:
+                settings=None;publish(('owners',None,f'Windows touchpad settings not managed: {exc}'))
+        def read_gestures(enabled):
+            nonlocal gestures
+            try:gestures=gesture_config.get(client)
+            except Exception as exc:
+                publish(('owners',gestures,f'Could not read gesture owners ({exc}); keeping {gestures.summary() if gestures else "Windows for all"}'));return
+            if model:model.configure(gestures)
+            text='Gesture owners: '+(gestures.summary() if gestures else 'every gesture Windows (this firmware has no gesture settings)')
+            if settings and enabled:
+                want=settings.apply(gestures)
+                text+=f' · Windows pan {"on" if want["panEnabled"] else "off"}, zoom {"on" if want["zoomEnabled"] else "off"}'
+            publish(('owners',gestures,text))
+            if log:log.write(json.dumps(dict(event='gestures',time=time.time(),config=gestures.__dict__ if gestures else None))+'\n');log.flush()
         def advance(frame=None,received=None):
-            nonlocal backend,active,config,identity_at
+            nonlocal backend,active
             try:
                 if frame is not None:model.feed(frame,received)
                 model.tick()
@@ -76,7 +103,7 @@ def main():
                 backend.close();backend=None;model.backend=None
                 model.cancel('Windows input stopped')
                 client.command(3);active=False
-                config=(gen,False,g,flip);identity_at=0
+                commands.put((gen,False,g,flip)) # restart the lease in preview mode
                 publish(('fallback',message))
                 return False
         try:
@@ -84,14 +111,13 @@ def main():
             # Receipt timestamps are taken by the HID I/O thread, never the GUI.
             dispatcher=HidDispatcher(device,lambda packet:packets.put_nowait((packet,time.monotonic())),report_size=64)
             client=StreamClient(dispatcher)
-            renewed=identity_at=0
+            renewed=identity_at=gestures_at=0
             while not stop.is_set():
                 change=False
                 while not commands.empty():config=commands.get();change=True
                 if config is None:stop.wait(.01);continue
                 gen,enabled,g,flip=config
                 now=time.monotonic()
-                if now-identity_at>=45:change=True
                 if change:
                     if backend:backend.close();backend=None
                     if active:client.command(3);active=False
@@ -104,10 +130,21 @@ def main():
                         from windows_touchpad import WindowsTouchpad
                         backend=WindowsTouchpad(width=8600+round(g*100),height=4000)
                     model=UnifiedPad(backend,g,(flip[:2],flip[2:]));renewed=now
+                    owner_bits=reply['ownership']&0x30;read_gestures(enabled);gestures_at=now
+                    if settings and settings.active and not enabled:settings.restore()
                     if log:log.write(json.dumps(dict(event='session',time=time.time(),real=enabled,gap=g))+'\n');log.flush()
                 if dispatcher.failure:raise dispatcher.failure
                 now=time.monotonic()
-                if now-renewed>=.1:client.command(2);renewed=now
+                if now-identity_at>=REBIND_S:
+                    # A plain renew under a fresh wrapper ID: no STOP/START, no cut-off gesture.
+                    reply=client.rebind();assembler.rebind(client.client);identity_at=renewed=now
+                elif now-renewed>=.1:reply=client.command(2);renewed=now
+                else:reply=None
+                if (reply and reply['ownership']&0x30!=owner_bits) or now-gestures_at>=2:
+                    # The owners changed (Keybard or the CLI sent a SET): re-read and re-apply.
+                    # The info flags only carry two bits, so re-read every two seconds as well.
+                    if reply:owner_bits=reply['ownership']&0x30
+                    read_gestures(enabled);gestures_at=now
                 batch=[]
                 try:batch.append(packets.get(timeout=.005))
                 except queue.Empty:pass
@@ -125,7 +162,7 @@ def main():
                 if not advance():continue
                 now=time.monotonic()
                 if now-last_log>.025:
-                    publish((gen,model.raw_points(),model.points,model.width,model.reason,model.metrics,tuple(counts),model.cancellations,model.gaps,sum(model.faults.values())))
+                    publish((gen,model.raw_points(),model.points,model.width,model.reason,model.metrics,tuple(counts),model.cancellations,model.gaps,sum(model.faults.values()),model.claims,model.withheld))
                     if log:
                         log.write(json.dumps(dict(event='state',time=time.time(),real=enabled,counts=counts,reason=model.reason,contacts=model.points,cancellations=model.cancellations,gaps=model.gaps,faults=dict(model.faults)))+'\n');log.flush()
                     last_log=now
@@ -141,14 +178,19 @@ def main():
                     except Exception:pass
                 if dispatcher:dispatcher.close()
                 if device:device.close()
+                if settings:
+                    try:settings.restore()
+                    except Exception as exc:print('Could not restore Windows touchpad settings:',exc)
     def poll():
         while not alerts.empty() or not display.empty():
             item=alerts.get_nowait() if not alerts.empty() else display.get_nowait()
+            if item[0]=='owners':
+                owners_label.set(item[2]);continue
             if item[0]=='fallback':
                 real.set(False);input_error.set('Windows input stopped; preview resumed. '+item[1]);continue
             if item[0]=='error':
                 real.set(False);real_button.config(state='disabled');mode_label.set('DISCONNECTED · ordinary pointing restored after lease expiry');status.set(item[1]);continue
-            gen,raw,points,width,reason,metrics,counts,cancels,gaps,faults=item
+            gen,raw,points,width,reason,metrics,counts,cancels,gaps,faults,claims,withheld=item
             if gen!=generation:continue
             surface.delete('all');scale=min(880/width,250/4000);offset=(960-width*scale)/2
             for hand in (0,1):
@@ -159,7 +201,7 @@ def main():
                 x=offset+x*scale;y=35+y*scale
                 surface.create_oval(x-9,y-9,x+9,y+9,fill=('#71ddc9','#ffb570')[pad],outline='')
                 surface.create_text(x,y-19,text=f'{"L" if pad==0 else "R"}{key}',fill='white')
-            status.set(reason);details.set(f'Frames left {counts[0]} / right {counts[1]}   ·   canceled gestures {cancels} / faults {faults}   ·   skipped source samples {gaps}')
+            status.set(reason);details.set(f'Frames left {counts[0]} / right {counts[1]}   ·   canceled gestures {cancels} / faults {faults}   ·   firmware claims {claims} / withheld swipes {withheld}   ·   skipped source samples {gaps}')
             view.delete('all')
             import math
             pan,zoom,angle=metrics if metrics else ((0,0),1,0)

@@ -44,13 +44,19 @@ class Frame:
 class Assembler:
     def __init__(self, client, token, clock=time.monotonic):
         self.client, self.token, self.clock = client, token, clock
+        self.previous = None  # the wrapper ID before a rebind, still accepted
         self.key, self.parts, self.started = None, {}, 0
         self.incomplete = 0
+
+    def rebind(self, client):
+        """A renew moved the lease to a fresh wrapper ID: frames already queued
+        under the old one stay valid, so the stream carries on unbroken."""
+        self.previous, self.client = self.client, client
 
     def accept(self, data):
         if len(data) not in (32, 64):
             raise ValueError("Invalid report size")
-        if data[:1] != b"\xdd" or int.from_bytes(data[1:5], "little") != self.client:
+        if data[:1] != b"\xdd" or int.from_bytes(data[1:5], "little") not in (self.client, self.previous):
             return None
         if data[5] != PROTOCOL or data[6] not in (0x40, 0x41):
             return None
@@ -192,7 +198,7 @@ class StreamClient:
         if self.client in (0, 0xffffffff):
             raise ValueError("Invalid client ID")
 
-    def command(self, op, mode=0):
+    def command(self, op, mode=0, extra=b""):
         if not self.client:
             self.bootstrap()
         prefix = b"\xdd" + self.client.to_bytes(4, "little")
@@ -206,13 +212,40 @@ class StreamClient:
             if reply[7]:
                 raise RuntimeError(f"Stream command {op} rejected: {reply[7]}")
             return reply
-        reply = self.dispatcher.exchange(prefix + bytes((PROTOCOL, op, mode)) + self.token.to_bytes(2, "little"), accept)
+        reply = self.dispatcher.exchange(prefix + bytes((PROTOCOL, op, mode)) + self.token.to_bytes(2, "little") + extra, accept)
         self.token = int.from_bytes(reply[10:12], "little")
         return {"version": reply[8], "ownership": reply[9], "token": self.token,
                 "x_max": int.from_bytes(reply[12:14], "little"), "y_max": int.from_bytes(reply[14:16], "little"),
                 "width_mm": reply[16], "height_mm": reply[17], "max_contacts": reply[18],
                 "samples": int.from_bytes(reply[19:23], "little"),
                 "errors": int.from_bytes(reply[23:27], "little"), "dropped": int.from_bytes(reply[27:31], "little")}
+
+    def rebind(self):
+        """Renew the lease under a fresh wrapper ID (IDs expire after two
+        minutes). Same token; the old ID proves the lease is ours. No STOP and
+        START, so a gesture in progress is not cut off."""
+        old = self.client
+        self.bootstrap()
+        try:
+            return self.command(2, extra=old.to_bytes(4, "little"))
+        except Exception:
+            self.client = old
+            raise
+
+    def sval(self, command, payload=b""):
+        """One wrapped Sval (0xDF) request. Returns the reply bytes after
+        DF <command>, or None when the firmware doesn't know the command."""
+        prefix = b"\xdd" + self.client.to_bytes(4, "little")
+        def accept(reply):
+            if reply[:5] != prefix or reply[5] != 0xDF:
+                return None
+            if reply[6] == 0xFF:
+                return b""
+            if reply[6] != command:
+                return None
+            return bytes(reply[7:])
+        reply = self.dispatcher.exchange(prefix + bytes((0xDF, command)) + payload, accept)
+        return reply or None
 
     def diagnostics(self):
         prefix = b"\xdd" + self.client.to_bytes(4, "little")
