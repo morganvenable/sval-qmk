@@ -19,3 +19,22 @@ endif
 ifeq ($(strip $(SVAL_TOUCH_TEST_BOARD)),yes)
   OPT_DEFS += -DSVAL_MT_SPLIT
 endif
+
+# Experiment: the USB half presents both pads as one native Windows Precision
+# Touchpad (its own HID interface). Off by default; needs both pads.
+ifeq ($(strip $(SVAL_NATIVE_PTP)),yes)
+  ifneq ($(strip $(SVAL_AZOTEQ_MULTITOUCH)),yes)
+    $(error SVAL_NATIVE_PTP requires SVAL_AZOTEQ_MULTITOUCH=yes)
+  endif
+  ifneq ($(strip $(SVAL_TOUCH_TEST_BOARD)),yes)
+    $(error SVAL_NATIVE_PTP requires SVAL_TOUCH_TEST_BOARD=yes (two pads))
+  endif
+  OPT_DEFS += -DSVAL_NATIVE_PTP
+  SRC += azoteq/ptp.c
+  ifeq ($(strip $(SVAL_PTP_KEY_BUTTONS)),yes)
+    OPT_DEFS += -DSVAL_PTP_KEY_BUTTONS=1
+  endif
+  ifeq ($(strip $(SVAL_PTP_MOUSE_BEFORE_MODE3)),no)
+    OPT_DEFS += -DSVAL_PTP_MOUSE_BEFORE_MODE3=0
+  endif
+endif

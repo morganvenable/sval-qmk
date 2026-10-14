@@ -18,6 +18,13 @@
 extern usb_endpoint_in_t usb_endpoints_in[USB_ENDPOINT_IN_COUNT];
 
 #endif
+#ifdef SVAL_NATIVE_PTP
+#    include "ptp.h"
+#endif
+
+#ifndef SVAL_MT_DEFAULT_PERIOD_MS
+#    define SVAL_MT_DEFAULT_PERIOD_MS 10
+#endif
 
 #define FRAME_SIZE 56
 #define QUEUE_SIZE 8
@@ -38,8 +45,12 @@ void sval_mt_acquisition_fault(uint32_t flags, bool retried, bool recovered) {
 }
 static uint32_t measured_samples, cycle_sum, cycle_max, rate_missed, too_many, acquisition_sum;
 static uint8_t configured_max = 5;
-static uint16_t configured_period = 10;
+static uint16_t configured_period = SVAL_MT_DEFAULT_PERIOD_MS;
 static bool restore_pending;
+#ifdef SVAL_NATIVE_PTP
+// Who owns the pads (ptp.h). RAM only: the build default returns at power-up.
+static uint8_t touch_owner = SVAL_TOUCH_OWNER_DEFAULT;
+#endif
 #ifdef SVAL_MT_SPLIT
 static uint8_t remote_snapshot[FRAME_SIZE];
 static bool snapshot_valid, remote_seen, remote_stale;
@@ -93,7 +104,7 @@ static void reset_stream(void) {
 #endif
 }
 static void stop_stream(void) {
-    restore_pending |= configured_max != 5 || configured_period != 10;
+    restore_pending |= configured_max != 5 || configured_period != SVAL_MT_DEFAULT_PERIOD_MS;
     recovering |= owner;
     owner = want_owner = pair_capture = false;
     client = 0;
@@ -101,8 +112,37 @@ static void stop_stream(void) {
 }
 
 bool sval_mt_suppress_pair_mouse(void) {
+#ifdef SVAL_NATIVE_PTP
+    // Input Mode 3 (or the hold after it): the touchpad interface owns both pads.
+    if (is_keyboard_master() && sval_ptp_suppress_mouse()) return true;
+#endif
     return is_keyboard_master() && pair_capture && client && timer_elapsed32(renewed) < LEASE_MS;
 }
+
+#ifdef SVAL_NATIVE_PTP
+// 0xFC op 0x42: get or set the pads' owner. data[7] 0 get, 1 set; data[8] owner.
+// Refusals keep the old owner; nothing falls back to anything.
+static void owner_command(uint8_t *data, uint8_t length) {
+    uint8_t action = data[7], wanted = data[8], status = 0;
+    if (action == 1 && wanted != touch_owner) {
+        if (wanted == SVAL_TOUCH_OWNER_DETECTOR || wanted > SVAL_TOUCH_OWNER_NATIVE) {
+            status = 2; // the detector is not built; unknown owners are refused
+        } else {
+            if (touch_owner == SVAL_TOUCH_OWNER_HOST) stop_stream(); // ends any lease
+            sval_ptp_set_native(wanted == SVAL_TOUCH_OWNER_NATIVE);
+            touch_owner = wanted;
+        }
+    } else if (action > 1) {
+        status = 2;
+    }
+    memset(data + 6, 0, length - 6);
+    data[6] = 0xC2;
+    data[7] = status;
+    data[8] = touch_owner;
+    data[9] = 1; // bit 0: native PTP built
+    sval_ptp_status(data + 10);
+}
+#endif
 
 bool sval_mt_suppress_mouse(void) {
     return is_keyboard_master() && (owner || recovering || sval_mt_suppress_pair_mouse());
@@ -152,8 +192,18 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
         put32(data + 24, max_read_ms);
         return;
     }
+#ifdef SVAL_NATIVE_PTP
+    if (op == 0x42) {
+        owner_command(data, length);
+        return;
+    }
+#endif
     if (client && timer_elapsed32(renewed) >= LEASE_MS) stop_stream();
     if (op == 1) {
+#ifdef SVAL_NATIVE_PTP
+        if (touch_owner != SVAL_TOUCH_OWNER_HOST) status = 5; // another owner has the pads
+        else
+#endif
         if (client && client != requester) status = 1; // busy
         else if (mode > 2) status = 2;
 #ifdef SVAL_MT_SPLIT
@@ -218,7 +268,13 @@ void sval_mt_sample(const uint8_t *raw, bool valid) {
         recovering = false;
         if (client && want_owner) owner = true;
     }
+#ifdef SVAL_NATIVE_PTP
+    // The native touchpad needs this half's frames without any host client.
+    bool to_ptp = is_keyboard_master() && sval_ptp_wants_frames();
+    if (!client && is_keyboard_master() && !to_ptp) return;
+#else
     if (!client && is_keyboard_master()) return;
+#endif
     if (flags || count == QUEUE_SIZE) {
         if (count == QUEUE_SIZE) { dropped++; flags |= 0x10; }
         reset_stream();
@@ -254,6 +310,10 @@ void sval_mt_sample(const uint8_t *raw, bool valid) {
         osalSysUnlock();
         return;
     }
+#endif
+#ifdef SVAL_NATIVE_PTP
+    if (to_ptp) sval_ptp_feed(frame);
+    if (!client) return;
 #endif
     memcpy(queue[(head + count) % QUEUE_SIZE], frame, FRAME_SIZE);
     count++;
@@ -298,6 +358,9 @@ static void poll_remote(void) {
             remote_received = timer_read32();
             if (!remote_seen || remote_stale || seq != remote_sequence) {
                 if (remote_stale) frame[2] |= 0x10;
+#ifdef SVAL_NATIVE_PTP
+                if (sval_ptp_wants_frames()) sval_ptp_feed(frame); // only the mouse hold
+#endif
                 queue_remote(frame);
             }
             remote_sequence = seq; remote_seen = true; remote_stale = false;
@@ -312,20 +375,70 @@ static void poll_remote(void) {
         queue_remote(frame); remote_stale = true;
     }
 }
+
+#ifdef SVAL_NATIVE_PTP
+// The native touchpad's own poll of the other half: faster, and no queue or
+// host client. Duplicate snapshots are skipped; a silent half is lifted.
+static uint32_t ptp_poll_at, ptp_received, ptp_remote_epoch;
+static uint16_t ptp_remote_sequence;
+static bool     ptp_remote_seen, ptp_remote_lost;
+
+static void poll_remote_ptp(void) {
+    if (timer_elapsed32(ptp_poll_at) < SVAL_PTP_REMOTE_POLL_MS || updater_active()) return;
+    ptp_poll_at = timer_read32();
+    uint8_t request = 1, reply[60] = {0};
+    uint8_t remote_pad = is_keyboard_left() ? 1 : 0;
+    bool ok = is_transport_connected() && transaction_rpc_exec(KEYBOARD_MT, 1, &request, sizeof(reply), reply);
+    if (ok && reply[0] == 0xA7 && reply[1] && reply[4] == 1 && reply[5] == remote_pad) {
+        uint8_t *frame = reply + 4;
+        uint16_t seq   = frame[4] | (uint16_t)frame[5] << 8;
+        uint16_t age   = reply[2] | (uint16_t)reply[3] << 8;
+        uint32_t ep    = get32(frame + 12);
+        if (age <= SVAL_PTP_REMOTE_STALE_MS) {
+            ptp_received = timer_read32();
+            if (!ptp_remote_seen || ptp_remote_lost || seq != ptp_remote_sequence || ep != ptp_remote_epoch) sval_ptp_feed(frame);
+            ptp_remote_sequence = seq;
+            ptp_remote_epoch    = ep;
+            ptp_remote_seen     = true;
+            ptp_remote_lost     = false;
+            return;
+        }
+    }
+    if (ptp_remote_seen && !ptp_remote_lost && timer_elapsed32(ptp_received) > SVAL_PTP_REMOTE_STALE_MS) {
+        sval_ptp_pad_lost(remote_pad);
+        ptp_remote_lost = true;
+    }
+}
+#endif
 #endif
 
 void sval_mt_init(void) {
 #ifdef SVAL_MT_SPLIT
     transaction_register_rpc(KEYBOARD_MT, mt_rpc);
 #endif
+#ifdef SVAL_NATIVE_PTP
+    sval_ptp_set_native(touch_owner == SVAL_TOUCH_OWNER_NATIVE);
+#endif
 }
 
 void sval_mt_task(void) {
     if (!is_keyboard_master()) return;
-    if (restore_pending && azoteq_iqs5xx_mt_config(5, 10)) {
-        configured_max = 5; configured_period = 10; restore_pending = false; reset_stream();
+    if (restore_pending && azoteq_iqs5xx_mt_config(5, SVAL_MT_DEFAULT_PERIOD_MS)) {
+        configured_max = 5; configured_period = SVAL_MT_DEFAULT_PERIOD_MS; restore_pending = false; reset_stream();
     }
+#ifdef SVAL_NATIVE_PTP
+    // The native touchpad runs without any host client.
+    if (!client) {
+#    ifdef SVAL_MT_SPLIT
+        if (sval_ptp_wants_frames()) poll_remote_ptp();
+#    endif
+        sval_ptp_task();
+        return;
+    }
+    sval_ptp_task();
+#else
     if (!client) return;
+#endif
     if (timer_elapsed32(renewed) >= LEASE_MS) { stop_stream(); return; }
 #ifdef SVAL_MT_SPLIT
     poll_remote();

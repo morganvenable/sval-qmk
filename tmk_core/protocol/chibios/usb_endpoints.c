@@ -100,6 +100,12 @@ usb_endpoint_in_t usb_endpoints_in[USB_ENDPOINT_IN_COUNT] = {
 #    endif
     [USB_ENDPOINT_IN_CDC_SIGNALING] = QMK_USB_ENDPOINT_IN(USB_EP_MODE_TYPE_INTR, CDC_NOTIFICATION_EPSIZE, CDC_NOTIFICATION_EPNUM, CDC_SIGNALING_DUMMY_CAPACITY, NULL, NULL),
 #endif
+
+#if defined(SVAL_NATIVE_PTP)
+    // Class requests for PTP_INTERFACE are routed in usb_main.c, so no
+    // request callback and no QMK report storage here.
+    [USB_ENDPOINT_IN_PTP] = QMK_USB_ENDPOINT_IN(USB_EP_MODE_TYPE_INTR, PTP_EPSIZE, PTP_IN_EPNUM, PTP_IN_CAPACITY, NULL, NULL),
+#endif
 };
 
 usb_endpoint_in_lut_t usb_endpoint_interface_lut[TOTAL_INTERFACES] = {
@@ -142,6 +148,10 @@ usb_endpoint_in_lut_t usb_endpoint_interface_lut[TOTAL_INTERFACES] = {
 
 #if defined(DIGITIZER_ENABLE) && !defined(DIGITIZER_SHARED_EP)
     [DIGITIZER_INTERFACE] = USB_ENDPOINT_IN_DIGITIZER,
+#endif
+
+#if defined(SVAL_NATIVE_PTP)
+    [PTP_INTERFACE] = USB_ENDPOINT_IN_PTP,
 #endif
 };
 

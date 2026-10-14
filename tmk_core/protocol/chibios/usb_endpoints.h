@@ -65,6 +65,10 @@
 
 #define CDC_SIGNALING_DUMMY_CAPACITY 1
 
+#if defined(SVAL_NATIVE_PTP) && !defined(PTP_IN_CAPACITY)
+#    define PTP_IN_CAPACITY USB_DEFAULT_BUFFER_CAPACITY
+#endif
+
 typedef enum {
 #if defined(SHARED_EP_ENABLE)
     USB_ENDPOINT_IN_SHARED,
@@ -105,6 +109,10 @@ typedef enum {
 #if defined(VIRTSER_ENABLE)
     USB_ENDPOINT_IN_CDC_DATA,
     USB_ENDPOINT_IN_CDC_SIGNALING,
+#endif
+
+#if defined(SVAL_NATIVE_PTP)
+    USB_ENDPOINT_IN_PTP,
 #endif
     USB_ENDPOINT_IN_COUNT,
 /* All non shared endpoints have to be consequtive numbers starting from 0, so

@@ -345,3 +345,25 @@ and failed communication-window closure still invalidate the acquisition.
 and opcode 8 retry counters plus opcode 9 raw RP2040 abort status before/after capture. Retry diagnostics are local to
 the USB-connected MCU; remote failures are visible through its streamed flags.
 The patched HAL is a prototype-local copy, selected only for this build option.
+
+## Native Precision Touchpad (experiment/native-ptp)
+
+`SVAL_NATIVE_PTP=yes` (with `SVAL_AZOTEQ_MULTITOUCH=yes` and
+`SVAL_TOUCH_TEST_BOARD=yes`) makes the USB half present both pads as one
+Windows Precision Touchpad on its own HID interface (Digitizers 0x0D, Touch
+Pad 0x05). Windows, or Linux `hid-multitouch` with libinput, then owns the
+gestures; no host app runs. The firmware side is `azoteq/ptp.c`, with the
+descriptor in `azoteq/ptp_descriptor.h` and a small `tmk_core` patch behind
+the same flag. Without the flag the build is byte-identical to before.
+
+One owner at a time, chosen explicitly: `ptp_owner.py --serial EXACT_SERIAL
+{get,mouse,host,native}`. Native builds start as `native`; the host-injection
+lease (`unified_lab.py` and friends) is refused (status 5) until the owner is
+`host`. The setting is RAM only.
+
+- `ptp_desc_check.py BUILD.elf`: offline check of the descriptor in a built
+  ELF (page 0xFF00 blob, report sizes 35/2/257/2/2/2, 5 contacts, X/Y ranges,
+  interface and endpoint numbers, bcdDevice).
+- `ptp_hid.py`: the small HID descriptor parser both use.
+- Host tests: `util/test_native_ptp.sh` (unifier, feature reports, owner
+  command, descriptor; hid-tools cross-check when it is installed).
