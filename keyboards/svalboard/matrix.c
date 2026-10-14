@@ -324,10 +324,13 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     _Static_assert(SVAL_UPDATE_CHORD_PREWAIT_US >= SCANLAB_SAFE_PREWAIT_US && SVAL_UPDATE_CHORD_POSTWAIT_US >= SCANLAB_SAFE_POSTWAIT_US, "chord timing");
     update_gesture_timing(&cur_prewait_us, &cur_postwait_us);
 #endif
+    // Keyless fixtures keep curr_matrix zero: floating inputs cannot type.
+#ifndef SVAL_TOUCH_TEST_BOARD
     // Set row, read cols
     for (uint8_t current_row = 0; current_row < (ROWS_PER_HAND); current_row++) {
         matrix_read_cols_on_row(curr_matrix, current_row);
     }
+#endif
     ema16(&stat_led_us, led_on_acc_us);
 #ifdef SVAL_UPDATER
     // The updater's confirmation chord is read here, and its keys removed,

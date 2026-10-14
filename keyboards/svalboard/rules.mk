@@ -148,3 +148,21 @@ ifneq ($(strip $(SVAL_DEV_RESET_TOKEN)),)
   OPT_DEFS += -DSVAL_DEV_RESET_TOKEN=0x$(strip $(SVAL_DEV_RESET_TOKEN))u
   SRC += dev_reset.c
 endif
+
+# Permanent, keyless touchpad fixtures. Keep the matrix inert even if a host
+# accidentally writes a binding into the dynamic keymap.
+ifeq ($(strip $(SVAL_TOUCH_TEST_BOARD)),yes)
+  ifneq ($(strip $(KEYMAP)),blank)
+    $(error SVAL_TOUCH_TEST_BOARD requires the blank keymap)
+  endif
+  ifneq ($(strip $(SVAL_UPDATE_NO_CHORD)),yes)
+    $(error SVAL_TOUCH_TEST_BOARD requires SVAL_UPDATE_NO_CHORD=yes)
+  endif
+  ifneq ($(strip $(SVAL_UPDATER)),yes)
+    $(error SVAL_TOUCH_TEST_BOARD requires SVAL_UPDATER=yes)
+  endif
+  ifeq ($(strip $(SVAL_UPDATE_RELEASE)),yes)
+    $(error SVAL_TOUCH_TEST_BOARD is not a release configuration)
+  endif
+  OPT_DEFS += -DSVAL_TOUCH_TEST_BOARD
+endif

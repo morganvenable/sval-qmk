@@ -8,6 +8,10 @@
 #include "timer.h"
 #include <string.h>
 
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+extern void sval_mt_command(uint8_t *data, uint8_t length);
+#endif
+
 // Nonce size for bootstrap
 #define NONCE_SIZE 20
 
@@ -148,6 +152,12 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
     uint8_t protocol = data[5];
 
     switch (protocol) {
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+        case 0xFC: // Experimental Azoteq contacts; not a released Sval protocol.
+            sval_mt_command(data, length);
+            host_raw_hid_send(data, length);
+            return true;
+#endif
         case SVAL_PREFIX: {
             // Sval (0xDF) - handle directly
             // Inner payload starts at data[5] (includes protocol byte)

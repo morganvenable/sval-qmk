@@ -525,6 +525,10 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void* in_data, uint8_t
 }
 
 void keyboard_post_init_kb(void) {
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    extern void sval_mt_init(void);
+    sval_mt_init();
+#endif
 #ifdef SVAL_DEV_RESET_TOKEN
     dev_reset_post_init(); // the settings were reset in quantum_init()
 #endif
@@ -662,6 +666,10 @@ static void sval_usb_wake_handler(void) {
 }
 
 void housekeeping_task_kb(void) {
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    extern void sval_mt_task(void);
+    sval_mt_task();
+#endif
     sval_pointer_probe_task();
     sval_usb_wake_handler();
     scanlab_housekeeping();

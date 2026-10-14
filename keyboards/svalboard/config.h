@@ -280,7 +280,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // count changes, and both halves fold it into every split handshake, so an
 // SVAL_UPDATER half and a half without it cannot talk at all (P1:
 // keyboards/svalboard/tools/check_split_tables.py).
-#    define SPLIT_TRANSACTION_IDS_KB KEYBOARD_SYNC_A, KEYBOARD_SYNC_B, KEYBOARD_UPDATE
+#    ifdef SVAL_MT_SPLIT
+#        define SPLIT_TRANSACTION_IDS_KB KEYBOARD_SYNC_A, KEYBOARD_SYNC_B, KEYBOARD_UPDATE, KEYBOARD_MT
+#        define RPC_S2M_BUFFER_SIZE 64
+#    else
+#        define SPLIT_TRANSACTION_IDS_KB KEYBOARD_SYNC_A, KEYBOARD_SYNC_B, KEYBOARD_UPDATE
+#    endif
 #else
 #    define SPLIT_TRANSACTION_IDS_KB KEYBOARD_SYNC_A, KEYBOARD_SYNC_B
 #endif

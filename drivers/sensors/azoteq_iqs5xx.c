@@ -5,12 +5,23 @@
 #include "azoteq_iqs5xx.h"
 #include "pointing_device_internal.h"
 #include "wait.h"
+#include <string.h>
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+#    include "timer.h"
+#endif
 
 #ifndef AZOTEQ_IQS5XX_ADDRESS
 #    define AZOTEQ_IQS5XX_ADDRESS (0x74 << 1)
 #endif
 #ifndef AZOTEQ_IQS5XX_TIMEOUT_MS
 #    define AZOTEQ_IQS5XX_TIMEOUT_MS 10
+#endif
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+#    ifndef AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS
+// Multiple contacts can keep the sensor computing past the legacy 10 ms
+// deadline. Include clock stretching while awaiting its communication window.
+#        define AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS 30
+#    endif
 #endif
 
 #define AZOTEQ_IQS5XX_REG_PRODUCT_NUMBER 0x0000
@@ -122,12 +133,46 @@ i2c_status_t azoteq_iqs5xx_end_session(void) {
     return i2c_write_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_END_COMMS, &END_BYTE, 1, AZOTEQ_IQS5XX_TIMEOUT_MS);
 }
 
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+// Volatile, bounded controls for characterization; never write EEPROM.
+bool azoteq_iqs5xx_mt_config(uint8_t maximum, uint16_t period) {
+    if (maximum < 1 || maximum > 5 || period < 5 || period > 50) return false;
+    uint8_t rate[] = {period >> 8, period & 255};
+    i2c_status_t status = i2c_write_register16(AZOTEQ_IQS5XX_ADDRESS, 0x066A, &maximum, 1, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+    for (uint8_t mode = 0; mode < 3; mode++) {
+        status |= i2c_write_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_REPORT_RATE_ACTIVE + 2 * mode, rate, 2, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+    }
+    uint8_t actual_max = 0, actual_rate[2] = {0};
+    status |= i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, 0x066A, &actual_max, 1, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+    status |= i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_REPORT_RATE_ACTIVE, actual_rate, 2, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+    status |= azoteq_iqs5xx_end_session();
+    return status == I2C_STATUS_SUCCESS && actual_max == maximum && actual_rate[0] == rate[0] && actual_rate[1] == rate[1];
+}
+#endif
+
 i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    // One coherent communication window for both legacy mouse and contact data.
+    extern void sval_mt_sample(const uint8_t *data, bool valid);
+    extern void sval_mt_read_status(i2c_status_t read_status, i2c_status_t end_status, uint32_t elapsed_ms);
+    uint8_t raw[45] = {0};
+    uint32_t started = timer_read32();
+    i2c_status_t status = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, raw, sizeof(raw), AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+    i2c_status_t read_status = status, end_status = I2C_STATUS_SUCCESS;
+    if (status == I2C_STATUS_SUCCESS) {
+        memcpy(base_data, raw, sizeof(*base_data));
+        status = end_status = azoteq_iqs5xx_end_session();
+    }
+    sval_mt_read_status(read_status, end_status, timer_elapsed32(started));
+    sval_mt_sample(raw, status == I2C_STATUS_SUCCESS);
+    return status;
+#else
     i2c_status_t status = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, (uint8_t *)base_data, 10, AZOTEQ_IQS5XX_TIMEOUT_MS);
     if (status == I2C_STATUS_SUCCESS) {
         azoteq_iqs5xx_end_session();
     }
     return status;
+#endif
 }
 
 i2c_status_t azoteq_iqs5xx_get_report_rate(azoteq_iqs5xx_report_rate_t *report_rate, azoteq_iqs5xx_charging_modes_t mode, bool end_session) {
@@ -261,6 +306,11 @@ i2c_status_t azoteq_iqs5xx_reset_suspend(bool reset, bool suspend, bool end_sess
 }
 
 void azoteq_iqs5xx_set_cpi(uint16_t cpi) {
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    // Prototype uses a fixed coordinate domain; OS applies pointer gain.
+    (void)cpi;
+    return;
+#endif
     if (azoteq_iqs5xx_product_number != AZOTEQ_IQS5XX_UNKNOWN) {
         azoteq_iqs5xx_resolution_t resolution = {0};
         resolution.x_resolution               = AZOTEQ_IQS5XX_SWAP_H_L_BYTES(MIN(azoteq_iqs5xx_device_resolution_t.resolution_x, AZOTEQ_IQS5XX_INCH_TO_RESOLUTION_X(cpi)));
@@ -329,7 +379,15 @@ bool azoteq_iqs5xx_init(void) {
     i2c_ping_address(AZOTEQ_IQS5XX_ADDRESS, 1); // wake
     if (azoteq_iqs5xx_get_product() != AZOTEQ_IQS5XX_UNKNOWN) {
         azoteq_iqs5xx_setup_resolution();
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+        const uint8_t max_contacts = 5;
+        const uint8_t xy_resolution[] = {0x08, 0x00, 0x07, 0x00}; // TPS43: 2048 x 1792
+        azoteq_iqs5xx_init_status = i2c_write_register16(AZOTEQ_IQS5XX_ADDRESS, 0x066A, &max_contacts, 1, AZOTEQ_IQS5XX_TIMEOUT_MS);
+        azoteq_iqs5xx_init_status |= i2c_write_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_X_RESOLUTION, xy_resolution, sizeof(xy_resolution), AZOTEQ_IQS5XX_TIMEOUT_MS);
+        azoteq_iqs5xx_init_status |= azoteq_iqs5xx_set_report_rate(AZOTEQ_IQS5XX_REPORT_RATE, AZOTEQ_IQS5XX_ACTIVE, false);
+#else
         azoteq_iqs5xx_init_status = azoteq_iqs5xx_set_report_rate(AZOTEQ_IQS5XX_REPORT_RATE, AZOTEQ_IQS5XX_ACTIVE, false);
+#endif
         azoteq_iqs5xx_init_status |= azoteq_iqs5xx_set_report_rate(AZOTEQ_IQS5XX_REPORT_RATE, AZOTEQ_IQS5XX_IDLE, false);
         azoteq_iqs5xx_init_status |= azoteq_iqs5xx_set_report_rate(AZOTEQ_IQS5XX_REPORT_RATE, AZOTEQ_IQS5XX_IDLE_TOUCH, false);
 
@@ -337,6 +395,12 @@ bool azoteq_iqs5xx_init(void) {
         azoteq_iqs5xx_init_status |= i2c_write_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_IDLE_MODE_TIMEOUT, &no_timeout, 1, AZOTEQ_IQS5XX_TIMEOUT_MS); // Don't enter LP1, LP2 states
         azoteq_iqs5xx_init_status |= azoteq_iqs5xx_set_event_mode(AZOTEQ_IQS5XX_EVENT_MODE, false);
         azoteq_iqs5xx_init_status |= azoteq_iqs5xx_set_reati(true, false);
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+        // SHOW_RESET is latched until acknowledged, even after configuration.
+        // Subsequent unexpected resets remain invalid until reinitialization.
+        const uint8_t acknowledge_reset = 0x80;
+        azoteq_iqs5xx_init_status |= i2c_write_register16(AZOTEQ_IQS5XX_ADDRESS, 0x0431, &acknowledge_reset, 1, AZOTEQ_IQS5XX_TIMEOUT_MS);
+#endif
 #if defined(AZOTEQ_IQS5XX_ROTATION_90)
         azoteq_iqs5xx_init_status |= azoteq_iqs5xx_set_xy_config(false, true, true, true, false);
 #elif defined(AZOTEQ_IQS5XX_ROTATION_180)

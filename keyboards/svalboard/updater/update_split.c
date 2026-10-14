@@ -1001,7 +1001,11 @@ static uint8_t           info_flags; // the constant bits
 // This table names each ID: 'S','V','K','B', the count of entries, then per
 // entry its ID and a two-letter tag. Two builds that order the IDs
 // differently differ here. update_split_init() reads it, so it is linked.
+#ifdef SVAL_MT_SPLIT
+const uint8_t sval_split_kb_ids[] = {'S', 'V', 'K', 'B', 4, KEYBOARD_SYNC_A, 'S', 'A', KEYBOARD_SYNC_B, 'S', 'B', KEYBOARD_UPDATE, 'U', 'P', KEYBOARD_MT, 'M', 'T'};
+#else
 const uint8_t sval_split_kb_ids[] = {'S', 'V', 'K', 'B', 3, KEYBOARD_SYNC_A, 'S', 'A', KEYBOARD_SYNC_B, 'S', 'B', KEYBOARD_UPDATE, 'U', 'P'};
+#endif
 
 static void keyboard_update_rpc(uint8_t in_len, const void *in, uint8_t out_len, void *out) {
     update_split_slave_rpc((const uint8_t *)in, in_len, (uint8_t *)out, out_len);

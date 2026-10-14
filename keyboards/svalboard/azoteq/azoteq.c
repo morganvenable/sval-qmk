@@ -5,6 +5,9 @@
 #include "pointing_device.h"
 #include "drivers/sensors/azoteq_iqs5xx.h"
 #include "svalboard.h"
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+#    include "multitouch.h"
+#endif
 #include "pointing_detect.h"
 
 // Azoteq can only report at 100Hz. Faster polling causes issues.
@@ -59,7 +62,12 @@ uint8_t sval_pointer_own_bus(void) {
 }
 
 report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
-    if (timer_elapsed(azo_timer) >= AZO_MS) {
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    const uint16_t interval = sval_mt_poll_ms();
+#else
+    const uint16_t interval = AZO_MS;
+#endif
+    if (timer_elapsed(azo_timer) >= interval) {
         azo_timer = timer_read();
         mouse_report = azoteq_iqs5xx_get_report(mouse_report);
         azo_held_buttons = mouse_report.buttons;
@@ -69,6 +77,12 @@ report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
     mouse_report.v = -mouse_report.v;
     mouse_report.buttons = azo_held_buttons;
 
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    if (sval_mt_suppress_mouse()) {
+        mouse_report = (report_mouse_t){0};
+        azo_held_buttons = 0;
+    }
+#endif
     return mouse_report;
 }
 
