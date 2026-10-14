@@ -88,6 +88,14 @@ def main():
         failures.append(f"{len(ptp)} interfaces carry the touchpad descriptor")
     elif ptp[0][0] != ifaces[-1][0]:
         failures.append("the touchpad interface is not the last one")
+    total, num_ifaces = struct.unpack_from("<HB", config, 2)
+    if config[1] != 2 or total != len(config):
+        failures.append(f"configuration wTotalLength {total} != {len(config)} bytes")
+    if num_ifaces != len(ifaces) or [f[0] for f in ifaces] != list(range(len(ifaces))):
+        failures.append(f"bNumInterfaces {num_ifaces} does not match interfaces {[f[0] for f in ifaces]}")
+    addrs = [a for f in ifaces for a, _, _ in f[4]]
+    if len(addrs) != len(set(addrs)) or any((a & 0x7F) > 15 for a in addrs):
+        failures.append(f"endpoint addresses reused or above 15: {addrs}")
     raw = [f for f in ifaces if f[1] == 3 and f[5] and f[0] == 1]
     if not raw:
         failures.append("interface 1 is not HID (raw HID must stay interface 1)")

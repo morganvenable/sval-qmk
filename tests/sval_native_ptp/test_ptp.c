@@ -109,6 +109,7 @@ static void fresh(const char *name) {
     last_report[0] = 1;
     f_mode = f_latency = 0;
     f_switches     = 3;
+    seen_switches  = 3;
     f_reset        = false;
     ptp_test_busy  = false;
     ptp_test_us += 1000000;
@@ -538,13 +539,18 @@ static void test_key_buttons(void) {
     start("key-buttons");
     assert(sval_ptp_key_button(0, true));
     run(5000);
-    assert(new_reports() == 1 && count_of(last()) == 0 && last()[34] == 1);
+    // MS_BTN1 is the primary external button: PTP Button 2 (bit 1).
+    assert(new_reports() == 1 && count_of(last()) == 0 && last()[34] == 2);
     set_feature(6, 1); // button switch off
-    assert(sval_ptp_key_button(2, true));
+    assert(sval_ptp_key_button(1, true)); // MS_BTN2: Button 3 (bit 2)
     run(5000);
     assert(new_reports() == 1 && last()[34] == 0);
     set_feature(6, 3);
-    assert(sval_ptp_key_button(0, false) && sval_ptp_key_button(2, false));
+    run(5000);
+    assert(new_reports() == 1 && last()[34] == 6);
+    // MS_BTN3 (middle) has no PTP usage: it stays on the mouse report.
+    assert(!sval_ptp_key_button(2, true) && !sval_ptp_key_button(2, false));
+    assert(sval_ptp_key_button(0, false) && sval_ptp_key_button(1, false));
     run(5000);
     assert(new_reports() == 1 && last()[34] == 0);
     set_feature(5, 0);

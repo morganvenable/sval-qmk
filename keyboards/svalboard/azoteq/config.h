@@ -32,7 +32,7 @@
 #    define SVAL_PTP_KEEPALIVE_MS 50    // repeat while down (Linux releases after 100 ms)
 #    define SVAL_PTP_PALM_AREA 0        // 0 off; contact area above this is a palm
 #    ifndef SVAL_PTP_KEY_BUTTONS
-#        define SVAL_PTP_KEY_BUTTONS 0  // 1: MS_BTN1-3 go to the touchpad while it is active
+#        define SVAL_PTP_KEY_BUTTONS 0  // 1: MS_BTN1/2 are touchpad Buttons 2/3 while it is active
 #    endif
 #    ifndef SVAL_PTP_MOUSE_BEFORE_MODE3
 #        define SVAL_PTP_MOUSE_BEFORE_MODE3 1 // 0: pads silent until the host writes mode 3

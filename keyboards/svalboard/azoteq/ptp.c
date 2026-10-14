@@ -101,7 +101,7 @@ static pad_state_t pads[2];
 static bool     native, mode3, output, hold, release_pending, dirty, ever_sent, scan_started;
 static uint32_t release_at, last_sent, scan_clock, scan_rem, frames_sent, send_busy;
 static uint16_t cid_busy, scan;
-static uint8_t  cid_next, key_buttons, sent_buttons;
+static uint8_t  cid_next, key_buttons, sent_buttons, seen_switches = 3;
 #if SVAL_PTP_KEY_BUTTONS
 static uint8_t key_taken; // buttons whose press went to the touchpad
 #endif
@@ -485,6 +485,11 @@ void sval_ptp_task(void) {
         output = out;
     }
     if (hold && !mode3 && all_up()) hold = false;
+    // A Button Switch change while reporting re-sends the buttons byte, so a
+    // held button is released (switch off) or restored (switch on) at once.
+    uint8_t switches = f_switches;
+    if (output && ((switches ^ seen_switches) & 2) && (key_buttons || sent_buttons)) dirty = true;
+    seen_switches = switches;
 
     bool paced = !ever_sent || now - last_sent >= SVAL_PTP_MIN_FRAME_US;
     if (release_pending) {
@@ -531,8 +536,13 @@ uint16_t sval_ptp_take_motion(uint8_t pad) {
 
 bool sval_ptp_key_button(uint8_t button, bool pressed) {
 #if SVAL_PTP_KEY_BUTTONS
-    if (button > 2) return false;
-    uint8_t bit = 1u << button;
+    // Pad Type 2 (external buttons): Microsoft's PTP spec puts the primary
+    // (left) external button on Button 2 and the secondary (right) on
+    // Button 3; Button 1 is the clickpad's integrated button. Linux
+    // hid-multitouch (WIN8_PTP_BUTTONS) maps them the same way. MS_BTN3
+    // (middle) has no PTP usage, so it stays on the mouse report.
+    if (button > 1) return false;
+    uint8_t bit = 2u << button;
     if (pressed) {
         if (!sval_ptp_active()) return false;
         key_buttons |= bit;

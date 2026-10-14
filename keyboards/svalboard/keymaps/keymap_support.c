@@ -527,7 +527,7 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
     }
 
 #if defined(SVAL_NATIVE_PTP) && SVAL_PTP_KEY_BUTTONS
-    // Build option: while the native touchpad is active, MS_BTN1-3 are its
+    // Build option: while the native touchpad is active, MS_BTN1/2 are its
     // buttons and never reach the mouse report. A release follows its press.
     if (keycode >= MS_BTN1 && keycode <= MS_BTN3 && sval_ptp_key_button(keycode - MS_BTN1, record->event.pressed)) return false;
 #endif
