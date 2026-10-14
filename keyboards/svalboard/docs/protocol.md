@@ -93,4 +93,41 @@ Each hand:
 - A hand that is not valid (no module, the driver didn't start, or the other half is disconnected) has an all-zero block.
 - Touch positions and finger counts are not reported yet: bit 4 and bits 5-6 read `0`.
 
+## Touch gestures (experimental)
+
+`TOUCH_GESTURES` (`0x2E`) reads and sets who owns each touch gesture on a unified Azoteq pair, and what the firmware's own gestures type. Only experimental builds have it (`SVAL_AZOTEQ_UNIFIED=yes`, or the keyless `SVAL_TOUCH_TEST_BOARD` fixtures); see `tools/multitouch/README.md`.
+
+- Discovery: GET_INFO byte 19, bit 4 (`sval_flag2_touch_gestures`, `0x10`). Other builds answer every sub-command with status `3`.
+- Values are little-endian. Status: `0` ok, `1` bad version or length, `2` a value is out of range (nothing applied), `3` this build has no touch support.
+
+| Sub | Request after `DF 2E` | Reply after `DF 2E` |
+|---|---|---|
+| 0 GET | `00` | `00 status ver=1 len=21 payload[21]` |
+| 1 SET | `01 ver=1 len=21 payload[21]` | `01 status`. Applies at once; saved only if something changed |
+| 2 DEFAULTS | `02` | `02 status payload[21]`. Restores and saves the defaults |
+| 3 STATUS | `03` | `03 status mode claim last count:u16 claims:u16 contacts_left contacts_right` |
+
+STATUS: `mode` `0` normal, `2` unified (a host holds the pair-capture lease), plus `0x80` while chip output stays off after unified mode until both pads are all-up. `claim` `1` while a firmware gesture owns the pads. `last` the last output (`0` none, then 1-6 in the keycode order below). `count` outputs fired and `claims` gestures claimed, both since the last STATUS (read-and-clear). Contacts per hand, `0xFF` unknown.
+
+Payload v1 (21 bytes):
+
+| Byte | Field | Default |
+|---|---|---|
+| 0 | Bit 0 `scroll_owner` (0 Windows, 1 chip). Bit 1 `swipe_owner` (0 Windows, 1 firmware). Bit 2 `pinch_owner` (0 Windows, 1 firmware). Bit 3 firmware gestures may span both pads. Bit 4 the host always merges cross-pad contacts (0: only touchdowns within 150 ms). Bits 5-7 zero | `0x08` |
+| 1 | Low nibble `swipe_fingers` (3-5), high nibble `sustain_min` (1-5, at most `swipe_fingers`) | `0x13` |
+| 2 | `swipe_mm` (4-40) | 12 |
+| 3 | `swipe_ratio` x10 (10-50) | 20 |
+| 4 | `settle_ms` (0-200) | 40 |
+| 5 | `swipe_window` in 10 ms (10-200) | 60 |
+| 6 | `swipe_repeat_mm` (0 fire once, else 4-40) | 0 |
+| 7 | `pinch_start_mm` x2 (2-40) | 8 |
+| 8 | `pinch_step_mm` x2 (1-40) | 6 |
+| 9-20 | Keycodes, u16 each: swipe left, right, up, down, pinch out, pinch in. `0` does nothing | `094F 0950 082B 0807 01D9 01DA` |
+
+Keycodes are QMK keycodes: basic and modified keys are tapped, wheel keycodes (with or without modifiers) put one full detent into the pointing report with the modifiers held, and anything else (macros, layer keys) runs as a key press and release. The settings live in the VIA custom area right after the saved-values magic (22 bytes: stamp `0xA1`, then the payload); a bad stamp loads the defaults.
+
+The contact stream (`0xFC`, not a Sval command) carries two related signals:
+- Frame flag `0x40`: the firmware claimed the gesture. It is set on both pads' frames until every finger on both pads is up. A host must withdraw those contacts from the operating system at once (without a release that could read as a tap) and send nothing until all-up.
+- Info-reply ownership bits: `0x10` scroll owner is the chip, `0x20` the firmware owns swipe or pinch. A host re-reads GET when they change.
+
 Packet formats: [client-ID protocol](../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [layer state](../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), [command definitions](../../../modules/svalboard/core/sval.h).

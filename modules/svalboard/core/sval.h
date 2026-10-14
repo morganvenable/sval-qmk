@@ -91,6 +91,7 @@ enum sval_command_id {
     sval_cmd_default_layer_set    = 0x2B, // advertised by sval_flag2_default_layer_set
     sval_cmd_pointing_hardware    = 0x2C, // advertised by sval_flag2_pointing_hardware
     sval_cmd_pointing_motion      = 0x2D, // advertised by sval_flag2_pointing_motion
+    sval_cmd_touch_gestures       = 0x2E, // experimental; advertised by sval_flag2_touch_gestures
     sval_cmd_error                = 0xFF,
 };
 
@@ -112,6 +113,7 @@ enum sval_feature_flags2 {
     sval_flag2_pointing_hardware = (1 << 1), // 0x2C reports each half's side and pointing sensor
     sval_flag2_modifier_state    = (1 << 2), // 0x16 appends the board's modifiers, Caps Word and Caps Lock
     sval_flag2_pointing_motion   = (1 << 3), // 0x2D reports pointing motion since the last read
+    sval_flag2_touch_gestures    = (1 << 4), // 0x2E reads and sets the touch gesture owners and outputs (experimental)
 };
 
 // Status byte after the modifiers in the 0x16 reply (sval_flag2_modifier_state).
@@ -365,6 +367,11 @@ void sval_pointing_hardware_kb(uint8_t *out, uint8_t length);
 // the motion since the previous read, then clears it. Weak no-op in the module;
 // out[0] = 0 means no data.
 void sval_pointing_motion_kb(uint8_t *out, uint8_t length);
+
+// TOUCH_GESTURES (0x2E, experimental): data[0] is the sub-command, and the keyboard
+// writes its reply in place (Svalboard: keyboards/svalboard/docs/protocol.md). Weak
+// in the module: replies status 3, "this build has no touch support".
+void sval_touch_gestures_kb(uint8_t *data, uint8_t length);
 
 void sval_keycode_down(uint16_t keycode);
 void sval_keycode_up(uint16_t keycode);

@@ -166,3 +166,20 @@ ifeq ($(strip $(SVAL_TOUCH_TEST_BOARD)),yes)
   endif
   OPT_DEFS += -DSVAL_TOUCH_TEST_BOARD
 endif
+
+# Unified two-pad touch on a keyboard with keys (experimental hacker builds).
+# It turns on the Azoteq multitouch stream and the split contact transport
+# (azoteq/rules.mk) on a real keymap; the matrix keeps scanning keys. Both
+# halves need matching images: the split transaction table changes.
+ifeq ($(strip $(SVAL_AZOTEQ_UNIFIED)),yes)
+  ifeq ($(strip $(SVAL_UPDATE_RELEASE)),yes)
+    $(error SVAL_AZOTEQ_UNIFIED is not a release configuration)
+  endif
+  ifneq ($(strip $(SVAL_UPDATER)),yes)
+    $(error SVAL_AZOTEQ_UNIFIED requires SVAL_UPDATER=yes: KEYBOARD_MT follows KEYBOARD_UPDATE in the split table)
+  endif
+  ifeq ($(strip $(SVAL_TOUCH_TEST_BOARD)),yes)
+    $(error SVAL_AZOTEQ_UNIFIED is for boards with keys; keyless fixtures use SVAL_TOUCH_TEST_BOARD alone)
+  endif
+  SVAL_AZOTEQ_MULTITOUCH = yes
+endif

@@ -363,6 +363,27 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
     return pointing_device_task_user(ret_mouse);
 }
 
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+// Unified touch mode zeroes the pads' pointing reports before the code above
+// sees them, so azoteq/multitouch.c feeds one-finger contact movement here
+// instead (already normalized to 800 DPI). Same per-side switches, threshold
+// and decay as pointer motion.
+void sval_mt_contact_activity(bool left, uint16_t movement) {
+    if (left ? !global_saved_values.left_automouse : !global_saved_values.right_automouse) return;
+    if (!movement) return;
+    uint16_t decay_ms = global_saved_values.automouse_decay * 10;
+    if (decay_ms > 0 && timer_elapsed(automouse_accumulator_timer) > decay_ms) {
+        automouse_accumulator = 0;
+    }
+    automouse_accumulator_timer = timer_read();
+    automouse_accumulator += movement;
+    if (global_saved_values.automouse_threshold == 0 ||
+        automouse_accumulator >= global_saved_values.automouse_threshold) {
+        mouse_mode(true);
+    }
+}
+#endif
+
 // Pointing modes for POINTING_MOTION (Sval 0x2D), from the state above.
 void sval_pointing_modes(sval_pointing_modes_t *m) {
     memset(m, 0, sizeof(*m));

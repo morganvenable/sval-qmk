@@ -177,6 +177,9 @@ uint8_t sval_get_feature_flags2(void) {
 #ifdef POINTING_DEVICE_ENABLE
     flags |= sval_flag2_pointing_motion;
 #endif
+#ifdef SVAL_TOUCH_GESTURES
+    flags |= sval_flag2_touch_gestures;
+#endif
     return flags;
 }
 
@@ -766,6 +769,13 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             break;
         }
 
+        case sval_cmd_touch_gestures: {
+            // Request:  [0xDF] [0x2E] [sub] [...]
+            // Response: [0xDF] [0x2E] [sub] [status] [...]
+            if (length > 3) sval_touch_gestures_kb(&data[2], length - 2);
+            break;
+        }
+
         case sval_cmd_layer_state_set: {
             // Request: [0xDF] [0x17] [state0] [state1] [state2] [state3]
             // Response: [0xDF] [0x17]
@@ -1066,6 +1076,11 @@ __attribute__((weak)) void sval_host_packet_kb(void) {}
 __attribute__((weak)) void sval_pointing_hardware_kb(uint8_t *out, uint8_t length) {}
 
 __attribute__((weak)) void sval_pointing_motion_kb(uint8_t *out, uint8_t length) {}
+
+__attribute__((weak)) void sval_touch_gestures_kb(uint8_t *data, uint8_t length) {
+    memset(&data[1], 0, length - 1);
+    data[1] = 3; // this build has no touch support
+}
 
 // Override via_command_kb to intercept wrapper and Sval protocol
 bool via_command_kb(uint8_t *data, uint8_t length) {

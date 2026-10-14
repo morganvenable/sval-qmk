@@ -19,6 +19,10 @@
 #    include "dev_reset.h"
 #endif
 #include "nvm_via.h"
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+#    include "azoteq/multitouch.h"
+#    include "azoteq/touch_gestures.h"
+#endif
 #ifdef SVAL_UPDATER
 #    include "updater/updater.h"
 #    include "updater/update_split.h"
@@ -110,6 +114,24 @@ void svalboard_eeprom_set_valid(void) {
 void write_eeprom_kb(void) {
     via_update_custom_config(&global_saved_values, SVALBOARD_VIA_CONFIG_OFFSET, SVALBOARD_VIA_CONFIG_SIZE);
 }
+
+#ifdef SVAL_TOUCH_GESTURES
+// Touch gestures (Sval 0x2E): a 22-byte block right after the saved-values
+// magic, filling the rest of the VIA custom area, so nothing before it moves.
+// Its own stamp: a bad one loads the defaults. Read on both halves, used on
+// the USB half only.
+#    define SVAL_TOUCH_GESTURES_OFFSET (SVALBOARD_MAGIC_OFFSET + SVALBOARD_MAGIC_SIZE)
+_Static_assert(SVAL_TOUCH_GESTURES_OFFSET + TG_BLOCK_SIZE <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "touch gestures block fits the VIA custom config area");
+void tg_storage_read(uint8_t block[TG_BLOCK_SIZE]) {
+    via_read_custom_config(block, SVAL_TOUCH_GESTURES_OFFSET, TG_BLOCK_SIZE);
+}
+void tg_storage_write(const uint8_t block[TG_BLOCK_SIZE]) {
+    via_update_custom_config(block, SVAL_TOUCH_GESTURES_OFFSET, TG_BLOCK_SIZE);
+}
+void sval_touch_gestures_kb(uint8_t *data, uint8_t length) {
+    tg_command(data, length);
+}
+#endif
 #else
 static bool svalboard_eeprom_is_valid(void) { return true; }
 void svalboard_eeprom_set_valid(void) {}
@@ -533,6 +555,9 @@ void keyboard_post_init_kb(void) {
     dev_reset_post_init(); // the settings were reset in quantum_init()
 #endif
     read_eeprom_kb();
+#if defined(SVAL_TOUCH_GESTURES) && VIA_ENABLE
+    tg_load();
+#endif
     sval_pointer_rest_apply(); // the sensor was initialised before the flags were read
     sval_sleep_gating_init();
     set_dpi_from_eeprom();
@@ -618,13 +643,19 @@ report_mouse_t pointing_device_task_combined_kb(report_mouse_t left_report, repo
         sval_motion_accumulate(&motion_acc[1], right_report.x, right_report.y, right_report.h, right_report.v, right_report.buttons);
     }
 #ifdef SVAL_AZOTEQ_MULTITOUCH
-    extern bool sval_mt_suppress_pair_mouse(void);
-    if (sval_mt_suppress_pair_mouse()) {
-        left_report = (report_mouse_t){0};
-        right_report = (report_mouse_t){0};
-    }
-#endif
+    // Unified mode, firmware gesture claims and the handoff after unified mode
+    // hold back the chips' output; the chip wheel may pass (scroll_owner = chip).
+    sval_mt_filter_reports(&left_report, &right_report);
+    report_mouse_t report = pointing_device_task_combined_user(left_report, right_report);
+    // A firmware gesture's wheel output: one full detent, after scroll conversion.
+    int16_t h = report.h, v = report.v;
+    tg_wheel_take(&h, &v);
+    report.h = h;
+    report.v = v;
+    return report;
+#else
     return pointing_device_task_combined_user(left_report, right_report);
+#endif
 }
 
 void sval_pointing_motion_kb(uint8_t *out, uint8_t length) {
