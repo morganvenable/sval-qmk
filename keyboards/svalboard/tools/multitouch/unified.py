@@ -4,6 +4,7 @@ Never equate source clocks. Freshness uses host receipt time; a bounded latest
 sample join tolerates a stationary hand, not a missing hand. No OS dependencies.
 """
 import math
+from collections import Counter
 
 
 class UnifiedPad:
@@ -14,33 +15,44 @@ class UnifiedPad:
         self.clock=clock or time.monotonic
         self.width,self.height=8600+self.gap,4000
         self.samples={};self.ready=False;self.points={};self.reason='Lift all fingers on both pads to arm'
-        self.cancellations=0;self.gaps=0;self.identities={};self.next_id=1
+        self.cancellations=0;self.faults=Counter();self.gaps=0;self.identities={};self.next_id=1
         self.origin=None;self.metrics=None;self.last_output=None;self.last_tick=None
 
     def cancel(self,reason):
-        if self.backend:self.backend.cancel()
+        self.faults[reason]+=1
+        if self.points:
+            self.cancellations+=1
+            if self.backend:self.backend.cancel()
         self.ready=False;self.points={};self.identities={};self.next_id=1
         self.origin=self.metrics=self.last_output=None
-        self.reason=reason+' · lift all fingers to rearm';self.cancellations+=1
+        self.reason=reason+' · lift all fingers to rearm'
 
     def feed(self,frame,received=None):
         now=self.clock() if received is None else received
         previous=self.samples.get(frame.pad)
+        reason=None
         if previous:
             old,when=previous
             delta=(frame.sequence-old.sequence)&65535
             if delta==0 and frame.epoch==old.epoch:return
             if now<when or now-when>.06:
-                self.cancel('Pad heartbeat interrupted')
+                reason='Pad heartbeat interrupted'
             if frame.epoch!=old.epoch or delta>0x8000:
-                self.cancel('Pad restarted')
+                reason='Contact stream reset'
             elif delta!=1:
                 self.gaps+=max(0,delta-1)
-                # Snapshot transport can skip intermediate reports. Lifetime IDs
-                # let a small gap retain existing fingers without guessing lifts.
+                # Small snapshot skips are safe only with unchanged lifetimes.
                 if delta>3 or self.contact_ids(frame)!=self.contact_ids(old):
-                    self.cancel('Contact continuity lost')
-        if frame.flags&0x7f:self.cancel('Sensor / split frame invalid')
+                    reason='Contact continuity lost'
+        # A flagged frame explains its epoch change: report one cause, not a
+        # fictitious second MCU restart. Preserve all flag bits in raw logs.
+        if frame.flags&0x7f:
+            reason=', '.join(label for bit,label in (
+                (1,'Palm detected'),(2,'Sensor contact limit'),
+                (4,'Sensor acquisition invalid'),(8,'Sensor reset / calibration'),
+                (16,'Stream discontinuity'),(32,'Split snapshot stale'),
+                (64,'Unknown frame fault')) if frame.flags&bit)
+        if reason:self.cancel(('Left: ' if frame.pad==0 else 'Right: ')+reason)
         self.samples[frame.pad]=(frame,now)
 
     @staticmethod

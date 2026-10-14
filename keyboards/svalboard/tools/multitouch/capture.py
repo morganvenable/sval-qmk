@@ -36,6 +36,7 @@ def main():
     parser.add_argument("--relay", action="store_true")
     parser.add_argument("--report-size", type=int, choices=(32, 64), default=32)
     parser.add_argument("--diagnostics", action="store_true", help="Read acquisition diagnostics from the revised prototype")
+    parser.add_argument("--retry-diagnostics", action="store_true", help="Read ACK retry counters (firmware 2305+)")
     args = parser.parse_args()
     if args.relay: parser.error("Split-pair prototype is observation-only; two-pad injection is not integrated")
     if not 0 < args.seconds <= 45:
@@ -55,6 +56,8 @@ def main():
         result["before"] = client.command(0)
         if args.diagnostics:
             result["diagnostics_before"] = client.diagnostics()
+        if args.retry_diagnostics:
+            result["retry_before"] = client.retry_diagnostics()
         if args.relay:
             from windows_touchpad import WindowsTouchpad
             backend = WindowsTouchpad()
@@ -95,6 +98,8 @@ def main():
         result["incomplete"] = assembler.incomplete
         if args.diagnostics:
             result["diagnostics_after"] = client.diagnostics()
+        if args.retry_diagnostics:
+            result["retry_after"] = client.retry_diagnostics()
         if guard:
             result["cancellations"] = guard.cancellations
     finally:

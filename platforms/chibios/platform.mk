@@ -509,3 +509,11 @@ EXTRALIBDIRS = $(RULESPATH)/ld
 
 bin: $(BUILD_DIR)/$(TARGET).bin sizeafter
 	$(COPY) $(BUILD_DIR)/$(TARGET).bin $(TARGET).bin;
+
+# Isolated Azoteq prototype: RP HAL must preserve address NACK causes.
+ifeq ($(strip $(SVAL_AZOTEQ_MULTITOUCH)),yes)
+ifeq ($(MCU_SERIES),RP2040)
+PLATFORM_SRC := $(filter-out %/RP/LLD/I2Cv1/hal_i2c_lld.c,$(PLATFORM_SRC))
+PLATFORM_SRC += platforms/chibios/drivers/sval_rp_i2c_lld.c
+endif
+endif

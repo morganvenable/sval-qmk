@@ -2,6 +2,7 @@
 #define SVAL_MT_SPLIT
 #include "../../keyboards/svalboard/azoteq/multitouch.c"
 #include <stdio.h>
+uint32_t sval_mt_rp_abort_source;
 int main(void) {
  uint8_t raw[45]={0},request=1;
  master=false; clock_ms=10; sval_mt_init();
@@ -16,12 +17,12 @@ int main(void) {
  poll_remote(); assert(count==1 && queue[0][1]==0 && queue[0][3]==1);
  clock_ms=30; poll_remote(); assert(count==1);
  // Failed link emits one invalidation after the freshness deadline.
- connected=false; clock_ms=140; poll_remote(); assert(count==2 && queue[1][2]==4 && !queue[1][3]);
+ connected=false; clock_ms=140; poll_remote(); assert(count==2 && queue[1][2]==0x20 && !queue[1][3]);
  clock_ms=160; poll_remote(); assert(count==2);
  // Recovery is discontinuous even if the source sequence is identical.
  connected=true; clock_ms=180; poll_remote(); assert(count==3 && (queue[2][2]&16));
  // Stale remote snapshot cannot masquerade as new contacts.
- rpc_data[2]=101; clock_ms=300; poll_remote(); assert(count==4 && queue[3][2]==4);
+ rpc_data[2]=101; clock_ms=300; poll_remote(); assert(count==4 && queue[3][2]==0x20);
  // Reversed/malformed hand is refused.
  remote_seen=false; rpc_data[2]=0; rpc_data[5]=1; clock_ms=320; poll_remote(); assert(count==4);
  // Update activity never starts another split transaction.

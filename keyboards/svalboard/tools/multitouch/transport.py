@@ -224,6 +224,24 @@ class StreamClient:
         return dict(zip(("read_timeouts", "read_errors", "end_timeouts", "end_errors", "max_read_ms"),
                         struct.unpack_from("<5I", reply, 8)))
 
+    def retry_diagnostics(self):
+        prefix = b"\xdd" + self.client.to_bytes(4, "little")
+        def accept(reply):
+            if reply[:5] == prefix and reply[5:7] == bytes((PROTOCOL, 0x88)):
+                return reply
+            return None
+        reply = self.dispatcher.exchange(prefix + bytes((PROTOCOL, 8)), accept)
+        result = dict(zip(("acquisition_faults", "nack_faults", "retry_attempts",
+                         "retry_recovered", "nonack_faults", "last_i2c_flags"),
+                        struct.unpack_from("<6I", reply, 8)))
+        def accept_abort(reply):
+            if reply[:5] == prefix and reply[5:7] == bytes((PROTOCOL, 0x89)):
+                return reply
+            return None
+        reply = self.dispatcher.exchange(prefix + bytes((PROTOCOL, 9)), accept_abort)
+        result["rp_abort_source"] = struct.unpack_from("<I", reply, 8)[0]
+        return result
+
     def characterize(self, op, maximum=5, period=10):
         if op not in (5, 6, 7):
             raise ValueError("Invalid characterization operation")

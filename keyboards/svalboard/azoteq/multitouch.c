@@ -29,6 +29,13 @@ static uint16_t sequence, token;
 static uint32_t client, renewed, epoch, dropped, errors, samples;
 static bool want_owner, owner, recovering, pair_capture;
 static uint32_t read_timeouts, read_errors, end_timeouts, end_errors, max_read_ms;
+static uint32_t acquisition_faults, nack_faults, retry_attempts, retry_recovered, nonack_faults, last_i2c_flags;
+void sval_mt_acquisition_fault(uint32_t flags, bool retried, bool recovered) {
+    acquisition_faults++; last_i2c_flags = flags;
+    if (flags == 0x04) nack_faults++; else nonack_faults++;
+    if (retried) retry_attempts++;
+    if (recovered) retry_recovered++;
+}
 static uint32_t measured_samples, cycle_sum, cycle_max, rate_missed, too_many, acquisition_sum;
 static uint8_t configured_max = 5;
 static uint16_t configured_period = 10;
@@ -122,6 +129,19 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
             put32(data + 16, cycle_max); put32(data + 20, rate_missed);
             put32(data + 24, too_many); put32(data + 28, acquisition_sum);
         } else { data[8] = configured_max; put16(data + 9, configured_period); data[11] = restore_pending; }
+        return;
+    }
+    if (op == 9) {
+        extern uint32_t sval_mt_rp_abort_source;
+        memset(data + 6, 0, length - 6); data[6] = 0x89;
+        put32(data + 8, sval_mt_rp_abort_source);
+        return;
+    }
+    if (op == 8) {
+        memset(data + 6, 0, length - 6); data[6] = 0x88;
+        put32(data + 8, acquisition_faults); put32(data + 12, nack_faults);
+        put32(data + 16, retry_attempts); put32(data + 20, retry_recovered);
+        put32(data + 24, nonack_faults); put32(data + 28, last_i2c_flags);
         return;
     }
     if (op == 4) {
@@ -287,7 +307,7 @@ static void poll_remote(void) {
     if (remote_seen && !remote_stale && timer_elapsed32(remote_received) > 100) {
         uint8_t frame[FRAME_SIZE] = {0};
         frame[0] = 1; frame[1] = is_keyboard_left() ? 1 : 0;
-        frame[2] = 4; put16(frame + 4, ++remote_sequence);
+        frame[2] = 0x20; put16(frame + 4, ++remote_sequence);
         put16(frame + 6, FRAME_SIZE);
         queue_remote(frame); remote_stale = true;
     }

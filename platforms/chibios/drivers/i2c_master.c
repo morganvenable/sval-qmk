@@ -115,7 +115,15 @@ static const I2CConfig i2cconfig = {
  * @param status ChibiOS specific I2C status code
  * @return i2c_status_t QMK specific I2C status code
  */
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+static uint32_t sval_mt_last_i2c_flags;
+uint32_t sval_mt_i2c_error_flags(void) { return sval_mt_last_i2c_flags; }
+#endif
 static i2c_status_t i2c_epilogue(const msg_t status) {
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    // Read before i2cStop clears/reinitializes peripheral state.
+    sval_mt_last_i2c_flags = status == MSG_OK ? 0 : i2cGetErrors(&I2C_DRIVER);
+#endif
     if (status == MSG_OK) {
         return I2C_STATUS_SUCCESS;
     }

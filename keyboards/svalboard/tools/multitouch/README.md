@@ -326,3 +326,22 @@ firmware queue/lease fault-injection tests, and sustained latency/gesture testin
 Palm policy currently cancels the whole gesture. Physical buttons and per-contact
 palm classification are not represented. Five simultaneous physical fingers must
 be measured; a five-slot parser is not proof of five-finger hardware performance.
+
+## Unified pair reliability diagnostics
+
+`unified_lab.py --serial EXACT_SERIAL --log NEW.jsonl` previews the split pair
+as one surface; real Windows input remains an explicit checkbox. Logs contain
+raw frames with HID receipt timestamps as well as merged states and per-cause
+fault counts. The UI counts canceled **active gestures** separately from faults
+while idle. A flagged frame and its associated epoch reset are one event.
+Flag `0x04` is sensor acquisition invalid; `0x20` is a stale split snapshot.
+Faults still require all-up rearming; these distinctions do not relax safety.
+
+Firmware 2305 preserves RP2040 I2C address-NACK diagnostics that the underlying
+ChibiOS driver discarded. One pure address NACK permits one coherent-read retry
+following a 200 µs delay. Timeouts, data NACKs, arbitration loss, other bus faults,
+and failed communication-window closure still invalidate the acquisition.
+`capture.py --diagnostics --retry-diagnostics` reads ordinary acquisition counters
+and opcode 8 retry counters plus opcode 9 raw RP2040 abort status before/after capture. Retry diagnostics are local to
+the USB-connected MCU; remote failures are visible through its streamed flags.
+The patched HAL is a prototype-local copy, selected only for this build option.

@@ -216,3 +216,42 @@ UF2s, build logs, capture JSONL, Windows event records and Keybard/lease results
   successfully. The board rebooted and its exact application serial reappeared.
   The subsequent physical session reinstalled the prototype; it is now the firmware
   left on the board, per the user's explicit instruction above.
+
+## 2026-10-13: unified pair invalid-frame diagnosis and recovery
+
+An idle 15-second baseline on firmware 2302 recorded 2,957 frames and 29 sensor
+acquisition-invalid frames (16 left, 13 right). The unified host counted each
+invalid frame twice: its epoch change as a pad restart, then its invalid flag.
+Replay therefore showed 58 warnings despite no active gesture. No host heartbeat
+or synchronization faults appeared in that baseline. USB queue drops were zero.
+
+The RP2040 ChibiOS I2C interrupt handler discarded address-NACK causes before QMK
+could inspect them. The prototype now preserves the abort reason and retries one
+pure 7-bit address NACK after 200 microseconds. It does not retry timeouts,
+arbitration loss, data NACKs, other bus faults, or end-session failures. The raw
+abort value 0x00800001 is address NACK plus one flushed FIFO entry; FIFO count bits
+are not error causes. This is consistent with polling a closed communication
+window; the capture does not establish which internal sensor mode caused it.
+Azoteq documents first-address NACK and retry in its IQS5xx B000 datasheet §8.8.2.
+
+Firmware 2305 on both permanent blank test boards produced 9,000 valid frames in
+45.01 seconds: exactly 4,500 per hand, no sequence gaps, no incomplete packets,
+no invalid flags, and no USB queue drops. On the USB-connected right MCU, 3,604
+additional address-NACK attempts all recovered on the single retry. No final
+read/end errors or timeouts occurred; lifetime maximum read duration was 6 ms.
+Remote retry counters are not transported, but all 4,500 remote frames were valid.
+Replay through the unified model had zero faults and zero cancellations.
+
+The UI now distinguishes per-hand acquisition faults from stale split snapshots,
+counts canceled active gestures separately from idle faults, and logs raw frames
+with receipt timestamps for replay. Safety thresholds and all-up rearming remain.
+
+Validation: seven sensor-driver tests, 45 host tests, the compiled split fixture,
+the actual HAL handler with abort-register fixtures, both flash RAM checks,
+matching split transaction tables, and hash-verified pair update. This hardware
+comparison was idle (zero contacts); sustained physical gestures still need a
+fresh user exercise. The 45-second app identity refresh still deliberately rearms.
+
+Local evidence: `.local/touchpad-reliability-2026-10-13/` in the main workspace,
+including baseline and all intermediate captures, final `after-2305.summary.json`,
+raw frames, replay totals, build logs, pair-update logs, and firmware hashes.

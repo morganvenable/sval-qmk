@@ -1,4 +1,5 @@
 """Live unified two-pad Windows lab. Preview by default; real input opt-in."""
+from dataclasses import asdict
 import argparse
 import json
 from pathlib import Path
@@ -93,6 +94,7 @@ def main():
                     frame=assembler.accept(packet)
                     if frame:
                         counts[frame.pad]+=1
+                        if log:log.write(json.dumps(dict(event="frame",received=received,**asdict(frame)))+"\n")
                         if time.monotonic()-received>.06:
                             model.cancel('Queued input too old');continue
                         model.feed(frame,received)
@@ -101,9 +103,9 @@ def main():
                 model.tick()
                 now=time.monotonic()
                 if now-last_log>.025:
-                    publish((gen,model.raw_points(),model.points,model.width,model.reason,model.metrics,tuple(counts),model.cancellations,model.gaps))
+                    publish((gen,model.raw_points(),model.points,model.width,model.reason,model.metrics,tuple(counts),model.cancellations,model.gaps,sum(model.faults.values())))
                     if log:
-                        log.write(json.dumps(dict(event='state',time=time.time(),real=enabled,counts=counts,reason=model.reason,contacts=model.points,cancellations=model.cancellations,gaps=model.gaps))+'\n');log.flush()
+                        log.write(json.dumps(dict(event='state',time=time.time(),real=enabled,counts=counts,reason=model.reason,contacts=model.points,cancellations=model.cancellations,gaps=model.gaps,faults=dict(model.faults)))+'\n');log.flush()
                     last_log=now
         except Exception as exc:publish(('error',str(exc)))
         finally:
@@ -120,7 +122,7 @@ def main():
             item=display.get()
             if item[0]=='error':
                 real.set(False);real_button.config(state='disabled');mode_label.set('DISCONNECTED · ordinary pointing restored after lease expiry');status.set(item[1]);continue
-            gen,raw,points,width,reason,metrics,counts,cancels,gaps=item
+            gen,raw,points,width,reason,metrics,counts,cancels,gaps,faults=item
             if gen!=generation:continue
             surface.delete('all');scale=min(880/width,250/4000);offset=(960-width*scale)/2
             for hand in (0,1):
@@ -131,7 +133,7 @@ def main():
                 x=offset+x*scale;y=35+y*scale
                 surface.create_oval(x-9,y-9,x+9,y+9,fill=('#71ddc9','#ffb570')[pad],outline='')
                 surface.create_text(x,y-19,text=f'{"L" if pad==0 else "R"}{key}',fill='white')
-            status.set(reason);details.set(f'Frames left {counts[0]} / right {counts[1]}   ·   cancellations {cancels}   ·   skipped source samples {gaps}')
+            status.set(reason);details.set(f'Frames left {counts[0]} / right {counts[1]}   ·   canceled gestures {cancels} / faults {faults}   ·   skipped source samples {gaps}')
             view.delete('all')
             import math
             pan,zoom,angle=metrics if metrics else ((0,0),1,0)

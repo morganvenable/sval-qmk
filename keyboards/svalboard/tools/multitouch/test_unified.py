@@ -56,6 +56,18 @@ class Tests(unittest.TestCase):
         self.send(f(0,2),f(1,2));self.assertEqual(self.backend.frames[-1],{})
     def test_duplicate_cannot_extend_freshness(self):
         self.send(f(0,1),f(1,1));self.now+=.07;self.pad.feed(f(0,1));self.pad.feed(f(1,1));self.pad.tick();self.assertFalse(self.pad.ready)
+    def test_idle_fault_counts_once_despite_epoch_change(self):
+        self.send(f(0,1,epoch=2,flags=4),f(1,1))
+        self.assertEqual(self.pad.cancellations,0)
+        self.assertEqual(dict(self.pad.faults),{'Left: Sensor acquisition invalid':1})
+        self.assertEqual(self.backend.cancels,0)
+    def test_active_fault_cancels_once_and_distinguishes_split(self):
+        self.send(f(0,1,[(1,100,100)]),f(1,1))
+        self.send(f(0,2,epoch=2,flags=32),f(1,2,epoch=2,flags=4))
+        self.assertEqual(self.pad.cancellations,1)
+        self.assertEqual(self.backend.cancels,1)
+        self.assertEqual(self.pad.faults['Left: Split snapshot stale'],1)
+        self.assertEqual(self.pad.faults['Right: Sensor acquisition invalid'],1)
     def test_geometry_flip_and_gap(self):
         p=UnifiedPad(gap_mm=10,flips=((True,True),(False,False)),clock=lambda:0)
         p.feed(f(0,0));p.feed(f(1,0));p.tick()

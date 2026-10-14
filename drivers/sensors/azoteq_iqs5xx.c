@@ -158,6 +158,21 @@ i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
     uint8_t raw[45] = {0};
     uint32_t started = timer_read32();
     i2c_status_t status = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, raw, sizeof(raw), AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+    // IQS5xx datasheet 8.8.2: a low-power wake may NACK the first address.
+    // Retry exactly once after >=150 us, only for a pure ACK failure (HAL bit
+    // 0x04). Never retry a timeout, arbitration loss, or an end-session write.
+    extern uint32_t sval_mt_i2c_error_flags(void);
+    extern void sval_mt_acquisition_fault(uint32_t flags, bool retried, bool recovered);
+    if (status != I2C_STATUS_SUCCESS) {
+        uint32_t flags = sval_mt_i2c_error_flags();
+        bool retry = status == I2C_STATUS_ERROR && flags == 0x04;
+        if (retry) {
+            wait_us(200);
+            memset(raw, 0, sizeof(raw));
+            status = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, raw, sizeof(raw), AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+        }
+        sval_mt_acquisition_fault(flags, retry, status == I2C_STATUS_SUCCESS);
+    }
     i2c_status_t read_status = status, end_status = I2C_STATUS_SUCCESS;
     if (status == I2C_STATUS_SUCCESS) {
         memcpy(base_data, raw, sizeof(*base_data));
