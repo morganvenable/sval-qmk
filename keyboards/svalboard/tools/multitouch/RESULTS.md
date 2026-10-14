@@ -255,3 +255,20 @@ fresh user exercise. The 45-second app identity refresh still deliberately rearm
 Local evidence: `.local/touchpad-reliability-2026-10-13/` in the main workspace,
 including baseline and all intermediate captures, final `after-2305.summary.json`,
 raw frames, replay totals, build logs, pair-update logs, and firmware hashes.
+
+### Windows toggle / first-contact failure
+
+The GUI supplies the virtual gap as a float, including default 0.0. The unified
+mapper previously propagated that float into every combined X coordinate. Preview
+rendering accepted it, but the first real contact failed when ctypes built the
+integer Windows POINT structure. This stopped the shared input worker.
+
+The mapper now rounds the gap once to integer HIMETRIC units, matching the native
+device width. A regression test sends default and fractional GUI gaps through the
+actual Windows backend ctypes marshalling, including two contacts and their lifts
+(the OS injection function is mocked). All 46 host tests pass. Runtime failures
+during injection now log a traceback, release pair capture, and resume preview;
+error notices use a separate queue so frame refreshes cannot discard them.
+A Windows GUI smoke test deliberately failed the backend before native injection
+and verified an input_error event followed by live preview states. No synthetic
+input was injected by that recovery test. User gesture retesting remains pending.

@@ -60,3 +60,16 @@ class BackendTests(unittest.TestCase):
             with self.assertRaises(ValueError): pad.frame({1: (4301, 0)})
             with self.assertRaises(ValueError): pad.frame({i: (0, 0) for i in range(6)})
         self.assertEqual(self.frames, [])
+
+    def test_gui_float_gap_flows_through_real_ctypes_marshalling(self):
+        from unified import UnifiedPad
+        from test_unified import f
+        for gap in (0.0, 1.234):
+            with self.subTest(gap=gap), w.WindowsTouchpad(width=8600+round(gap*100)) as backend:
+                pad=UnifiedPad(backend,gap_mm=gap,clock=lambda:0)
+                pad.feed(f(0,0));pad.feed(f(1,0));pad.tick()
+                pad.feed(f(0,1,[(1,1024,896)]));pad.feed(f(1,1,[(1,1024,896)]))
+                points=pad.tick()
+                self.assertEqual(sorted(points.values()),[(2150,2000),(6450+round(gap*100),2000)])
+                self.assertTrue(all(type(x) is int and type(y) is int for x,y in points.values()))
+                pad.feed(f(0,2));pad.feed(f(1,2));pad.tick()

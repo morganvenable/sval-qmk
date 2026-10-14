@@ -11,7 +11,7 @@ class UnifiedPad:
     def __init__(self, backend=None, gap_mm=0, flips=((False,False),(False,False)), clock=None):
         import time
         if not math.isfinite(gap_mm) or not 0<=gap_mm<=50: raise ValueError('Gap must be 0–50 mm')
-        self.backend, self.gap, self.flips = backend, gap_mm*100, flips
+        self.backend, self.gap, self.flips = backend, round(gap_mm*100), flips
         self.clock=clock or time.monotonic
         self.width,self.height=8600+self.gap,4000
         self.samples={};self.ready=False;self.points={};self.reason='Lift all fingers on both pads to arm'

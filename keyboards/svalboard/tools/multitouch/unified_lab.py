@@ -6,6 +6,7 @@ from pathlib import Path
 import queue
 import threading
 import time
+import traceback
 from transport import Assembler,HidDispatcher,StreamClient
 from capture import open_device
 from unified import UnifiedPad
@@ -22,6 +23,7 @@ def main():
     ttk.Label(root,text='Two touchpads → one multitouch surface',font=('Segoe UI',22)).pack(pady=14)
     ttk.Label(root,text='Left + right, side by side · 86 × 40 mm · up to five combined Windows contacts\nLift all fingers to arm. Then try one finger on each pad and move them apart or together.').pack()
     real=tk.BooleanVar(value=False);gap=tk.DoubleVar(value=0);flips=[tk.BooleanVar(value=False) for _ in range(4)]
+    input_error=tk.StringVar(value='')
     status=tk.StringVar(value='Connecting…');details=tk.StringVar(value='');mode_label=tk.StringVar(value='PREVIEW ONLY · ordinary mouse output remains active')
     row=ttk.Frame(root);row.pack(pady=12)
     real_button=ttk.Checkbutton(row,text='Enable REAL Windows touchpad input',variable=real)
@@ -31,11 +33,12 @@ def main():
     for i,text in enumerate(('Flip left X','Flip left Y','Flip right X','Flip right Y')):
         ttk.Checkbutton(orient,text=text,variable=flips[i]).pack(side='left',padx=12)
     ttk.Label(root,textvariable=mode_label,wraplength=1000).pack(pady=8)
+    ttk.Label(root,textvariable=input_error,foreground='#b03020',wraplength=1000).pack()
     surface=tk.Canvas(root,width=960,height=320,bg='#101c29',highlightthickness=0);surface.pack()
     ttk.Label(root,textvariable=status,font=('Segoe UI',15),wraplength=1000).pack(pady=10)
     ttk.Label(root,textvariable=details,font=('Segoe UI',11)).pack()
     view=tk.Canvas(root,width=960,height=125,bg='#101c29',highlightthickness=0);view.pack(pady=8)
-    stop=threading.Event();commands=queue.Queue();display=queue.Queue(maxsize=2)
+    stop=threading.Event();commands=queue.Queue();display=queue.Queue(maxsize=2);alerts=queue.Queue()
     generation=0
     def configure(*_):
         nonlocal generation
@@ -50,6 +53,8 @@ def main():
     for v in flips:v.trace_add('write',configure)
     gapbox.config(command=configure);gapbox.bind('<Return>',configure);gapbox.bind('<FocusOut>',configure)
     def publish(item):
+        if item[0] in ('fallback','error'):
+            alerts.put(item);return
         if display.full():
             try:display.get_nowait()
             except queue.Empty:pass
@@ -57,6 +62,23 @@ def main():
     def worker():
         device=dispatcher=client=backend=None;active=False;config=None;model=None
         counts=[0,0];last_log=0
+        def advance(frame=None,received=None):
+            nonlocal backend,active,config,identity_at
+            try:
+                if frame is not None:model.feed(frame,received)
+                model.tick()
+                return True
+            except Exception as exc:
+                if backend is None:raise
+                message=f'{type(exc).__name__}: {exc}'
+                if log:
+                    log.write(json.dumps(dict(event='input_error',time=time.time(),error=message,traceback=traceback.format_exc()))+'\n');log.flush()
+                backend.close();backend=None;model.backend=None
+                model.cancel('Windows input stopped')
+                client.command(3);active=False
+                config=(gen,False,g,flip);identity_at=0
+                publish(('fallback',message))
+                return False
         try:
             device=open_device(args.serial);packets=queue.Queue(maxsize=256)
             # Receipt timestamps are taken by the HID I/O thread, never the GUI.
@@ -97,17 +119,19 @@ def main():
                         if log:log.write(json.dumps(dict(event="frame",received=received,**asdict(frame)))+"\n")
                         if time.monotonic()-received>.06:
                             model.cancel('Queued input too old');continue
-                        model.feed(frame,received)
                         # Preserve lifts between UI updates; merge on the input worker.
-                        model.tick()
-                model.tick()
+                        if not advance(frame,received):break
+                if enabled and backend is None:continue
+                if not advance():continue
                 now=time.monotonic()
                 if now-last_log>.025:
                     publish((gen,model.raw_points(),model.points,model.width,model.reason,model.metrics,tuple(counts),model.cancellations,model.gaps,sum(model.faults.values())))
                     if log:
                         log.write(json.dumps(dict(event='state',time=time.time(),real=enabled,counts=counts,reason=model.reason,contacts=model.points,cancellations=model.cancellations,gaps=model.gaps,faults=dict(model.faults)))+'\n');log.flush()
                     last_log=now
-        except Exception as exc:publish(('error',str(exc)))
+        except Exception as exc:
+            if log:log.write(json.dumps(dict(event='error',time=time.time(),error=str(exc),traceback=traceback.format_exc()))+'\n');log.flush()
+            publish(('error',str(exc)))
         finally:
             try:
                 if backend:backend.close()
@@ -118,8 +142,10 @@ def main():
                 if dispatcher:dispatcher.close()
                 if device:device.close()
     def poll():
-        while not display.empty():
-            item=display.get()
+        while not alerts.empty() or not display.empty():
+            item=alerts.get_nowait() if not alerts.empty() else display.get_nowait()
+            if item[0]=='fallback':
+                real.set(False);input_error.set('Windows input stopped; preview resumed. '+item[1]);continue
             if item[0]=='error':
                 real.set(False);real_button.config(state='disabled');mode_label.set('DISCONNECTED · ordinary pointing restored after lease expiry');status.set(item[1]);continue
             gen,raw,points,width,reason,metrics,counts,cancels,gaps,faults=item
