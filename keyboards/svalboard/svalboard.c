@@ -617,6 +617,13 @@ report_mouse_t pointing_device_task_combined_kb(report_mouse_t left_report, repo
         sval_motion_accumulate(&motion_acc[0], left_report.x, left_report.y, left_report.h, left_report.v, left_report.buttons);
         sval_motion_accumulate(&motion_acc[1], right_report.x, right_report.y, right_report.h, right_report.v, right_report.buttons);
     }
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    extern bool sval_mt_suppress_pair_mouse(void);
+    if (sval_mt_suppress_pair_mouse()) {
+        left_report = (report_mouse_t){0};
+        right_report = (report_mouse_t){0};
+    }
+#endif
     return pointing_device_task_combined_user(left_report, right_report);
 }
 

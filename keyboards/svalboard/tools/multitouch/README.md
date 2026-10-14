@@ -1,3 +1,68 @@
+# Unified two-hand touchpad (current experiment)
+
+Run `unified_lab.py --serial EXACT_RIGHT_USB_SERIAL --log NEW_FILE.jsonl` with
+Windows Python. It opens a live combined preview with **real Windows input off**.
+Lift every finger on both pads once to arm. The default geometry is one 86 × 40 mm
+surface: left coordinates 0–43 mm, right 43–86 mm. The virtual gap and each pad's
+X/Y flips are configurable; changing any setting cancels and rearms the session.
+The lower panel previews pan, scale and rotation when exactly two fingers are
+active. There is no requirement to start both fingers simultaneously.
+
+The checkbox **Enable REAL Windows touchpad input** creates one native
+`PT_TOUCHPAD` device for both physical sources. One finger on each hand becomes
+a normal two-contact gesture; three fingers on either side become a native
+three-finger gesture, subject to Windows/app gesture settings. This is a host
+synthetic device, not a changed USB HID descriptor. It is still a standalone
+lab, not yet installed in the persistent Keybard overlay daemon.
+
+The two sources' `(pad, epoch, lifetime ID)` tuples map to unique synthetic IDs.
+The join uses HID-thread receipt timestamps, never subtracts the two MCU clocks,
+and requires both pads to report. Samples must be within 25 ms of one another;
+a missing heartbeat over 60 ms, invalid frame, reset, contact-ID discontinuity,
+or a worker stall cancels the combined gesture. Duplicate packets do not renew
+freshness. A gap of at most two omitted source samples is tolerated only when
+contact lifetime IDs are unchanged; the latest-snapshot split transport can
+legitimately skip intermediate frames. No coordinates are extrapolated. The
+remote transport can itself buffer an old snapshot up to its firmware freshness
+limit, so host receipt age is not a physical sensor timestamp or latency bound.
+
+Windows permits five simultaneous synthetic touchpad contacts. The preview
+shows raw contacts from both sensors, but six or more cancels unified output
+until a fresh all-up on both pads; it never silently drops the sixth contact.
+The two-pad namespace and readiness rules are tested independently of Windows.
+
+Firmware `unified-pad-dev` (2302) adds stream START mode **2** for the unified
+host and returns ownership flag **0x08**. That lease suppresses both halves'
+ordinary mouse reports on the USB master, including buttons, so the synthetic
+pad is the only output while enabled. The host waits for two-pad all-up before
+injecting. Mode 1 remains rejected for the old single-pad injector. STOP or the
+500 ms lease timeout restores ordinary output. Both matching halves keep blank
+keymaps, the inert physical matrix, and no-chord updates. The split wire layout
+is unchanged from the preceding pair firmware.
+
+The app renews its wrapper identity every 45 seconds: it closes the synthetic
+device, releases/reacquires capture, and waits for all-up again. This can
+interrupt a gesture spanning renewal; seamless ownership transfer is future
+work. The checkbox does not persist across launches. Close releases capture;
+on errors it disables the checkbox and firmware's watchdog handles host loss.
+Ordinary mouse output remains active in preview mode.
+
+Validation: 43 host tests including namespace collisions, cross-hand pinch,
+stationary contacts, real lifts, duplicate/stale reports, epochs, small gaps,
+sequence wrap, geometry, and five/six-contact handling; ASan/UBSan split tests
+including mode-2 lease expiry; matching ARM split tables and RAM commit checks;
+verified update of both halves through the right USB; blank keymap readback;
+Windows live-preview smoke; native 86 × 40 mm device creation and capture
+acquire/release without injecting contacts. Physical Windows gesture behavior
+still needs interactive trials. The pair currently has intermittent invalid
+sensor frames: those cancel rather than fabricate releases/taps.
+
+[Microsoft's synthetic touchpad API and five-contact limit](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-synthetic_device_creation_params)
+
+## Earlier split-capture implementation (historical)
+
+The following describes version 2301, prior to unified capture mode and host UI.
+
 # Permanent split-touchpad test firmware
 
 This branch prepares two keyless Azoteq controllers for a split pair with one

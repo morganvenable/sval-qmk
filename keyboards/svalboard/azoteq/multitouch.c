@@ -27,7 +27,7 @@ static uint8_t queue[QUEUE_SIZE][FRAME_SIZE];
 static uint8_t head, count, fragment, last_mask, ids[5], next_id;
 static uint16_t sequence, token;
 static uint32_t client, renewed, epoch, dropped, errors, samples;
-static bool want_owner, owner, recovering;
+static bool want_owner, owner, recovering, pair_capture;
 static uint32_t read_timeouts, read_errors, end_timeouts, end_errors, max_read_ms;
 static uint32_t measured_samples, cycle_sum, cycle_max, rate_missed, too_many, acquisition_sum;
 static uint8_t configured_max = 5;
@@ -88,13 +88,17 @@ static void reset_stream(void) {
 static void stop_stream(void) {
     restore_pending |= configured_max != 5 || configured_period != 10;
     recovering |= owner;
-    owner = want_owner = false;
+    owner = want_owner = pair_capture = false;
     client = 0;
     reset_stream();
 }
 
+bool sval_mt_suppress_pair_mouse(void) {
+    return is_keyboard_master() && pair_capture && client && timer_elapsed32(renewed) < LEASE_MS;
+}
+
 bool sval_mt_suppress_mouse(void) {
-    return is_keyboard_master() && (owner || recovering);
+    return is_keyboard_master() && (owner || recovering || sval_mt_suppress_pair_mouse());
 }
 
 void sval_mt_command(uint8_t *data, uint8_t length) {
@@ -131,17 +135,20 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
     if (client && timer_elapsed32(renewed) >= LEASE_MS) stop_stream();
     if (op == 1) {
         if (client && client != requester) status = 1; // busy
-        else if (mode > 1) status = 2;
+        else if (mode > 2) status = 2;
 #ifdef SVAL_MT_SPLIT
-        // Pair capture is observation-only until the host owns two independent
-        // pad lifetimes. Never let the old one-pad injector merge their IDs.
+        // Only the explicit unified host may acquire pair capture (mode 2).
+        // Old single-pad clients requesting mode 1 must still be refused.
         else if (mode == 1) status = 2;
+#else
+        else if (mode == 2) status = 2;
 #endif
         else {
             stop_stream();
             client = requester;
             renewed = timer_read32();
             want_owner = mode == 1;
+            pair_capture = mode == 2;
             if (++token == 0) ++token;
         }
     } else if (op == 2 || op == 3) {
@@ -153,7 +160,7 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
     data[6] = 0x80 | op;
     data[7] = status;
     data[8] = 1; // protocol version
-    data[9] = (owner ? 1 : 0) | (want_owner ? 2 : 0) | (recovering ? 4 : 0);
+    data[9] = (owner ? 1 : 0) | (want_owner ? 2 : 0) | (recovering ? 4 : 0) | (pair_capture ? 8 : 0);
     put16(data + 10, token);
     put16(data + 12, 2048);
     put16(data + 14, 1792);

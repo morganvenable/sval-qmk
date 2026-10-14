@@ -10,3 +10,5 @@ bool sval_mt_suppress_mouse(void);
 uint16_t sval_mt_poll_ms(void);
 
 void sval_mt_init(void);
+
+bool sval_mt_suppress_pair_mouse(void);

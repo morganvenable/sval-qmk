@@ -29,6 +29,12 @@ int main(void) {
  // Pair firmware refuses old single-pad injection ownership.
  uint8_t cmd[64]={0}; put32(cmd+1,123); cmd[6]=1; cmd[7]=1;
  sval_mt_command(cmd,64); assert(cmd[7]==2);
+ // Explicit pair capture suppresses both reports only while the lease lives.
+ memset(cmd,0,sizeof(cmd)); put32(cmd+1,123); cmd[6]=1; cmd[7]=2;
+ sval_mt_command(cmd,64); assert(!cmd[7] && (cmd[9]&8));
+ assert(sval_mt_suppress_pair_mouse());
+ clock_ms+=500; assert(!sval_mt_suppress_pair_mouse());
+ sval_mt_task(); assert(!pair_capture && !client);
  // Queue overload is explicit and bounded.
  uint8_t f[56]={1}; count=8; head=0; queue_remote(f);
  assert(count==8 && dropped==1 && (queue[0][2]&16));
