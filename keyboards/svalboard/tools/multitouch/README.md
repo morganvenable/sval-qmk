@@ -34,8 +34,8 @@ the next start (`--no-manage-windows-settings` turns this off).
 ## Build (WSL), both halves
 
 ```sh
-make svalboard/azoteq/left:sval SVAL_UPDATER=yes SVAL_AZOTEQ_UNIFIED=yes SVAL_FW_VERSION=2310 SVAL_FW_VERSION_STRING=cyrus-mt-dev1 -j8
-make svalboard/azoteq/right:sval SVAL_UPDATER=yes SVAL_AZOTEQ_UNIFIED=yes SVAL_FW_VERSION=2310 SVAL_FW_VERSION_STRING=cyrus-mt-dev1 -j8
+make svalboard/azoteq/left:sval SVAL_UPDATER=yes SVAL_AZOTEQ_UNIFIED=yes SVAL_FW_VERSION=2311 SVAL_FW_VERSION_STRING=cyrus-mt-dev2 -j8
+make svalboard/azoteq/right:sval SVAL_UPDATER=yes SVAL_AZOTEQ_UNIFIED=yes SVAL_FW_VERSION=2311 SVAL_FW_VERSION_STRING=cyrus-mt-dev2 -j8
 ```
 
 `SVAL_AZOTEQ_UNIFIED=yes` turns on the contact stream and the split contact
