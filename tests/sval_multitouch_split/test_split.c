@@ -53,6 +53,7 @@ int main(void) {
  sval_mt_command(cmd,64); assert(!cmd[7] && (cmd[9]&8));
  assert(sval_mt_suppress_pair_mouse());
  clock_ms+=500; assert(!sval_mt_suppress_pair_mouse());
+ { int16_t hh=1, vv=1; assert(sval_mt_chip_filter(0,&hh,&vv)==2); } // expired, not yet stopped: no chip report leaks
  sval_mt_task(); assert(!pair_capture && !client);
  // Queue overload is explicit and bounded.
  uint8_t f[56]={1}; count=8; head=0; queue_remote(f);

@@ -16,6 +16,13 @@ formats are in [protocol.md](../../docs/protocol.md) ("Touch gestures").
 | Mouse-layer keys and clicks | Firmware mousekeys | Firmware |
 | Auto mouse layer | Firmware, from one-finger contact movement | Firmware, from pad motion |
 
+`validate_windows.py` (Windows Python, no board) checks that Windows turns the
+lab's injected input into each feature, in its own window. On Windows 11 build
+26200 (2026-10-14) all passed: tap to click, cursor motion, tap and drag,
+two-finger tap (right click), two-finger scroll (wheel), pinch (Ctrl+wheel), and
+with `--three-finger` a three-finger swipe up (Task View; it presses Esc after).
+What it can't show is the physical pads feeding the lab: that still needs hands.
+
 Windows delivers every feature from the injected input; the firmware adds a
 second, tunable owner for swipe and pinch, a chip scroll owner, auto mouse in
 unified mode, and gestures with no host at all. Exactly one owner handles each
@@ -75,6 +82,14 @@ python touch_gestures_cli.py --serial SERIAL status --watch
   turn pointing into scrolling. Payload bit 4 merges always.
 - **Leaving unified mode** (STOP, the lease running out, the lab closing):
   chip output stays off until both pads report all fingers up (5 s at most).
+- **One pad gone.** With the split cable out, or one pad sending only invalid
+  reads or resets for 200 ms (unplugged), the lab cancels the touch and goes on
+  with the other pad after an all-up; the firmware recognizer treats that pad
+  as empty the same way (`TG_ABSENT_MS`). When the pad comes back, both join
+  after the next all-up.
+- **CPI in normal mode.** The contact stream keeps the chip at its full
+  resolution, so `azoteq.c` scales the chip's motion and wheel by the DPI
+  setting instead; the cursor speed in normal mode matches a normal build.
 
 ## Firmware recognizer (`azoteq/touch_gestures.c`)
 
@@ -89,8 +104,14 @@ python touch_gestures_cli.py --serial SERIAL status --watch
 - Pinch: two contacts whose distance changes by `pinch_start_mm`, more than
   1.5 times the centroid's travel, start it; then one step per `pinch_step_mm`.
   It stays a pinch until all-up.
+- Resting fingers: while nothing is recognized yet, a contact that hasn't moved
+  2 mm (`TG_REST_MOVE`) and landed more than `TG_REST_MS` (250) before the
+  newest one is resting and never counts, so a thumb left on one pad plus a
+  two-finger scroll is not a three-finger swipe. With the swipe owned by the
+  firmware, the lab still withholds such a touch from Windows (it counts every
+  contact), so that scroll does nothing in unified mode: lift the thumb.
 - Compile-time knobs at the top of `touch_gestures.h`: drop grace, pinch hold,
-  staleness, per-pad flips.
+  staleness, resting contacts, a dead pad, per-pad flips.
 - Offline tuning: `trace_from_log.py session.jsonl > s.trace`, then run the
   host test binary with `--replay s.trace 0e` (see the script's docstring).
 
@@ -129,9 +150,10 @@ lab, not yet installed in the persistent Keybard overlay daemon.
 
 The two sources' `(pad, epoch, lifetime ID)` tuples map to unique synthetic IDs.
 The join uses HID-thread receipt timestamps, never subtracts the two MCU clocks,
-and requires both pads to report. Samples must be within 25 ms of one another;
-a missing heartbeat over 60 ms, invalid frame, reset, contact-ID discontinuity,
-or a worker stall cancels the combined gesture. Duplicate packets do not renew
+and uses every pad that reports (one alone when the other is gone). Two pads'
+samples must be within 25 ms of one another; a missing heartbeat over 60 ms,
+invalid frame, reset, contact-ID discontinuity, or a worker stall cancels the
+combined gesture. Duplicate packets do not renew
 freshness. A gap of at most two omitted source samples is tolerated only when
 contact lifetime IDs are unchanged; the latest-snapshot split transport can
 legitimately skip intermediate frames. No coordinates are extrapolated. The

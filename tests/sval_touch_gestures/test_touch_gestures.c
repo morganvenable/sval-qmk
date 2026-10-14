@@ -255,6 +255,48 @@ static void test_pinch_hold(void) {
     CHECK(!tg_pinch_hold(0, now_ms));
 }
 
+// A thumb resting on the left pad while two fingers scroll on the right: a
+// scroll, not a three-finger swipe. Three fingers landing with a resting
+// thumb still swipe, and the thumb doesn't dilute their travel.
+static void test_resting_thumb(void) {
+    fresh(TG_OWN_SWIPE_FW | TG_OWN_PINCH_FW | TG_OPT_SPAN);
+    touch_t thumb = {7, 20, 30};
+    for (int k = 0; k < 40; k++) { send(0, &thumb, 1, 0); send(1, NULL, 0, 0); step(10); }
+    for (int k = 0; k <= 30; k++) {
+        touch_t t[2] = {{1, 15, 5 + k}, {2, 23, 5 + k}};
+        send(0, &thumb, 1, 0); send(1, t, 2, 0); step(10);
+    }
+    CHECK(n_emitted == 0 && !tg_claimed());
+    lift();
+    fresh(TG_OWN_SWIPE_FW | TG_OPT_SPAN);
+    for (int k = 0; k < 40; k++) { send(0, &thumb, 1, 0); send(1, NULL, 0, 0); step(10); }
+    for (int k = 0; k <= 12; k++) {
+        touch_t t[3] = {{1, 30 - 2 * k, 20}, {2, 35 - 2 * k, 20}, {3, 40 - 2 * k, 20}};
+        send(0, &thumb, 1, 0); send(1, t, 3, 0); step(10);
+    }
+    CHECK(n_emitted == 1 && emitted[0] == 0x094F);
+    // A finger that was moving (a cursor finger) is not resting: it joins.
+    fresh(TG_OWN_SWIPE_FW | TG_OPT_SPAN);
+    for (int k = 0; k < 40; k++) { touch_t m = {5, 20 + k * 0.2, 20}; send(1, &m, 1, 0); send(0, NULL, 0, 0); step(10); }
+    for (int k = 0; k <= 12; k++) {
+        touch_t t[3] = {{5, 28 - 2 * k, 20}, {1, 33 - 2 * k, 20}, {2, 38 - 2 * k, 20}};
+        send(1, t, 3, 0); send(0, NULL, 0, 0); step(10);
+    }
+    CHECK(n_emitted == 1 && emitted[0] == 0x094F);
+}
+
+// One pad unplugged (only invalid reads): after TG_ABSENT_MS it reads as
+// empty, and the other pad's swipes work again.
+static void test_dead_pad(void) {
+    fresh(TG_OWN_SWIPE_FW | TG_OPT_SPAN);
+    for (int k = 0; k < 30; k++) { send(0, NULL, 0, 4); step(10); }
+    for (int k = 0; k <= 12; k++) {
+        touch_t t[3] = {{1, 30 - 2 * k, 20}, {2, 35 - 2 * k, 20}, {3, 40 - 2 * k, 20}};
+        send(1, t, 3, 0); send(0, NULL, 0, 4); step(10);
+    }
+    CHECK(n_emitted == 1 && emitted[0] == 0x094F);
+}
+
 static void test_faults_and_staleness(void) {
     fresh(TG_OWN_SWIPE_FW | TG_OPT_SPAN);
     touch_t t[3] = {{1, 15, 20}, {2, 20, 20}, {3, 25, 20}};
@@ -367,8 +409,10 @@ int main(int argc, char **argv) {
     test_pinch();
     test_scroll_is_not_pinch();
     test_pinch_hold();
+    test_resting_thumb();
+    test_dead_pad();
     test_faults_and_staleness();
     test_config_and_command();
-    puts("touch gestures: owners, four swipe directions, settle, thresholds, window, ratio, dropped finger (flicker and lift), sustain and repeat, span, pinch in/out, scroll vs pinch, pinch hold, faults, staleness, payload and 0x2E sub-commands passed");
+    puts("touch gestures: owners, four swipe directions, settle, thresholds, window, ratio, dropped finger (flicker and lift), sustain and repeat, span, pinch in/out, scroll vs pinch, pinch hold, resting thumb, dead pad, faults, staleness, payload and 0x2E sub-commands passed");
     return 0;
 }

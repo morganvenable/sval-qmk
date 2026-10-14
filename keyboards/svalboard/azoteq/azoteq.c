@@ -61,6 +61,32 @@ uint8_t sval_pointer_own_bus(void) {
     return SVAL_BUS_I2C;
 }
 
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+// The contact stream keeps the chip at its full 2048 x 1792 resolution, so the
+// driver ignores the CPI setting (azoteq_iqs5xx_set_cpi). Apply it here
+// instead, as the resolution register would have: min(native, CPI x pad size),
+// so the cursor and the chip's scroll move as in a normal build.
+#    define AZO_NATIVE_X 2048
+#    define AZO_NATIVE_Y 1792
+static int32_t azo_remainder[4];
+static int32_t azo_scale(int32_t value, uint8_t axis, uint32_t scaled, uint32_t native) {
+    int32_t total = value * (int32_t)scaled + azo_remainder[axis];
+    int32_t out   = total / (int32_t)native;
+    azo_remainder[axis] = total - out * (int32_t)native;
+    return out;
+}
+static void azo_apply_cpi(report_mouse_t *r) {
+    if (!azo_cached_cpi) return;
+    uint32_t sx = ((uint32_t)azo_cached_cpi * 430 + 127) / 254, sy = ((uint32_t)azo_cached_cpi * 400 + 127) / 254;
+    if (sx > AZO_NATIVE_X) sx = AZO_NATIVE_X;
+    if (sy > AZO_NATIVE_Y) sy = AZO_NATIVE_Y;
+    r->x = azo_scale(r->x, 0, sx, AZO_NATIVE_X);
+    r->y = azo_scale(r->y, 1, sy, AZO_NATIVE_Y);
+    r->h = azo_scale(r->h, 2, sx, AZO_NATIVE_X);
+    r->v = azo_scale(r->v, 3, sy, AZO_NATIVE_Y);
+}
+#endif
+
 report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
 #ifdef SVAL_AZOTEQ_MULTITOUCH
     const uint16_t interval = sval_mt_poll_ms();
@@ -71,6 +97,9 @@ report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
         azo_timer = timer_read();
         mouse_report = azoteq_iqs5xx_get_report(mouse_report);
         azo_held_buttons = mouse_report.buttons;
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+        azo_apply_cpi(&mouse_report);
+#endif
     }
 
     // Invert V-axis

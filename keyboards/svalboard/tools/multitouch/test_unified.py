@@ -36,6 +36,29 @@ class Tests(unittest.TestCase):
         self.now+=.07;self.pad.tick();self.assertFalse(self.pad.ready)
         self.send(f(0,2,[(1,1100,896)]),f(1,2,[(1,1100,896)]));self.assertFalse(self.pad.ready)
         self.send(f(0,3),f(1,3));self.assertTrue(self.pad.ready)
+    def test_split_cable_out_leaves_the_other_pad_working(self):
+        self.send(f(0,1,[(1,1024,896)]),f(1,1))
+        for seq in range(2,10):  # the right half stops answering
+            self.now+=.01;self.pad.feed(f(0,seq,[(1,1024,896)]));self.pad.tick()
+        self.assertFalse(self.pad.ready)  # canceled once; the touch in progress is not resumed
+        self.now+=.01;self.pad.feed(f(0,10));self.pad.tick();self.assertTrue(self.pad.ready)
+        self.now+=.01;self.pad.feed(f(0,11,[(1,1024,896)]));p=self.pad.tick()
+        self.assertEqual(list(p.values()),[(2150,2000)])
+        # The right half comes back: cancel, then both pads after an all-up.
+        self.send(f(0,12,[(1,1024,896)]),f(1,1,epoch=2));self.assertFalse(self.pad.ready)
+        self.send(f(0,13),f(1,2,epoch=2));self.assertTrue(self.pad.ready)
+        self.assertEqual(len(self.send(f(0,14,[(1,1024,896)]),f(1,3,[(1,1024,896)],epoch=2))),2)
+    def test_unplugged_pad_leaves_the_other_pad_working(self):
+        seq=1
+        for k in range(30):  # the left pad answers only with invalid reads
+            self.send(f(0,seq,epoch=seq+5,flags=4),f(1,seq));seq+=1
+        self.send(f(0,seq,epoch=seq+5,flags=4),f(1,seq));seq+=1
+        self.assertTrue(self.pad.ready)
+        p=self.send(f(0,seq,epoch=seq+5,flags=4),f(1,seq,[(1,1024,896)]));seq+=1
+        self.assertEqual(list(p.values()),[(6450,2000)])
+        n=self.backend.cancels
+        p=self.send(f(0,seq,epoch=seq+5,flags=4),f(1,seq,[(1,1100,896)]))
+        self.assertEqual(len(p),1);self.assertEqual(self.backend.cancels,n)
     def test_invalid_frame_never_becomes_normal_release(self):
         self.send(f(0,1,[(1,1024,896)]),f(1,1))
         n=len(self.backend.frames)

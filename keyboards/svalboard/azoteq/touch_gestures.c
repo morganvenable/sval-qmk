@@ -111,8 +111,10 @@ typedef struct {
     uint8_t  id;
     bool     live;   // in the latest frame
     bool     graced; // dropped out, held at its last position for TG_DROP_GRACE_MS
-    int16_t  x, y;
-    uint32_t seen;
+    bool     moved;  // went more than TG_REST_MOVE from where it landed
+    bool     rest;   // a resting finger or thumb: never part of a gesture (decided while idle)
+    int16_t  x, y, lx, ly; // now, and where it landed
+    uint32_t seen, landed;
 } tg_contact_t;
 
 enum { ST_IDLE, ST_SWIPE_ARMED, ST_SWIPE, ST_PINCH, ST_WAIT_UP };
@@ -121,6 +123,8 @@ static tg_contact_t pads[2][5];
 static uint32_t     pad_at[2];        // last frame per pad
 static uint32_t     pad_two_since[2]; // when the pad last went from <2 to >=2 contacts
 static uint8_t      pad_prev_n[2];
+static bool         pad_bad[2];       // the pad's frames are invalid reads or resets
+static uint32_t     pad_bad_since[2];
 
 static uint8_t  state;
 static bool     claimed;
@@ -155,6 +159,7 @@ void tg_reset(void) {
     memset(pads, 0, sizeof(pads));
     memset(pad_at, 0, sizeof(pad_at));
     memset(pad_prev_n, 0, sizeof(pad_prev_n));
+    memset(pad_bad, 0, sizeof(pad_bad));
     state = ST_IDLE; claimed = false; gpad = -1;
     arm_pending = pinch_cand = prev_valid = false;
     tx = ty = progress = 0;
@@ -186,11 +191,35 @@ static int8_t considered_pad(void) {
 static void build(cset_t *s) {
     s->n = 0;
     int8_t only = considered_pad();
+    if (state == ST_IDLE) {
+        // A finger or thumb that sat still since well before the newest one
+        // landed is resting, not gesturing: a thumb on one pad plus a two-finger
+        // scroll is a scroll, not a three-finger swipe. Decided only while idle,
+        // so a recognized gesture keeps its contacts.
+        uint32_t newest = 0;
+        bool     any    = false;
+        for (uint8_t p = 0; p < 2; p++) {
+            if (only >= 0 && p != only) continue;
+            for (uint8_t i = 0; i < 5; i++) {
+                const tg_contact_t *c = &pads[p][i];
+                if (!c->live && !c->graced) continue;
+                if (!any || (int32_t)(c->landed - newest) > 0) newest = c->landed;
+                any = true;
+            }
+        }
+        for (uint8_t p = 0; p < 2; p++) {
+            for (uint8_t i = 0; i < 5; i++) {
+                tg_contact_t *c = &pads[p][i];
+                c->rest = (c->live || c->graced) && !c->moved && (int32_t)(newest - c->landed) > TG_REST_MS;
+            }
+        }
+    }
     for (uint8_t p = 0; p < 2; p++) {
         if (only >= 0 && p != only) continue;
         for (uint8_t i = 0; i < 5; i++) {
             const tg_contact_t *c = &pads[p][i];
             if (!c->live && !c->graced) continue;
+            if (c->rest) continue;
             s->sig[s->n] = (uint16_t)(p << 8 | c->id);
             s->x[s->n] = c->x; s->y[s->n] = c->y;
             s->n++;
@@ -340,25 +369,41 @@ void tg_feed(uint8_t pad, const uint8_t *frame, uint32_t now) {
         // Split snapshot stale: that pad's contacts are unknown, so they are gone.
         memset(pads[pad], 0, sizeof(pads[pad]));
         abort_candidate();
+    } else if (!(flags & 0x03) && (flags & 0x0C) && pad_bad[pad] && now - pad_bad_since[pad] > TG_ABSENT_MS) {
+        // Only invalid reads or a sensor stuck in reset for a while: the pad is
+        // unplugged or dead. It counts as empty, and the other pad keeps working.
+        memset(pads[pad], 0, sizeof(pads[pad]));
     } else if (flags & 0x0F) {
         // Palm, too many fingers, invalid read or sensor reset: keep the last
         // contacts (so all-up still needs a real lift) and drop any candidate.
+        if ((flags & 0x0C) && !pad_bad[pad]) { pad_bad[pad] = true; pad_bad_since[pad] = now; }
         abort_candidate();
     } else {
+        pad_bad[pad] = false;
         uint8_t mask = frame[3];
         for (uint8_t i = 0; i < 5; i++) {
             tg_contact_t  *c = &pads[pad][i];
             const uint8_t *p = frame + 16 + 8 * i;
+            int16_t        x, y;
+            surface_xy(pad, p[1] | (uint16_t)p[2] << 8, p[3] | (uint16_t)p[4] << 8, &x, &y);
             if (mask & (1 << i)) {
                 if (!c->live && !c->graced) {
                     // A landing adopts one dropped contact on this pad, so a
-                    // finger that flickers out and back is not a lift and a landing.
+                    // finger that flickers out and back is not a lift and a
+                    // landing: it keeps that contact's landing and rest state.
+                    c->landed = now; c->lx = x; c->ly = y; c->moved = c->rest = false;
                     for (uint8_t j = 0; j < 5; j++) {
-                        if (j != i && pads[pad][j].graced) { pads[pad][j].graced = false; break; }
+                        tg_contact_t *d = &pads[pad][j];
+                        if (j != i && d->graced) {
+                            d->graced = false;
+                            c->landed = d->landed; c->lx = d->lx; c->ly = d->ly; c->moved = d->moved; c->rest = d->rest;
+                            break;
+                        }
                     }
                 }
                 c->id = p[0];
-                surface_xy(pad, p[1] | (uint16_t)p[2] << 8, p[3] | (uint16_t)p[4] << 8, &c->x, &c->y);
+                c->x = x; c->y = y;
+                if (!c->moved && abs(x - c->lx) + abs(y - c->ly) > TG_REST_MOVE) c->moved = true;
                 c->live = true; c->graced = false; c->seen = now;
             } else if (c->live) {
                 c->live = false; c->graced = true;

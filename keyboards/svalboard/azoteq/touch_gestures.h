@@ -28,6 +28,15 @@
 #ifndef TG_STALE_MS
 #    define TG_STALE_MS 100 // a pad with no frame for this long reads as empty
 #endif
+#ifndef TG_REST_MS
+#    define TG_REST_MS 250 // a still contact that landed this much before the newest one is resting
+#endif
+#ifndef TG_REST_MOVE
+#    define TG_REST_MOVE 200 // ...unless it moved more than this since landing (0.01 mm: 2 mm)
+#endif
+#ifndef TG_ABSENT_MS
+#    define TG_ABSENT_MS 200 // a pad with only invalid reads or resets this long is unplugged: empty
+#endif
 // Per-pad flips, matching unified.py's defaults (all off).
 #ifndef TG_FLIP_LEFT_X
 #    define TG_FLIP_LEFT_X 0

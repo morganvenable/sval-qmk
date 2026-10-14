@@ -153,7 +153,9 @@ static uint8_t chip_mode(void) {
     if (!is_keyboard_master()) return 0;
     if (tg_claimed()) return 2;
     if (sval_mt_suppress_pair_mouse()) return (tg_config.owners & TG_OWN_SCROLL_CHIP) ? 1 : 2;
-    if (pair_recovering) return 2;
+    // A lease that just ran out but that sval_mt_task hasn't stopped yet is
+    // already the handoff: no chip report may slip through in between.
+    if (pair_recovering || pair_capture) return 2;
     return 0;
 }
 

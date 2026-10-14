@@ -8,6 +8,7 @@ from collections import Counter
 
 
 MERGE_MS=150  # cross-pad contacts join one Windows gesture only if they land this close together
+ABSENT_S=.2   # a pad with only invalid reads, resets or stale snapshots this long is unplugged
 
 
 class UnifiedPad:
@@ -19,6 +20,10 @@ class UnifiedPad:
     the swipe owned by the firmware, touches of swipe_fingers or more never
     reach Windows; and a contact landing on the other pad more than MERGE_MS
     after the touch began is held back, unless the always-merge option is set.
+
+    A pad that stops sending (split cable out) or sends only invalid reads,
+    resets or stale snapshots for ABSENT_S (pad unplugged) drops out: the
+    surface carries on with the other pad, after a cancel and a fresh all-up.
     """
     def __init__(self, backend=None, gap_mm=0, flips=((False,False),(False,False)), clock=None, merge_ms=MERGE_MS):
         import time
@@ -32,6 +37,7 @@ class UnifiedPad:
         self.merge_window=merge_ms/1000;self.always_merge=False;self.withhold_fingers=None;self.span=True
         self.session_pads=set();self.session_start=None;self.held=set()
         self.claims=0;self.withheld=0;self.owners='every gesture: Windows'
+        self.bad_since={};self.present=None
 
     def configure(self,config):
         """config: gesture_config.GestureConfig from the firmware, or None (old firmware: Windows owns all)."""
@@ -73,6 +79,10 @@ class UnifiedPad:
                 (1,'Palm detected'),(2,'Sensor contact limit'),
                 (4,'Sensor acquisition invalid'),(8,'Sensor reset / calibration'),
                 (16,'Stream discontinuity'),(32,'Split snapshot stale')) if frame.flags&bit)
+        if frame.flags&0x2c:self.bad_since.setdefault(frame.pad,now)
+        else:self.bad_since.pop(frame.pad,None)
+        # An unplugged pad's endless faults must not keep canceling the other pad.
+        if reason and self.absent(frame.pad,now):reason=None
         if reason:self.cancel(('Left: ' if frame.pad==0 else 'Right: ')+reason)
         elif frame.flags&0x40:
             # Firmware claimed this gesture: one owner, so Windows lets go now.
@@ -80,6 +90,14 @@ class UnifiedPad:
                 self.claims+=1;self.cancel('Firmware gesture',fault=False)
             self.reason='Firmware gesture · lift all fingers to rearm'
         self.samples[frame.pad]=(frame,now)
+
+    def absent(self,pad,now):
+        since=self.bad_since.get(pad)
+        return since is not None and now-since>ABSENT_S
+
+    def live_pads(self,now):
+        """The pads taking part now: a fresh heartbeat and not persistently faulted."""
+        return tuple(p for p in (0,1) if p in self.samples and 0<=now-self.samples[p][1]<=.06 and not self.absent(p,now))
 
     def merge(self,raw,now):
         """Hold back a contact that lands on the other pad too late to be part of this touch."""
@@ -99,9 +117,10 @@ class UnifiedPad:
     def contact_ids(frame):
         return {c[0] for i,c in enumerate(frame.contacts) if frame.mask&(1<<i)}
 
-    def raw_points(self):
+    def raw_points(self,pads=None):
         result={}
         for pad,(frame,_) in self.samples.items():
+            if pads is not None and pad not in pads:continue
             if frame.flags&0x3f:continue
             for key,(x,y) in frame.himetric().items():
                 if self.flips[pad][0]:x=4300-x
@@ -114,21 +133,24 @@ class UnifiedPad:
         if self.last_tick is not None and now-self.last_tick>.1:
             self.cancel('Host input worker stalled')
         self.last_tick=now
-        if len(self.samples)!=2:
-            self.reason='Waiting for both pads';return None
-        frames=[self.samples[p][0] for p in (0,1)]
-        times=[self.samples[p][1] for p in (0,1)]
-        if any(now-t>.06 or now<t for t in times):
-            if self.ready:self.cancel('Pad heartbeat missing')
-            return None
+        live=self.live_pads(now)
+        if live!=self.present:
+            # A pad dropped out or came back: start over from all-up on what's left.
+            if self.present is not None and self.ready:
+                self.cancel('Pad heartbeat missing' if len(live)<len(self.present) else 'Pad came back',fault=len(live)<len(self.present))
+            self.present=live
+        if not live:
+            self.reason='Waiting for the pads';return None
+        frames=[self.samples[p][0] for p in live]
+        times=[self.samples[p][1] for p in live]
         if any(f.flags&0x7f for f in frames):return None
-        if abs(times[0]-times[1])>.025:
+        if len(live)==2 and abs(times[0]-times[1])>.025:
             if self.ready and abs(times[0]-times[1])>.05:self.cancel('Pads out of sync')
             return None
         if not self.ready:
             if any(f.mask for f in frames):return None
-            self.ready=True;self.reason='Ready · one continuous pad'
-        raw=self.merge(self.raw_points(),now)
+            self.ready=True;self.reason='Ready · one continuous pad' if len(live)==2 else ('Ready · left pad only' if live==(0,) else 'Ready · right pad only')
+        raw=self.merge(self.raw_points(live),now)
         if self.withhold_fingers:
             counts=Counter(key[0] for key in raw)
             fingers=len(raw) if self.span else max(counts.values(),default=0)
