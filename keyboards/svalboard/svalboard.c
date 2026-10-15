@@ -590,30 +590,39 @@ __attribute__((weak)) void sval_pointing_modes(sval_pointing_modes_t *m) {
 }
 
 #if defined(POINTING_DEVICE_ENABLE) && defined(SPLIT_POINTING_ENABLE) && defined(POINTING_DEVICE_COMBINED)
-// Motion since the last POINTING_MOTION (0x2D) read, per physical hand ([0] left).
-static sval_motion_acc_t motion_acc[2];
-static uint32_t          motion_last_read;
-static bool              motion_read_once = false;
+// Motion since each reader's last POINTING_MOTION (0x2D) read, per physical hand.
+// Each reader (the id byte of its request) keeps its own counts, so two apps polling
+// the same board each see all of the motion rather than half of it.
+static sval_motion_reader_t motion_readers[SVAL_MOTION_READERS];
+
+// The hand's sensor CPI for the 0x2D extension: the setting sent to a trackball's
+// sensor, or 0 when the hand has no CPI-based sensor.
+static uint16_t motion_cpi(bool left, const sval_pointer_identity_t *id) {
+    if (id->detected != SVAL_SENSOR_PMW3360 && id->detected != SVAL_SENSOR_PMW3389) return 0;
+    return (uint16_t)(left ? get_left_dpi() : get_right_dpi());
+}
 
 // Both halves' reports after rotation and invert, before sniper, boost and scroll
-// conversion (keymap_support.c). Counted only while a host app is reading them.
+// conversion (keymap_support.c). Counted only for readers that read within
+// SVAL_HOST_ACTIVE_MS.
 report_mouse_t pointing_device_task_combined_kb(report_mouse_t left_report, report_mouse_t right_report) {
-    if (motion_read_once && timer_elapsed32(motion_last_read) < SVAL_HOST_ACTIVE_MS) {
-        sval_motion_accumulate(&motion_acc[0], left_report.x, left_report.y, left_report.h, left_report.v, left_report.buttons);
-        sval_motion_accumulate(&motion_acc[1], right_report.x, right_report.y, right_report.h, right_report.v, right_report.buttons);
+    uint32_t now = timer_read32();
+    if (sval_motion_any_live(motion_readers, SVAL_MOTION_READERS, now, SVAL_HOST_ACTIVE_MS)) {
+        sval_motion_readers_accumulate(motion_readers, SVAL_MOTION_READERS, now, SVAL_HOST_ACTIVE_MS, 0, left_report.x, left_report.y, left_report.h, left_report.v, left_report.buttons);
+        sval_motion_readers_accumulate(motion_readers, SVAL_MOTION_READERS, now, SVAL_HOST_ACTIVE_MS, 1, right_report.x, right_report.y, right_report.h, right_report.v, right_report.buttons);
     }
     return pointing_device_task_combined_user(left_report, right_report);
 }
 
-void sval_pointing_motion_kb(uint8_t *out, uint8_t length) {
+void sval_pointing_motion_kb(uint8_t reader, uint8_t *out, uint8_t length) {
     if (length < SVAL_MOTION_REPORT_LEN) return;
     sval_pointing_modes_t modes;
     sval_pointing_modes(&modes);
-    out[0]           = SVAL_MOTION_FORMAT;
-    out[1]           = modes.global_bits & 0x3F;
-    out[2]           = sval_motion_elapsed(!motion_read_once, timer_elapsed32(motion_last_read));
-    motion_last_read = timer_read32();
-    motion_read_once = true;
+    sval_motion_reader_t *r = sval_motion_reader_begin_read(motion_readers, SVAL_MOTION_READERS, reader, timer_read32(), &out[2]);
+    out[0]                  = SVAL_MOTION_FORMAT;
+    out[1]                  = modes.global_bits & 0x3F;
+    bool ext                = length >= SVAL_MOTION_EXT_LEN;
+    if (ext) out[SVAL_MOTION_READER_OFF] = reader;
     for (uint8_t hand = 0; hand < 2; hand++) {
         bool                    left = hand == 0;
         sval_pointer_identity_t id;
@@ -622,10 +631,11 @@ void sval_pointing_motion_kb(uint8_t *out, uint8_t length) {
         uint8_t flags = SVAL_MOTION_VALID;
         if (left ? modes.left_scroll : modes.right_scroll) flags |= SVAL_MOTION_SCROLLING;
         if (left ? modes.left_automouse : modes.right_automouse) flags |= SVAL_MOTION_AUTOMOUSE;
-        sval_motion_pack_hand(&out[left ? SVAL_MOTION_LEFT_OFF : SVAL_MOTION_RIGHT_OFF], &motion_acc[hand], flags);
+        sval_motion_pack_hand(&out[left ? SVAL_MOTION_LEFT_OFF : SVAL_MOTION_RIGHT_OFF], &r->acc[hand], flags);
+        if (ext) sval_motion_put16(&out[left ? SVAL_MOTION_LEFT_CPI_OFF : SVAL_MOTION_RIGHT_CPI_OFF], motion_cpi(left, &id));
     }
     out[SVAL_MOTION_AXIS_OFF] = modes.axis_state;
-    memset(motion_acc, 0, sizeof(motion_acc));
+    memset(r->acc, 0, sizeof(r->acc));
 }
 #endif
 
