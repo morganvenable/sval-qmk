@@ -11,7 +11,7 @@
 #define KC_LALT 226
 #define QK_MOUSE_BUTTON_1 0xD1
 #define QK_MOUSE_BUTTON_8 0xD8
-#define MOD_BIT(kc) (1u << ((kc) & 7))
+#define MOD_BIT(kc) (1u << ((kc)&7))
 
 #define KC_EQUAL 0x2e
 #define KC_MINUS 0x2d

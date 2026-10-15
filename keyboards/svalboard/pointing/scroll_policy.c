@@ -21,10 +21,10 @@ bool sval_scroll_policy_update(sval_scroll_policy_t *s, int32_t h, int32_t v, ui
             s->v += v;
             if (abs(s->v) * 3 >= abs(s->h) * 2) {
                 s->mode = SV_AXIS_LOCKED_V;
-                s->h = 0;
+                s->h    = 0;
             } else if (abs(s->h) >= 6250) {
                 s->mode = SV_AXIS_LOCKED_H;
-                s->v = 0;
+                s->v    = 0;
             }
             break;
         case SV_AXIS_LOCKED_V:
@@ -32,7 +32,7 @@ bool sval_scroll_policy_update(sval_scroll_policy_t *s, int32_t h, int32_t v, ui
             s->h += h;
             if (abs(s->h) >= 18750) {
                 s->mode = SV_AXIS_LOCKED_H;
-                s->v = 0;
+                s->v    = 0;
                 return true;
             }
             break;
@@ -41,7 +41,7 @@ bool sval_scroll_policy_update(sval_scroll_policy_t *s, int32_t h, int32_t v, ui
             s->v += v;
             if (abs(s->v) >= 18750) {
                 s->mode = SV_AXIS_LOCKED_V;
-                s->h = 0;
+                s->h    = 0;
                 return true;
             }
             break;
