@@ -15,6 +15,9 @@ static uint16_t last_consumer;
 static int configured=USB_DEVICE_STATE_CONFIGURED;
 static bool connected;
 uint32_t timer_read32(void) { return clock_ms; }
+uint32_t timer_elapsed32(uint32_t t) { return clock_ms-t; }
+static uint8_t hand_sensor[2];
+uint8_t sval_pointer_sensor_for_hand(bool left) { return hand_sensor[left?0:1]; }
 uint16_t timer_read(void) { return clock_ms; }
 uint16_t timer_elapsed(uint16_t t) { return (uint16_t)(clock_ms-t); }
 bool is_keyboard_master(void) { return true; }
@@ -129,6 +132,16 @@ int main(void) {
     key(3,SV_POINT_R_TASKS_HOLD,false);for(int i=0;i<8;++i){++clock_ms;sval_point_task();}
     r=input(0,0,0,0,10);assert(!r.h&&!r.v); // no prior velocity resumes after task selection
     key(2,SV_POINT_L_VOLUME_HOLD,false);
+    // Tools normalize a trackball by its CPI, but take a TrackPoint's counts as they come.
+    sval_point_stop();for(int i=0;i<8;++i){++clock_ms;sval_point_task();}
+    global_saved_values.axis_scroll_lock=true;scroll_policy=(sval_scroll_policy_t){0};
+    sensor_cpi=1600;hand_sensor[0]=SVAL_SENSOR_PMW3389;clock_ms+=600;
+    key(5,SV_POINT_L_ARROWS_HOLD,true);input(70,0,0,0,1);input(0,0,0,0,11);assert(!pending_count(0));
+    key(5,SV_POINT_L_ARROWS_HOLD,false);
+    hand_sensor[0]=SVAL_SENSOR_TRACKPOINT;input(0,0,0,0,600); // the module is looked up every 500 ms
+    key(5,SV_POINT_L_ARROWS_HOLD,true);input(70,0,0,0,1);input(0,0,0,0,11);assert(pending_count(0));
+    key(5,SV_POINT_L_ARROWS_HOLD,false);sval_point_stop();sensor_cpi=800;hand_sensor[0]=SVAL_SENSOR_NONE;
+    puts("combined adapter: TrackPoint counts unscaled, trackball counts normalized by CPI passed");
     puts("combined adapter: proportional hold/toggle, center, independent pointers, natural direction, shared lock sustain/breakaway and stop passed");
     puts("combined adapter: idle flush, no cursor/wheel leakage, natural scroll, shared lock/breakaway, idle timeout, host bypass passed");
 }
