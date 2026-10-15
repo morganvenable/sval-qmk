@@ -23,6 +23,21 @@ static uint32_t hold_ms;
 static uint32_t done_ms;
 static uint8_t  swallow; // KEY_A | KEY_B: removed from the matrix QMK sees
 
+#ifdef SVAL_UPDATE_NO_CHORD
+#    ifdef SVAL_UPDATE_RELEASE
+#        error "release updater builds cannot have SVAL_UPDATE_NO_CHORD"
+#    endif
+// Fork-only dev builds (D37): every ARM counts as confirmed at once.
+__attribute__((used)) const uint8_t update_no_chord = 1;
+
+void update_gesture_arm(void) {
+    watching = false;
+    holding  = false;
+    done     = true;
+    done_ms  = updater_port_now_ms();
+    swallow  = 0;
+}
+#else
 void update_gesture_arm(void) {
     watching = true;
     seen_up  = false;
@@ -30,6 +45,7 @@ void update_gesture_arm(void) {
     done     = false;
     swallow  = KEY_A | KEY_B;
 }
+#endif
 
 void update_gesture_disarm(void) {
     watching = false;
