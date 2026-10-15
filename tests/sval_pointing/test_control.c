@@ -1,3 +1,4 @@
+#include "sval.h"
 #include <assert.h>
 #include <stdio.h>
 #include "point_control.c"
@@ -52,8 +53,8 @@ int main(void) {
     assert(!sval_point_active(0)); event(6, 4, false);
     // Different axis distances flow through the actual controller, not just storage.
     configured = USB_DEVICE_STATE_CONFIGURED;
-    uint8_t packet[32]={0xDF,0x2C};sval_point_command(packet,26);
-    uint8_t lo=packet[4],hi=packet[5];memmove(packet+5,packet+6,19);packet[1]=0x2D;packet[2]=5;packet[3]=lo;packet[4]=hi;
+    uint8_t packet[32]={0xDF,sval_cmd_point_tools_get};sval_point_command(packet,26);
+    uint8_t lo=packet[4],hi=packet[5];memmove(packet+5,packet+6,19);packet[1]=sval_cmd_point_tools_set;packet[2]=5;packet[3]=lo;packet[4]=hi;
     packet[5]=(packet[5]&63)|((45&3)<<6);packet[6]=(packet[6]&0xC0)|(45>>2)|(1<<5);
     sval_point_command(packet,26);assert(packet[2]==0);
     event(7,SV_POINT_L_ARROWS_HOLD,true);before=recognized;

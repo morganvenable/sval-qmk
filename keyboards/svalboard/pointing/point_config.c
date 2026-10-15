@@ -118,12 +118,12 @@ bool sval_point_inverted(uint8_t control,uint8_t axis) {
     return (inversions[control>=1&&control<=4?control-1:0] & (1u<<axis)) != 0;
 }
 bool sval_point_command(uint8_t *data, uint8_t length) {
-    if (length < 2 || data[1] < 0x2C || data[1] > 0x2F) return false;
+    if (length < 2 || data[1] < sval_cmd_point_tools_get || data[1] > sval_cmd_point_tools_stop) return false;
     if (!loaded) sval_point_config_reload();
-    if (data[1] == 0x2E) { sval_point_status(data); return true; }
-    if (data[1] == 0x2F) { sval_point_stop(); data[2]=0; data[3]=1; return true; }
+    if (data[1] == sval_cmd_point_tools_status) { sval_point_status(data); return true; }
+    if (data[1] == sval_cmd_point_tools_stop) { sval_point_stop(); data[2]=0; data[3]=1; return true; }
     uint8_t status = 0;
-    if (data[1] == 0x2D) {
+    if (data[1] == sval_cmd_point_tools_set) {
         uint8_t candidate[19]={0};
         if(length>=24)memcpy(candidate,data+5,19);
         if (length < 24 || data[2] != SVAL_POINT_CONFIG_VERSION || !decode(candidate,false) || !decode_options(candidate+16,false)) status = 3;
