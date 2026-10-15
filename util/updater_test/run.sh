@@ -16,6 +16,11 @@ python3 -I "$tests/test_make_update.py" "$out/cross" "$@"
 python3 -I "$tests/test_release_version.py" "$out/release_version"
 python3 -I "$tests/test_release_artifacts.py" "$out/release_artifacts"
 
+# Debounce: optical keys straight through, only the thumb Double Down
+# debounced (kb/debounce_sval.c), and the chatter log (kb/chatter.c).
+${CC:-cc} -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all     -DSVAL_DEBOUNCE_HOST_TEST -DSVAL_DD_DEBOUNCE_MS=5 -I"$root/tests/sval_debounce" -I"$kb"     "$root/tests/sval_debounce/test_debounce.c" "$kb/debounce_sval.c" "$kb/chatter.c" -o "$out/test_debounce"
+"$out/test_debounce"
+
 # Settings reset on the first boot of a different firmware build (kb/build_reset.c).
 ${CC:-cc} -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
     -DBUILD_RESET_HOST_TEST -I"$kb" "$tests/test_build_reset.c" "$kb/build_reset.c" -o "$out/test_build_reset"

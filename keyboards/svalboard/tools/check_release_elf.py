@@ -15,7 +15,8 @@ exits 1 on any failure:
     is the tools'; it is a release build (D34): a known side, the auto
     pointing build (every driver) and a release keymap (sval or blank, D40);
   - no test hooks (update_commit_test_halt, op_test_halt, halt_point,
-    halt_fed), no SVAL_KEYTEST (keytest_task, keytest_command) and no
+    halt_fed), no SVAL_KEYTEST (keytest_task, keytest_command), no
+    SVAL_CHATTER_LOG (sval_chatter_frame) and no
     SVAL_HOST_BOOTLOADER (scanlab.c's reboot_pending, reboot_due_ms).
 
 The symbol checks look at the ELF's own symbol table, independently of the
@@ -40,6 +41,7 @@ FORBIDDEN = {
     "halt_fed": "test hooks (SVAL_UPDATE_TEST_HOOKS)",
     "keytest_task": "SVAL_KEYTEST",
     "keytest_command": "SVAL_KEYTEST",
+    "sval_chatter_frame": "SVAL_CHATTER_LOG",
     "reboot_pending": "SVAL_HOST_BOOTLOADER",
     "reboot_due_ms": "SVAL_HOST_BOOTLOADER",
 }

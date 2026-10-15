@@ -63,12 +63,15 @@ enum scanlab_op {
     SCANLAB_OP_ABORT     = 0x03,
     SCANLAB_OP_REBOOT_ARM = 0x04, // set: returns a one-time token (needs SVAL_HOST_BOOTLOADER)
     SCANLAB_OP_REBOOT_GO  = 0x05, // set: args token u16; acks, then reboots into the bootloader
+    SCANLAB_OP_CHATTER_CLEAR = 0x06, // set: zero the chatter counters (SVAL_CHATTER_LOG builds)
     SCANLAB_OP_STATUS    = 0x10, // get
     SCANLAB_OP_POWER     = 0x11, // get: pacing settings and measured frame/LED-on times
     SCANLAB_OP_IDLE      = 0x12, // get: idle power diagnostics (sensor mode, RGB level, quiet times)
     SCANLAB_OP_SWEEP_ROW = 0x20, // get | hand<<3 | row
     SCANLAB_OP_PROBE_ON  = 0x40, // get | hand<<3 | row
     SCANLAB_OP_PROBE_OFF = 0x60, // get | hand<<3 | row
+    SCANLAB_OP_CHATTER_ROW = 0x80, // get | hand<<3 | row: transitions, fast transitions (chatter.h)
+    SCANLAB_OP_CHATTER_GAP = 0xA0, // get | hand<<3 | row: shortest gap per key, us
 };
 
 enum scanlab_state {

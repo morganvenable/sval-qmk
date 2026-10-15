@@ -19,6 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "split_util.h"
 #include "split_common/transactions.h"
 #include <string.h>
+#ifdef SVAL_CHATTER_LOG
+#    include "chatter.h"
+#endif
 #if VIA_ENABLE
 #    include "via.h"
 #endif
@@ -257,6 +260,12 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
             rsp[0] = probe.valid;
             rsp[1] = probe.row;
             return;
+        case SCANLAB_OP_CHATTER_CLEAR:
+#ifdef SVAL_CHATTER_LOG
+            sval_chatter_clear(now_us());
+            rsp[0] = 1;
+#endif
+            return;
         case SCANLAB_OP_ABORT:
             sweep.state = SCANLAB_IDLE;
             rsp[0] = sweep.state;
@@ -369,6 +378,25 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
         rsp[15] = sweep.ref_valid;
         return;
     }
+#ifdef SVAL_CHATTER_LOG
+    // [0..11] u16 per column, [12..17] u8 per column (saturating), [18] = 1: the log is in this build,
+    // [19..22] u32 ms since the counters were cleared.
+    if (kind == SCANLAB_OP_CHATTER_ROW || kind == SCANLAB_OP_CHATTER_GAP) {
+        const sval_chatter_t *cs = sval_chatter_stats();
+        for (uint8_t c = 0; c < SCANLAB_COLS; c++) {
+            if (kind == SCANLAB_OP_CHATTER_ROW) {
+                put16(&rsp[2 * c], cs->transitions[row][c]);
+                rsp[12 + c] = cs->fast[row][c] > 0xFF ? 0xFF : (uint8_t)cs->fast[row][c];
+            } else {
+                put16(&rsp[2 * c], cs->min_gap_us[row][c]);
+                rsp[12 + c] = (cs->seen[row] >> c) & 1;
+            }
+        }
+        rsp[18] = 1;
+        put32(&rsp[19], (now_us() - cs->cleared_us) / 1000u);
+        return;
+    }
+#endif
     if (kind == SCANLAB_OP_PROBE_ON) {
         if (!probe.valid || probe.row != row) return;  // all zero: no data for this row
         for (uint8_t c = 0; c < SCANLAB_COLS; c++) put16(&rsp[2 * c], probe.on_settle[c]);

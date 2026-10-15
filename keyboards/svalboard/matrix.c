@@ -24,6 +24,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "print.h"
 #include "svalboard.h"
 #include "scanlab.h"
+#ifdef SVAL_CHATTER_LOG
+#    include "chatter.h"
+_Static_assert(sizeof(matrix_row_t) == 1, "chatter log takes one byte per row");
+#endif
 #ifdef SVAL_UPDATER
 #    include "updater/updater.h"
 #    include "updater/update_gesture.h"
@@ -351,6 +355,9 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     } else {
         bool changed = memcmp(raw_matrix, curr_matrix, sizeof(curr_matrix)) != 0;
         if (changed) {
+#ifdef SVAL_CHATTER_LOG
+            sval_chatter_frame(raw_matrix, curr_matrix, now);
+#endif
             memcpy(raw_matrix, curr_matrix, sizeof(curr_matrix));
             last_change_ms = timer_read32();
         }

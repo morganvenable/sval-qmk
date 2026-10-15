@@ -43,6 +43,32 @@ VIA_INSECURE = yes
 
 # Note: Sval module is enabled via keymap.json with "modules": ["svalboard/core"]
 
+# Debounce. The keys are optical interrupters with nothing to bounce, so they
+# pass straight through; only the thumb Double Down tact switch (thumb row,
+# COL6, both halves) is debounced, SVAL_DD_DEBOUNCE_MS (config.h). See
+# debounce_sval.c. SVAL_DEBOUNCE=legacy restores QMK's default: 5 ms global
+# sym_defer_g on every key.
+SVAL_DEBOUNCE ?= optical
+ifeq ($(strip $(SVAL_DEBOUNCE)), optical)
+  # 'override': QMK's rules.mk scan for info.json ignores conditionals, and a
+  # plain assignment here would become DEBOUNCE_TYPE ?= custom for legacy too.
+  override DEBOUNCE_TYPE = custom
+  SRC += debounce_sval.c
+else ifneq ($(strip $(SVAL_DEBOUNCE)), legacy)
+  $(error SVAL_DEBOUNCE must be optical or legacy)
+endif
+
+# Raw matrix chatter log (chatter.h, tools/chatter.py); dev builds only, opt in
+# with -e SVAL_CHATTER_LOG=yes.
+SVAL_CHATTER_LOG ?= no
+ifeq ($(strip $(SVAL_CHATTER_LOG)), yes)
+  ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
+    $(error SVAL_CHATTER_LOG cannot be part of a release build)
+  endif
+  SRC += chatter.c
+  OPT_DEFS += -DSVAL_CHATTER_LOG
+endif
+
 # On-device action-path tests; opt in with -e SVAL_KEYTEST=yes.
 ifeq ($(strip $(SVAL_KEYTEST)), yes)
   SRC += keytest.c

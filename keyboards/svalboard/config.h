@@ -150,6 +150,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     #define MATRIX_COL_PUSHED_STATES_THUMBS { 0, 0, 0, 0, 0, 0 }
 #endif
 #define DOUBLEDOWN_COL 5 // need a pullup on COL6
+// The thumb Double Down is a tact switch, the only key that is not optical: the
+// only one debounced (debounce_sval.c). A change counts once it has held this long.
+#ifndef SVAL_DD_DEBOUNCE_MS
+    #define SVAL_DD_DEBOUNCE_MS 5
+#endif
 
 // Hardware revision strap. The pin is read with the internal pull-up enabled:
 // open = revision A, bridged to ground = revision B ("flipfet"). Override the
