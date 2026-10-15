@@ -16,7 +16,9 @@ void sval_point_output_reset(void);
 void sval_point_output_observe_keyboard(const report_keyboard_t *report);
 void sval_point_output_observe_nkro(const report_nkro_t *report);
 void sval_point_output_observe_extra(const report_extra_t *report);
-// Implemented next to the existing ChibiOS send functions; false means retry.
+// Implemented in point_transport.c on the ChibiOS endpoints; false means retry.
 bool sval_point_transport_keyboard(report_keyboard_t *report);
 bool sval_point_transport_nkro(report_nkro_t *report);
 bool sval_point_transport_extra(report_extra_t *report);
+// Wraps the host driver so QMK's keyboard, NKRO and extra reports reach the broker.
+void sval_point_transport_install(void);

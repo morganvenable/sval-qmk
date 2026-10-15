@@ -434,24 +434,6 @@ static bool receive_report(usb_endpoint_out_lut_t endpoint, void *report, size_t
     return usb_endpoint_out_receive(&usb_endpoints_out[endpoint], (uint8_t *)report, size, TIME_IMMEDIATE);
 }
 
-#ifdef SVAL_POINT_CONTROLS
-#    include "pointing/point_output.h"
-
-bool sval_point_transport_keyboard(report_keyboard_t *report) {
-    if (usb_device_state_get_protocol() == USB_PROTOCOL_BOOT) {
-        return send_report(USB_ENDPOINT_IN_KEYBOARD, &report->mods, 8);
-    }
-    return send_report(USB_ENDPOINT_IN_KEYBOARD, report, KEYBOARD_REPORT_SIZE);
-}
-bool sval_point_transport_nkro(report_nkro_t *report) {
-    return send_report(USB_ENDPOINT_IN_SHARED, report, sizeof(*report));
-}
-bool sval_point_transport_extra(report_extra_t *report) {
-    return send_report(USB_ENDPOINT_IN_SHARED, report, sizeof(*report));
-}
-void send_keyboard(report_keyboard_t *report) { sval_point_output_observe_keyboard(report); }
-void send_nkro(report_nkro_t *report) { sval_point_output_observe_nkro(report); }
-#else
 void send_keyboard(report_keyboard_t *report) {
     /* If we're in Boot Protocol, don't send any report ID or other funky fields */
     if (usb_device_state_get_protocol() == USB_PROTOCOL_BOOT) {
@@ -466,8 +448,6 @@ void send_nkro(report_nkro_t *report) {
     send_report(USB_ENDPOINT_IN_SHARED, report, sizeof(report_nkro_t));
 #endif
 }
-
-#endif
 
 /* ---------------------------------------------------------
  *                     Mouse functions
@@ -486,9 +466,7 @@ void send_mouse(report_mouse_t *report) {
  */
 
 void send_extra(report_extra_t *report) {
-#ifdef SVAL_POINT_CONTROLS
-    sval_point_output_observe_extra(report);
-#elif defined(EXTRAKEY_ENABLE)
+#ifdef EXTRAKEY_ENABLE
     send_report(USB_ENDPOINT_IN_SHARED, report, sizeof(report_extra_t));
 #endif
 }
