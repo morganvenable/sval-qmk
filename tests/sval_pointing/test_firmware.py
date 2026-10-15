@@ -57,6 +57,12 @@ class FirmwareTests(unittest.TestCase):
     def test_config(self):
         self.compile_run('test_config', ['point_config.c', str(HERE/'storage_stub.c')])
 
+    def test_keybard_vectors(self):
+        # Payloads encoded by Keybard's encodePointControls(); the firmware must read them as meant.
+        exe = Path(self.temp.name) / 'test_keybard_vectors'
+        subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsanitize=undefined', '-g', '-I'+str(HERE/'stubs'), '-I'+str(SOURCE), str(HERE/'test_keybard_vectors.c'), str(SOURCE/'point_config.c'), str(HERE/'storage_stub.c'), '-o', str(exe)], check=True)
+        subprocess.run([str(exe), str(HERE/'keybard_vectors.txt')], check=True)
+
     def test_combined_adapter(self):
         original = (ROOT/'keyboards/svalboard/keymaps/keymap_support.c').read_text()
         original = original[original.index('#define SCROLL_FREQUENCY_MS'):original.index('void toggle_axis_scroll_lock')]

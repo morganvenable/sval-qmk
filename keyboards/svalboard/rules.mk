@@ -158,7 +158,7 @@ ifeq ($(strip $(SVAL_DEV_KEEP_SETTINGS)), yes)
   OPT_DEFS += -DSVAL_DEV_KEEP_SETTINGS
 endif
 
-# Experimental motion controls, fixed RAM presets; no settings migration.
+# Pointing tools (experimental): keyboards/svalboard/docs/pointing-tools.md.
 ifeq ($(strip $(SVAL_POINT_CONTROLS)), yes)
   OPT_DEFS += -DSVAL_POINT_CONTROLS
   SRC += pointing/point_motion.c pointing/point_proportional.c pointing/point_control.c pointing/point_output.c pointing/point_config.c
