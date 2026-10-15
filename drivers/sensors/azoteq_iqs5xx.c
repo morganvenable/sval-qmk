@@ -147,33 +147,55 @@ extern uint32_t sval_mt_now_us(void);
 extern void sval_perf_i2c(uint32_t us, bool ok);
 #    endif
 
+#    define AZOTEQ_IQS5XX_SLOTS 5
+#    define AZOTEQ_IQS5XX_SLOT_BYTES 7
+#    define AZOTEQ_IQS5XX_RAW_BYTES (AZOTEQ_IQS5XX_BASE_BYTES + AZOTEQ_IQS5XX_SLOTS * AZOTEQ_IQS5XX_SLOT_BYTES)
+
 // The last read, for the read schedule in the keyboard's wrapper
-// (keyboards/svalboard/azoteq/azoteq.c): its status and when the contact
-// read itself (not the end of session, nor the processing after it) started
-// and ended. A retried read is not timed to the chip's window.
+// (keyboards/svalboard/azoteq/azoteq.c): its status, when the first read
+// itself (not a follow-up, the end of session, nor the processing after it)
+// started and ended, and how many contact slots it carried, since its length
+// depends on them. A retried read is not timed to the chip's window.
 static i2c_status_t azoteq_iqs5xx_base_status = I2C_STATUS_SUCCESS;
 static uint32_t     azoteq_iqs5xx_read_start_us, azoteq_iqs5xx_read_end_us;
 static bool         azoteq_iqs5xx_read_retried;
-i2c_status_t        azoteq_iqs5xx_last_read(uint32_t *start_us, uint32_t *end_us, bool *retried) {
+static uint8_t      azoteq_iqs5xx_read_slots;
+// Contact slots read with the base bytes: up to the highest slot that held a
+// contact in the last good read. A contact keeps its slot until it lifts, so
+// a lift can leave a contact in a higher slot than the count.
+static uint8_t azoteq_iqs5xx_slots_next;
+
+i2c_status_t azoteq_iqs5xx_last_read(uint32_t *start_us, uint32_t *end_us, bool *retried, uint8_t *slots) {
     *start_us = azoteq_iqs5xx_read_start_us;
     *end_us   = azoteq_iqs5xx_read_end_us;
     *retried  = azoteq_iqs5xx_read_retried;
+    *slots    = azoteq_iqs5xx_read_slots;
     return azoteq_iqs5xx_base_status;
+}
+
+static bool azoteq_iqs5xx_slot_down(const uint8_t *raw, uint8_t slot) {
+    const uint8_t *p = raw + AZOTEQ_IQS5XX_BASE_BYTES + AZOTEQ_IQS5XX_SLOT_BYTES * slot;
+    return p[4] || p[5]; // touch strength, as multitouch.c reads it
 }
 #endif
 
 i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
 #ifdef SVAL_AZOTEQ_MULTITOUCH
     // One communication window for both the mouse data and every contact:
-    // the 10 base bytes first, then, only when a finger is down, the five
-    // 7-byte contact slots after them. The window stays open until the end
-    // of session, so the second read sees the same cycle; with no finger the
-    // read is a quarter of the bytes.
-    uint8_t  raw[45] = {0};
-    uint32_t started = timer_read32();
+    // one read of the 10 base bytes and the 7-byte contact slots the last
+    // read needed, so the read grows with the contacts down, not with the
+    // five slots. Only when the count (raw[5]) says more contacts are down
+    // than that read found does a second read fetch the remaining slots. The
+    // window stays open until the end of session, so it sees the same cycle.
+    uint8_t        raw[AZOTEQ_IQS5XX_RAW_BYTES] = {0};
+    const uint8_t  first                        = azoteq_iqs5xx_slots_next;
+    const uint16_t first_len                    = AZOTEQ_IQS5XX_BASE_BYTES + AZOTEQ_IQS5XX_SLOT_BYTES * first;
+    uint32_t       started                      = timer_read32();
+
     azoteq_iqs5xx_read_retried  = false;
+    azoteq_iqs5xx_read_slots    = first;
     azoteq_iqs5xx_read_start_us = sval_mt_now_us();
-    i2c_status_t status         = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, raw, AZOTEQ_IQS5XX_BASE_BYTES, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+    i2c_status_t status         = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, raw, first_len, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
     azoteq_iqs5xx_read_end_us   = sval_mt_now_us();
     // IQS5xx datasheet 8.8.2: a low-power wake may NACK the first address.
     // Retry exactly once after >=150 us, only for a NACK: the RP2040 driver
@@ -187,14 +209,32 @@ i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
             memset(raw, 0, sizeof(raw));
             azoteq_iqs5xx_read_retried  = true;
             azoteq_iqs5xx_read_start_us = sval_mt_now_us();
-            status                      = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, raw, AZOTEQ_IQS5XX_BASE_BYTES, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+            status                      = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, raw, first_len, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
             azoteq_iqs5xx_read_end_us   = sval_mt_now_us();
         }
         sval_mt_acquisition_fault(flags, retry, status == I2C_STATUS_SUCCESS);
     }
-    // raw[5] is the number of fingers.
-    if (status == I2C_STATUS_SUCCESS && raw[5]) {
-        status = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME + AZOTEQ_IQS5XX_BASE_BYTES, raw + AZOTEQ_IQS5XX_BASE_BYTES, sizeof(raw) - AZOTEQ_IQS5XX_BASE_BYTES, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+    if (status == I2C_STATUS_SUCCESS) {
+        // raw[5] is the number of contacts down.
+        uint8_t found = 0, highest = 0;
+        for (uint8_t i = 0; i < first; i++) {
+            if (azoteq_iqs5xx_slot_down(raw, i)) {
+                found++;
+                highest = i + 1;
+            }
+        }
+        if (raw[5] > found && first < AZOTEQ_IQS5XX_SLOTS) {
+            const uint16_t offset = AZOTEQ_IQS5XX_BASE_BYTES + AZOTEQ_IQS5XX_SLOT_BYTES * first;
+            status                = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME + offset, raw + offset, sizeof(raw) - offset, AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
+            for (uint8_t i = first; i < AZOTEQ_IQS5XX_SLOTS; i++)
+                if (azoteq_iqs5xx_slot_down(raw, i)) highest = i + 1;
+        }
+        if (!raw[5]) {
+            // All up: no slot carries a contact, whatever the chip left there.
+            memset(raw + AZOTEQ_IQS5XX_BASE_BYTES, 0, sizeof(raw) - AZOTEQ_IQS5XX_BASE_BYTES);
+            highest = 0;
+        }
+        if (status == I2C_STATUS_SUCCESS) azoteq_iqs5xx_slots_next = highest;
     }
 #    ifdef SVAL_PERF_STATS
     sval_perf_i2c(sval_mt_now_us() - azoteq_iqs5xx_read_start_us, status == I2C_STATUS_SUCCESS);

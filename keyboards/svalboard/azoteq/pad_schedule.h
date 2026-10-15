@@ -16,8 +16,10 @@
 // little early to absorb loop jitter and the pointing task's 1 ms tick.
 //
 // Only the contact read itself is timed (azoteq_iqs5xx_last_read): not the
-// end of session, nor the processing of the sample, nor a retry. The bare
-// transfer time is the shortest successful read seen.
+// end of session, nor the processing of the sample, nor a retry. Its length
+// depends on the contact slots it carries (0 to 5), so the bare transfer time
+// is kept per length: the shortest successful read seen of that length. The
+// first read of a length learns it and leaves the lead alone.
 //
 // A failed read carries no phase, so the next one waits a whole period after
 // it ends, and consecutive failures back off further, up to about a second: a
@@ -45,6 +47,8 @@
 #ifndef SVAL_PAD_LATE_STEP_US
 #    define SVAL_PAD_LATE_STEP_US 25
 #endif
+// Read lengths, by contact slots carried with the base bytes.
+#define SVAL_PAD_SIZES 6
 #ifndef SVAL_PAD_BACKOFF_MAX_SHIFT
 #    define SVAL_PAD_BACKOFF_MAX_SHIFT 7 // failures: up to 128 periods apart (1 s at 8 ms)
 #endif
@@ -52,7 +56,7 @@
 typedef struct {
     uint32_t end;   // the last read ended here (us)
     uint32_t delay; // the next read is due this long after end (us)
-    uint32_t xfer;  // bare transfer time: the shortest successful read (us)
+    uint32_t xfer[SVAL_PAD_SIZES]; // bare transfer time per length: the shortest successful read (us)
     int32_t  lead;  // the next read starts this long before end + period (us)
     uint32_t wait;  // last read's estimated stretch (us), for the counters
     uint8_t  fails; // consecutive failed reads
@@ -62,7 +66,8 @@ typedef struct {
 static inline void pad_sched_init(pad_sched_t *s) {
     s->end     = 0;
     s->delay   = 0;
-    s->xfer    = UINT32_MAX;
+    for (uint8_t i = 0; i < SVAL_PAD_SIZES; i++)
+        s->xfer[i] = UINT32_MAX;
     s->lead    = SVAL_PAD_WAIT_TARGET_US;
     s->wait    = 0;
     s->fails   = 0;
@@ -76,8 +81,9 @@ static inline bool pad_sched_due(const pad_sched_t *s, uint32_t now_us) {
 
 // After a read: start_us and end_us bracket the contact read itself; phased
 // is false for a read whose timing says nothing about the chip's window (a
-// retry after a NACK).
-static inline void pad_sched_done(pad_sched_t *s, uint32_t start_us, uint32_t end_us, bool ok, bool phased, uint32_t period_us) {
+// retry after a NACK); size is the contact slots the read carried.
+static inline void pad_sched_done(pad_sched_t *s, uint32_t start_us, uint32_t end_us, bool ok, bool phased, uint8_t size, uint32_t period_us) {
+    if (size >= SVAL_PAD_SIZES) size = SVAL_PAD_SIZES - 1;
     // Only a read this schedule timed says anything about the lead: the first
     // read, and the first after a failure, land at an arbitrary phase.
     phased = phased && s->started && s->fails == 0;
@@ -91,10 +97,11 @@ static inline void pad_sched_done(pad_sched_t *s, uint32_t start_us, uint32_t en
         return;
     }
     s->fails      = 0;
-    uint32_t took = end_us - start_us;
-    if (took < s->xfer) s->xfer = took;
-    s->wait = took - s->xfer;
-    if (phased) {
+    uint32_t took  = end_us - start_us;
+    bool     known = s->xfer[size] != UINT32_MAX;
+    if (took < s->xfer[size]) s->xfer[size] = took;
+    s->wait = took - s->xfer[size];
+    if (phased && known) {
         if (s->wait < SVAL_PAD_WAIT_TARGET_US)
             s->lead += SVAL_PAD_LATE_STEP_US; // late: aim earlier
         else
