@@ -41,18 +41,19 @@ static uint8_t  peer_seq, peer_epoch    = 1, peer_age;
 static bool     peer_finger, peer_valid = true;
 static uint16_t peer_x, peer_y;
 static uint8_t  peer_last_req[3];
-static void     encode_peer(uint8_t *out) {
-        memset(out, 0, 32);
-        out[0] = 0xA7;
-        out[1] = (peer_valid ? 1 : 0) | 2;
-        out[2] = peer_age;
-        out[4] = peer_finger ? 1 : 0;
-        out[5] = peer_seq;
-        out[6] = peer_epoch;
-        if (peer_finger) {
-            out[7]     = 1;
-            uint32_t w = peer_x | (uint32_t)peer_y << 11 | 20u << 22;
-            put32(out + 8, w);
+
+static void encode_peer(uint8_t *out) {
+    memset(out, 0, 32);
+    out[0] = 0xA7;
+    out[1] = (peer_valid ? 1 : 0) | 2;
+    out[2] = peer_age;
+    out[4] = peer_finger ? 1 : 0;
+    out[5] = peer_seq;
+    out[6] = peer_epoch;
+    if (peer_finger) {
+        out[7]     = 1;
+        uint32_t w = peer_x | (uint32_t)peer_y << 11 | 20u << 22;
+        put32(out + 8, w);
     }
 }
 static void peer(uint8_t in_len, const uint8_t *in, uint8_t out_len, uint8_t *out) {
@@ -73,9 +74,10 @@ static void old_peer(uint8_t in_len, const uint8_t *in, uint8_t out_len, uint8_t
 
 static uint8_t hint; // what the other half's pointing report carries
 static bool    hint_on = true;
-static void    news(void) {
-       hint = 0x80 | ((hint + 1) & 0x7F);
-       peer_seq++;
+
+static void news(void) {
+    hint = 0x80 | ((hint + 1) & 0x7F);
+    peer_seq++;
 }
 static void set_peer(bool finger, uint16_t x, uint16_t y) {
     peer_finger = finger;
