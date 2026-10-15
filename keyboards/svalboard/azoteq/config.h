@@ -28,6 +28,8 @@
 #    define SVAL_PTP_PAD_PERIOD_MS 8    // chip report period on both halves (125 Hz)
 #    define SVAL_PTP_REMOTE_POLL_MS 5   // poll of the other half's snapshot
 #    define SVAL_PTP_REMOTE_STALE_MS 50 // other half silent this long: lift its contacts
+#    define SVAL_PTP_REMOTE_BACKUP_MS 10 // other pad has contacts: poll at least this often
+#    define SVAL_PTP_REMOTE_IDLE_MS 250  // other pad quiet: heartbeat (news is fetched at once)
 #    define SVAL_PTP_MIN_FRAME_US 4000  // at most 250 frames a second
 #    define SVAL_PTP_KEEPALIVE_MS 50    // repeat while down (Linux releases after 100 ms)
 #    define SVAL_PTP_PALM_AREA 0        // 0 off; contact area above this is a palm

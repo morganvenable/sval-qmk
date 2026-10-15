@@ -13,4 +13,5 @@ void     sval_perf_loop(void);
 void     sval_perf_scan(uint32_t now_us);
 void     sval_perf_i2c(uint32_t us, bool ok);
 void     sval_perf_rpc(uint32_t us, bool ok, bool fresh);
+void     sval_perf_rpc_hint(void); // a fetch the other half's news asked for
 bool     sval_perf_page(uint8_t page, uint32_t out[SVAL_PERF_PAGE_WORDS]);

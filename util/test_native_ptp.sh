@@ -19,6 +19,14 @@ export ASAN_OPTIONS=detect_leaks=0
   $t/test_owner.c -o "$work/test_owner"
 "$work/test_owner"
 
+# Pad read schedule (pad_schedule.h) against a simulated chip and loop.
+"${cc[@]}" $t/test_schedule.c -o "$work/test_schedule"
+"$work/test_schedule"
+
+# The other half's pad fetched only on news (multitouch.c with ptp.c).
+"${cc[@]}" -Itests/sval_multitouch_split -Wno-unused-function   $t/test_remote_gate.c -o "$work/test_remote_gate"
+"$work/test_remote_gate"
+
 py=${PTP_TEST_PYTHON:-python3}
 "$py" $t/test_descriptor.py "$work/descriptor.hex" "$work/trace.txt"
 

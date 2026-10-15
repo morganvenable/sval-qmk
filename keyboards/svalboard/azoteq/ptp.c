@@ -312,6 +312,18 @@ void sval_ptp_feed(const uint8_t *f) {
     }
 }
 
+// Nothing on this pad can change until it reports something new: its last
+// frame was a valid all-up, it is armed whenever reports are on, and none of
+// its contacts is still down or lifting. multitouch.c then polls the other
+// half's pad only on news.
+bool sval_ptp_pad_quiet(uint8_t pad) {
+    const pad_state_t *p = &pads[pad & 1];
+    if (!p->known || !p->up || (output && !p->armed)) return false;
+    for (uint8_t i = 0; i < POOL; i++)
+        if (pool[i].state != C_FREE && pool[i].pad == (pad & 1)) return false;
+    return true;
+}
+
 void sval_ptp_pad_lost(uint8_t pad) {
     pad &= 1;
     lift_pad(pad);

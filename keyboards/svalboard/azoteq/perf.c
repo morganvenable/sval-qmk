@@ -15,8 +15,11 @@ typedef struct {
     uint32_t loops, loop_sum, loop_max, loop_hist[SVAL_PERF_BUCKETS];
     uint32_t scans, scan_sum, scan_max, scan_hist[SVAL_PERF_BUCKETS];
     uint32_t i2c_n, i2c_sum, i2c_max, i2c_fail, i2c_hist[SVAL_PERF_BUCKETS];
-    uint32_t rpc_n, rpc_fail, rpc_sum, rpc_max, rpc_new;
+    uint32_t rpc_n, rpc_fail, rpc_sum, rpc_max, rpc_new, rpc_hint;
 } perf_t;
+
+// The pad read schedule (azoteq.c): its lead and bare transfer estimate.
+void sval_pad_sched_stats(uint32_t *lead_us, uint32_t *xfer_us, uint32_t *wait_us);
 
 static perf_t s;
 
@@ -65,6 +68,10 @@ void sval_perf_rpc(uint32_t us, bool ok, bool fresh) {
     if (fresh) s.rpc_new++;
 }
 
+void sval_perf_rpc_hint(void) {
+    s.rpc_hint++;
+}
+
 // Three pages of 13 counters; layout in tools/multitouch/perf.py.
 bool sval_perf_page(uint8_t page, uint32_t out[SVAL_PERF_PAGE_WORDS]) {
     memset(out, 0, SVAL_PERF_PAGE_WORDS * sizeof(uint32_t));
@@ -85,11 +92,14 @@ bool sval_perf_page(uint8_t page, uint32_t out[SVAL_PERF_PAGE_WORDS]) {
             const uint32_t v[] = {s.rpc_sum, s.rpc_max, s.rpc_new, frames, busy};
             memcpy(out, v, sizeof(v));
             memcpy(out + 5, s.loop_hist, sizeof(s.loop_hist));
+            uint32_t wait;
+            sval_pad_sched_stats(&out[11], &out[12], &wait);
             return true;
         }
         case 2:
             memcpy(out, s.i2c_hist, sizeof(s.i2c_hist));
             memcpy(out + SVAL_PERF_BUCKETS, s.scan_hist, sizeof(s.scan_hist));
+            out[12] = s.rpc_hint;
             return true;
     }
     return false;

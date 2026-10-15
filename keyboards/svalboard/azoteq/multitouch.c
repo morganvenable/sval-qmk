@@ -59,6 +59,23 @@ static uint8_t remote_snapshot[FRAME_SIZE];
 static bool snapshot_valid, remote_seen, remote_stale;
 static uint32_t snapshot_at, remote_received, remote_poll;
 static uint16_t remote_sequence;
+#    ifdef SVAL_NATIVE_PTP
+// The other half's news counter (azoteq.c puts it in its split pointing
+// report): bit 7 set, low bits move only when its pad has something new.
+static uint8_t split_hint = 0x80;
+uint8_t        sval_mt_split_hint(void) {
+    return split_hint;
+}
+static uint8_t  remote_hint, fetched_hint;
+static uint32_t remote_hint_at;
+static bool     remote_hint_seen;
+void            sval_mt_remote_hint(uint8_t hint) {
+    if (!(hint & 0x80)) return; // an older half sends no hints
+    remote_hint      = hint;
+    remote_hint_at   = timer_read32();
+    remote_hint_seen = true;
+}
+#    endif
 #endif
 extern bool azoteq_iqs5xx_mt_config(uint8_t maximum, uint16_t period);
 
@@ -281,6 +298,9 @@ void sval_mt_sample(const uint8_t *raw, bool valid) {
 #endif
     samples++;
     uint8_t flags = 0, mask = 0;
+#if defined(SVAL_MT_SPLIT) && defined(SVAL_NATIVE_PTP)
+    const uint8_t prev_mask = last_mask;
+#endif
     if (!valid) { flags |= 4; errors++; }
     else {
         measured_samples++; cycle_sum += raw[0];
@@ -343,6 +363,11 @@ void sval_mt_sample(const uint8_t *raw, bool valid) {
         memcpy(remote_snapshot, frame, FRAME_SIZE);
         snapshot_at = timer_read32(); snapshot_valid = true;
         osalSysUnlock();
+#    ifdef SVAL_NATIVE_PTP
+        // News is a contact, a lift or any flag; a repeat of a valid all-up
+        // sample is not, so an idle pad never moves the counter.
+        if (flags || mask || prev_mask) split_hint = 0x80 | ((split_hint + 1) & 0x7F);
+#    endif
         return;
     }
 #endif
@@ -453,11 +478,31 @@ static uint32_t ptp_poll_at, ptp_received, ptp_remote_epoch;
 static uint16_t ptp_remote_sequence;
 static bool     ptp_remote_seen, ptp_remote_lost;
 
+static bool ptp_last_ok;
+
+// Fetch the other half's snapshot only when it can hold something new. With
+// hints (both halves this build): at once on news, every BACKUP ms while its
+// pad has contacts or is not yet armed (a lift is news too; this only covers a
+// lost hint or a dead link), and every IDLE ms while it is quiet. Without
+// hints (an older other half): every POLL ms, as before.
+static bool remote_ptp_due(uint8_t remote_pad, bool *quiet, bool *news) {
+    uint32_t since = timer_elapsed32(ptp_poll_at);
+    bool     hints = remote_hint_seen && timer_elapsed32(remote_hint_at) < SVAL_PTP_REMOTE_HINT_LOST_MS;
+    *quiet         = hints && ptp_remote_seen && !ptp_remote_lost && sval_ptp_pad_quiet(remote_pad);
+    *news          = hints && remote_hint != fetched_hint;
+    if (!hints) return since >= SVAL_PTP_REMOTE_POLL_MS;
+    if (*news) return ptp_last_ok || since >= SVAL_PTP_REMOTE_POLL_MS; // no retry storm
+    return since >= (*quiet ? SVAL_PTP_REMOTE_IDLE_MS : SVAL_PTP_REMOTE_BACKUP_MS);
+}
+
 static void poll_remote_ptp(void) {
-    if (timer_elapsed32(ptp_poll_at) < SVAL_PTP_REMOTE_POLL_MS || updater_active()) return;
-    ptp_poll_at = timer_read32();
-    uint8_t request = 1, reply[60] = {0};
+    if (updater_active()) return;
     uint8_t remote_pad = is_keyboard_left() ? 1 : 0;
+    bool    quiet, news;
+    if (!remote_ptp_due(remote_pad, &quiet, &news)) return;
+    ptp_poll_at = timer_read32();
+    uint8_t want = remote_hint;
+    uint8_t request = 1, reply[60] = {0};
 #ifdef SVAL_PERF_STATS
     uint32_t rpc_started = sval_perf_now_us();
     bool     connected   = is_transport_connected();
@@ -485,16 +530,23 @@ static void poll_remote_ptp(void) {
             ptp_remote_epoch    = ep;
             ptp_remote_seen     = true;
             ptp_remote_lost     = false;
+            ptp_last_ok         = true;
+            fetched_hint        = want;
 #    ifdef SVAL_PERF_STATS
             sval_perf_rpc(sval_perf_now_us() - rpc_started, true, rpc_fresh);
+            if (news) sval_perf_rpc_hint();
 #    endif
             return;
         }
     }
+    ptp_last_ok = false;
 #    ifdef SVAL_PERF_STATS
     if (connected) sval_perf_rpc(sval_perf_now_us() - rpc_started, ok, false);
 #    endif
-    if (ptp_remote_seen && !ptp_remote_lost && timer_elapsed32(ptp_received) > SVAL_PTP_REMOTE_STALE_MS) {
+    // A quiet pad has no contacts to lift, and between heartbeats its last
+    // good snapshot is legitimately old: give it the heartbeat on top.
+    uint32_t stale = quiet ? SVAL_PTP_REMOTE_IDLE_MS + SVAL_PTP_REMOTE_STALE_MS : SVAL_PTP_REMOTE_STALE_MS;
+    if (ptp_remote_seen && !ptp_remote_lost && timer_elapsed32(ptp_received) > stale) {
         sval_ptp_pad_lost(remote_pad);
         ptp_remote_lost = true;
     }

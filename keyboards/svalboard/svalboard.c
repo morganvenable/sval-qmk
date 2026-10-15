@@ -613,6 +613,15 @@ static bool              motion_read_once = false;
 // Both halves' reports after rotation and invert, before sniper, boost and scroll
 // conversion (keymap_support.c). Counted only while a host app is reading them.
 report_mouse_t pointing_device_task_combined_kb(report_mouse_t left_report, report_mouse_t right_report) {
+#if defined(SVAL_AZOTEQ_MULTITOUCH) && defined(MOUSE_EXTENDED_REPORT)
+    // The other half's pad news counter rides in boot_x (azoteq.c); take it
+    // off before anything else sees the report.
+#    if defined(SVAL_NATIVE_PTP) && defined(SVAL_MT_SPLIT)
+    extern void sval_mt_remote_hint(uint8_t hint);
+    sval_mt_remote_hint((uint8_t)(is_keyboard_left() ? right_report.boot_x : left_report.boot_x));
+#    endif
+    left_report.boot_x = right_report.boot_x = 0;
+#endif
     if (motion_read_once && timer_elapsed32(motion_last_read) < SVAL_HOST_ACTIVE_MS) {
         sval_motion_accumulate(&motion_acc[0], left_report.x, left_report.y, left_report.h, left_report.v, left_report.buttons);
         sval_motion_accumulate(&motion_acc[1], right_report.x, right_report.y, right_report.h, right_report.v, right_report.buttons);

@@ -150,6 +150,13 @@ bool azoteq_iqs5xx_mt_config(uint8_t maximum, uint16_t period) {
 }
 #endif
 
+// The last get_base_data result, for the read scheduler in the keyboard's
+// wrapper (keyboards/svalboard/azoteq/azoteq.c).
+static i2c_status_t azoteq_iqs5xx_base_status = I2C_STATUS_SUCCESS;
+i2c_status_t        azoteq_iqs5xx_last_base_status(void) {
+    return azoteq_iqs5xx_base_status;
+}
+
 i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
 #ifdef SVAL_AZOTEQ_MULTITOUCH
     // One coherent communication window for both legacy mouse and contact data.
@@ -188,12 +195,14 @@ i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
 #    endif
     sval_mt_read_status(read_status, end_status, timer_elapsed32(started));
     sval_mt_sample(raw, status == I2C_STATUS_SUCCESS);
+    azoteq_iqs5xx_base_status = status;
     return status;
 #else
     i2c_status_t status = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, (uint8_t *)base_data, 10, AZOTEQ_IQS5XX_TIMEOUT_MS);
     if (status == I2C_STATUS_SUCCESS) {
         azoteq_iqs5xx_end_session();
     }
+    azoteq_iqs5xx_base_status = status;
     return status;
 #endif
 }

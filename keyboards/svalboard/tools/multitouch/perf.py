@@ -26,8 +26,9 @@ REFUSED = {"sval:E465B0621736062B": "the daily driver",
 BUCKETS = ("<1", "1-2", "2-4", "4-8", "8-16", ">=16")
 PAGE0 = ("ms", "loops", "loop_sum", "loop_max", "scans", "scan_sum", "scan_max",
          "i2c_n", "i2c_sum", "i2c_max", "i2c_fail", "rpc_n", "rpc_fail")
-PAGE1 = ("rpc_sum", "rpc_max", "rpc_new", "frames", "busy") + tuple(f"loop_h{i}" for i in range(6))
-PAGE2 = tuple(f"i2c_h{i}" for i in range(6)) + tuple(f"scan_h{i}" for i in range(6))
+PAGE1 = ("rpc_sum", "rpc_max", "rpc_new", "frames", "busy") + tuple(f"loop_h{i}" for i in range(6)) + (
+    "sched_lead", "sched_xfer")
+PAGE2 = tuple(f"i2c_h{i}" for i in range(6)) + tuple(f"scan_h{i}" for i in range(6)) + ("rpc_hint",)
 
 
 class Board:
@@ -99,7 +100,10 @@ def report(name, s):
     if s["rpc_n"] or s["frames"]:
         lines.append(f"  split pad RPC {s['rpc_n'] / sec:7.1f}/s  avg {avg(s, 'rpc'):.2f} ms  max {s['rpc_max'] / 1000:.2f} ms"
                      f"  busy {s['rpc_sum'] / 10 / max(s['ms'], 1):.1f}%  fails {s['rpc_fail']}  new {s['rpc_new']}")
-        lines.append(f"  touchpad      {s['frames'] / sec:7.1f} frames/s  endpoint busy {s['busy']}")
+        lines.append(f"  touchpad      {s['frames'] / sec:7.1f} frames/s  endpoint busy {s['busy']}"
+                     f"  RPCs on news {s['rpc_hint']}")
+    if s["sched_xfer"]:  # 0 on builds before the read schedule
+        lines.append(f"  pad schedule  lead {s['sched_lead'] / 1000:.2f} ms  bare read {s['sched_xfer'] / 1000:.2f} ms")
     for key, label in (("loop_h", "loop gaps"), ("scan_h", "scan gaps"), ("i2c_h", "I2C reads")):
         lines.append(f"  {label:10s} ms " + "  ".join(f"{b}:{s[f'{key}{i}']}" for i, b in enumerate(BUCKETS)))
     return "\n".join(lines)

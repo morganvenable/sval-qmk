@@ -13,7 +13,36 @@
 // Azoteq can only report at 100Hz. Faster polling causes issues.
 #define AZO_MS 10
 
-static uint16_t azo_timer = 0;
+// Reads are timed by pad_schedule.h: from the end of the last read, so they
+// land just before the chip's window opens instead of waiting in it.
+#include "pad_schedule.h"
+_Static_assert(CH_CFG_ST_FREQUENCY == 1000000, "the pad schedule assumes a 1 MHz system timer");
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+#    define AZO_READ_BYTES 53 // address + register, address + 45 bytes, end session
+#else
+#    define AZO_READ_BYTES 18 // address + register, address + 10 bytes, end session
+#endif
+#ifndef I2C1_CLOCK_SPEED
+#    define I2C1_CLOCK_SPEED 100000 // the ChibiOS I2C driver's default
+#endif
+// 90% of the bare bus time (9 clocks a byte): never above the real transfer.
+#define AZO_XFER_GUESS_US ((uint32_t)((uint64_t)AZO_READ_BYTES * 9 * 1000000 * 9 / 10 / I2C1_CLOCK_SPEED))
+static pad_sched_t azo_sched;
+static bool        azo_sched_ready = false;
+i2c_status_t       azoteq_iqs5xx_last_base_status(void);
+
+static inline uint32_t azo_now_us(void) {
+    return (uint32_t)chVTGetSystemTimeX();
+}
+
+#ifdef SVAL_PERF_STATS
+void sval_pad_sched_stats(uint32_t *lead_us, uint32_t *xfer_us, uint32_t *wait_us) {
+    *lead_us = azo_sched_ready ? (uint32_t)azo_sched.lead : 0;
+    *xfer_us = azo_sched_ready ? azo_sched.xfer : 0;
+    *wait_us = azo_sched_ready ? azo_sched.wait : 0;
+}
+#endif
+
 static uint8_t azo_held_buttons = 0;
 static uint16_t azo_cached_cpi = 0;
 
@@ -67,10 +96,15 @@ report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
 #else
     const uint16_t interval = AZO_MS;
 #endif
-    if (timer_elapsed(azo_timer) >= interval) {
-        azo_timer = timer_read();
+    if (!azo_sched_ready) {
+        pad_sched_init(&azo_sched, AZO_XFER_GUESS_US);
+        azo_sched_ready = true;
+    }
+    uint32_t started = azo_now_us();
+    if (pad_sched_due(&azo_sched, started)) {
         mouse_report = azoteq_iqs5xx_get_report(mouse_report);
         azo_held_buttons = mouse_report.buttons;
+        pad_sched_done(&azo_sched, started, azo_now_us(), azoteq_iqs5xx_last_base_status() == I2C_STATUS_SUCCESS, interval * 1000u);
     }
 
     // Invert V-axis
@@ -82,6 +116,13 @@ report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
         mouse_report = (report_mouse_t){0};
         azo_held_buttons = 0;
     }
+#endif
+#if defined(SVAL_NATIVE_PTP) && defined(SVAL_MT_SPLIT) && defined(MOUSE_EXTENDED_REPORT)
+    // The half without USB marks its split pointing report with a counter
+    // that moves only when its pad has news (multitouch.c), so the USB half
+    // fetches the pad snapshot only then. boot_x is otherwise always zero
+    // here (host_mouse_send fills it), and the USB half clears it on arrival.
+    if (!is_keyboard_master()) mouse_report.boot_x = (int8_t)sval_mt_split_hint();
 #endif
     return mouse_report;
 }

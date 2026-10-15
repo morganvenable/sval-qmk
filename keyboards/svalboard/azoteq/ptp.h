@@ -20,6 +20,17 @@ enum sval_touch_owner {
 #ifndef SVAL_PTP_REMOTE_STALE_MS
 #    define SVAL_PTP_REMOTE_STALE_MS 50
 #endif
+// The other half's pad is fetched on news (its split pointing report carries
+// a counter); these bound the gaps when there is none.
+#ifndef SVAL_PTP_REMOTE_BACKUP_MS
+#    define SVAL_PTP_REMOTE_BACKUP_MS 10 // contacts down or pad not armed
+#endif
+#ifndef SVAL_PTP_REMOTE_IDLE_MS
+#    define SVAL_PTP_REMOTE_IDLE_MS 250 // quiet pad: heartbeat
+#endif
+#ifndef SVAL_PTP_REMOTE_HINT_LOST_MS
+#    define SVAL_PTP_REMOTE_HINT_LOST_MS 300 // no hint this long: poll as before
+#endif
 #ifndef SVAL_PTP_MIN_FRAME_US
 #    define SVAL_PTP_MIN_FRAME_US 4000
 #endif
@@ -68,6 +79,7 @@ bool sval_ptp_key_button(uint8_t button, bool pressed); // SVAL_PTP_KEY_BUTTONS
 // five 8-byte slots (lifetime id, x, y, strength, area).
 void sval_ptp_feed(const uint8_t *frame);
 void sval_ptp_pad_lost(uint8_t pad); // remote snapshot went stale
+bool sval_ptp_pad_quiet(uint8_t pad); // all up, armed, nothing pending
 void sval_ptp_task(void);
 
 // --- status for the owner command (16 bytes) ---
