@@ -65,7 +65,7 @@ if [ "$km" = claussen ]; then
 fi
 
 commit=$(git rev-parse --short=10 HEAD)
-flags=(SVAL_UPDATER=yes SVAL_UPDATE_NO_CHORD=yes)
+flags=(SVAL_UPDATER=yes SVAL_UPDATE_NO_CHORD=yes SVAL_POINT_CONTROLS=yes)  # dev/pointing-tools
 flags+=(SVAL_FW_VERSION_STRING="dev-$commit")
 if [ "$mode" = keep ]; then
     flags+=(SVAL_DEV_KEEP_SETTINGS=yes)
