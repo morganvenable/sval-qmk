@@ -96,6 +96,9 @@ typedef struct __attribute__((__packed__)) {
 void sval_pointer_identity(sval_pointer_identity_t *id);
 // The bus the build's own driver uses (SVAL_BUS_*), which the probes skip; 0 for no module.
 uint8_t sval_pointer_own_bus(void);
+// The module on one hand, this half's or the connected other half's (enum sval_pointer_sensor);
+// SVAL_SENSOR_NONE while that hand isn't known.
+uint8_t sval_pointer_sensor_for_hand(bool left);
 
 // Pointing modes for POINTING_MOTION (Sval 0x2D). global_bits uses SVAL_MOTION_* from
 // pointing_motion.h; axis_state is 0 free, 1 locked vertical, 2 locked horizontal.

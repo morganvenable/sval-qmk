@@ -169,6 +169,26 @@ void update_boost_multiplier(void) {
 }
 
 
+#ifdef SVAL_POINT_CONTROLS
+// The CPI the pointing tools normalize a hand's counts by, so a step takes the same travel
+// at any CPI. A trackball or trackpad moves at the CPI set for its hand (a trackpad caps it
+// at its own resolution). A TrackPoint ignores CPI and reports force rather than distance,
+// so its counts are taken as they come, as a logical 800 CPI; the tool speeds tune it.
+// Looked up every half second: a module only changes across a reset or a reconnect.
+static uint16_t point_tool_cpi(bool left, uint16_t cpi) {
+    static uint8_t  sensor[2];
+    static uint32_t checked;
+    static bool     known;
+    if (!known || timer_elapsed32(checked) > 500) {
+        sensor[0] = sval_pointer_sensor_for_hand(true);
+        sensor[1] = sval_pointer_sensor_for_hand(false);
+        checked   = timer_read32();
+        known     = true;
+    }
+    return sensor[left ? 0 : 1] == SVAL_SENSOR_TRACKPOINT ? 800 : cpi;
+}
+#endif
+
 report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, report_mouse_t reportMouse2) {
     report_mouse_t ret_mouse;
 #ifdef SVAL_POINT_CONTROLS
@@ -176,8 +196,8 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
     if (sval_point_blocked(1)) reportMouse2.x = reportMouse2.y = reportMouse2.h = reportMouse2.v = 0;
     bool control_left = sval_point_active(0), control_right = sval_point_active(1);
     sval_point_policy_changed(global_saved_values.axis_scroll_lock && !is_mac);
-    sval_point_buffer(0, reportMouse1.x, reportMouse1.y, get_left_dpi(), sniper_x.div);
-    sval_point_buffer(1, reportMouse2.x, reportMouse2.y, get_right_dpi(), sniper_x.div);
+    sval_point_buffer(0, reportMouse1.x, reportMouse1.y, point_tool_cpi(true, get_left_dpi()), sniper_x.div);
+    sval_point_buffer(1, reportMouse2.x, reportMouse2.y, point_tool_cpi(false, get_right_dpi()), sniper_x.div);
 #endif
 
     if (any_sniper_active()) {

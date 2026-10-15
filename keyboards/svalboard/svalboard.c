@@ -563,6 +563,14 @@ static inline bool sval_pointer_for_hand(bool left, sval_pointer_identity_t *id,
     return false;
 }
 
+// The module on one hand (enum sval_pointer_sensor), or SVAL_SENSOR_NONE while that hand
+// isn't known (no half there, or it hasn't reported yet).
+uint8_t sval_pointer_sensor_for_hand(bool left) {
+    sval_pointer_identity_t id;
+    bool                    local;
+    return sval_pointer_for_hand(left, &id, &local) ? id.detected : SVAL_SENSOR_NONE;
+}
+
 #ifdef SVAL_FRAGMENT_IDX_LEFT_POINTING
 // Each hand's pointing fragment (Sval 0x18) from the module identity 0x2C reports.
 // 0xFF until that half has settled: not checked yet, or its own module missing before the
