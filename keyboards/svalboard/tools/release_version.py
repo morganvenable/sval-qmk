@@ -120,8 +120,7 @@ def main(argv=None):
     if fw <= prev_fw:
         errors.append(f"{VERSION_FILE} says {fw}, not greater than {prev_fw} at the previous release {prev}: raise it")
 
-    outputs = dict(version=tag, fw_version=fw, prerelease="true" if pre else "false",
-                   draft="false" if pre else "true", previous=prev or "")
+    outputs = dict(version=tag, fw_version=fw, prerelease="true" if pre else "false", draft="false" if pre else "true", previous=prev or "")
     for k, v in outputs.items():
         print(f"{k}={v}")
     if errors:

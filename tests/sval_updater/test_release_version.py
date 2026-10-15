@@ -92,8 +92,7 @@ def main():
     for tag, pre in (("v3", "false"), ("v3.1", "false"), ("v10.2.3", "false"), ("x3", "true"), ("x3.1", "true"), ("x10.0", "true")):
         rc, text, o = run(out, tag, history, {})
         check(rc == 0 and o.get("prerelease") == pre and o.get("draft") != pre, f"{tag} is a release tag: {rc} {text}")
-    for tag in ("vLaunch2", "vLaunch3", "vNext1", "v3-rc1", "x3-rc1", "v3-dryrun1", "x", "v", "3", "V3", "X3",
-                "v3.", "v.3", "v3..1", "x3a", "vx3", "xv3", "v03a", "v3\n", " v3", "keybard-host-v3"):
+    for tag in ("vLaunch2", "vLaunch3", "vNext1", "v3-rc1", "x3-rc1", "v3-dryrun1", "x", "v", "3", "V3", "X3", "v3.", "v.3", "v3..1", "x3a", "vx3", "xv3", "v03a", "v3\n", " v3", "keybard-host-v3"):
         rc, text, o = run(out, tag, history, {})
         check(rc == 1 and "not a release tag" in text and not o, f"tag {tag!r} refused: {text}")
 
