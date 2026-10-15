@@ -48,8 +48,12 @@ Surface and Button Switch, latency) are answered by `ptp.c` through one hook in
 interface set instead of a cached one.
 
 **Pads.** Each half reads its pad at the chip's 8 ms report period, over I2C at
-400 kHz: the 10 base bytes, and the five contact slots only while a finger is
-down, in the same communication window. The USB half feeds its own pad to
+400 kHz, in one read: the 10 base bytes and the 7-byte contact slots the last
+read needed (up to the highest slot with a contact, since a contact keeps its
+slot until it lifts). Only when the chip's count says more contacts are down
+than that read found does a second read, in the same communication window,
+fetch the remaining slots; so a read grows with the contacts down, and costs
+two reads only as a finger lands. The USB half feeds its own pad to
 `ptp.c` at once. The other half keeps its last sample; the USB half fetches it
 over the split link on the Scan Lab RPC with its own request op (0xA7, 32-byte
 reply), so the split message table is the same as in every other build. The
@@ -61,8 +65,10 @@ while it is quiet.
 **Read timing.** A read that starts before the chip's window opens is held by
 clock stretching, and the main loop with it. `pad_schedule.h` times the next
 read from the end of the last one, one period later less a lead that adapts so
-that reads land just after the window opens. A pad that stops answering is
-read less and less often, down to about once a second.
+that reads land just after the window opens. The bare transfer time it
+subtracts is kept per read length (0 to 5 slots), so a longer read is not
+taken for a stretch. A pad that stops answering is read less and less often,
+down to about once a second.
 
 **Contacts.** Contact IDs, the 5-contact limit, arming on an all-up sample,
 palm, faults and lifts are in `ptp.c`. A pad whose contacts get no valid
@@ -78,7 +84,7 @@ sample, and every frame is stamped with its newest sample's read time.
 | `SVAL_PTP_KEY_BUTTONS=yes` | with the touchpad | MS_BTN1 and MS_BTN2 are the touchpad's buttons while it reports |
 | `SVAL_PTP_MOUSE_BEFORE_MODE3=no` | with the touchpad | The pads stay silent until the host asks for touchpad mode |
 | `SVAL_TOUCH_DEV=yes` | dev builds only | Raw HID 0xFC op 0x42: owner (native or mouse) and status, for `tools/multitouch/ptp_owner.py` |
-| `SVAL_PERF_STATS=yes` | dev builds only | Timing counters over raw HID 0xFC op 0x43, for `tools/multitouch/perf.py`; with or without the touchpad |
+| `SVAL_PERF_STATS=yes` | dev builds only | Timing counters over raw HID 0xFC op 0x43, for `tools/multitouch/perf.py`; with or without the touchpad. They include the slowest scan gap split into exclusive parts: matrix row reads, the split exchange of every scan, the pad driver call, the other pad's split fetch, USB IN sends, the counters' own split reads, and everything else |
 
 Release builds refuse `SVAL_TOUCH_DEV` and `SVAL_PERF_STATS`, and
 `check_release_elf.py` rejects their symbols. Neither 0xFC command is a
@@ -98,23 +104,38 @@ released protocol.
 
 On a keyless test board with a pad on each half: the auto build with the
 blank keymap, the real matrix scan running on both halves (unpaced, turbo 0,
-90/90 us), idle, two 30 s windows each, with and without the touchpad (the
-same commit, `SVAL_NATIVE_PTP=no`). A keyless board reads its unconnected
-column inputs as four keys held, so the scan settles into one unchanging
-frame; key events themselves were not exercised.
+90/90 us). A keyless board reads its unconnected column inputs as four keys
+held, so the scan settles into one unchanging frame; key events themselves
+were not exercised.
+
+**Idle**, two 30 s windows each, with and without the touchpad (the same
+commit, `SVAL_NATIVE_PTP=no`):
 
 | | Without the touchpad | With it |
 |---|---|---|
-| USB half: matrix scans per second | 589 | 488 |
-| USB half: longest scan gap | 3.3 ms | 5.0 ms (about one gap a second over 4 ms) |
-| Other half: matrix scans per second | 779 | 744 |
-| Other half: longest scan gap | 5.7 ms | 3.2 ms |
-| Pad reads per second, each half | 98 | 123 |
-| Pad read | 0.66 ms (100 kHz, 10 bytes, with the end of session) | 0.59 ms USB half, 0.56 ms other half (400 kHz, 10 bytes, the read alone) |
-| Other pad fetched over the split link | | 4 a second, 0.74 ms each |
+| USB half: matrix scans per second | 573, 571 | 483, 484 |
+| USB half: longest scan gap | 3.3, 3.2 ms | 5.3, 5.2 ms (3 to 4 gaps a second over 4 ms) |
+| Other half: matrix scans per second | 762, 772 | 750, 751 |
+| Other half: longest scan gap | 6.2, 5.6 ms | 2.6, 2.6 ms |
+| Pad reads per second, each half | 96 to 99 | 123 |
+| Pad read | 0.64 ms USB half, 0.87 to 0.98 ms other half (100 kHz, 10 bytes, with the end of session) | 0.59 ms USB half, 0.55 ms other half (400 kHz, 10 bytes, the read alone) |
+| Other pad fetched over the split link | | 4 a second, 0.81 ms each |
 
 On the USB half the touchpad takes 11% of the time in the pad driver call
-(read, end of session and the sample) and 3% in its task.
+(read, end of session and the sample) and 4% in its task. Its slowest idle
+gap is one loop pass with a pad read held by the chip (2.5 ms), the matrix
+(1.0 ms) and the 4-a-second split fetch (0.8 ms).
+
+**With fingers**, by hand on the USB half, 10 s each, on the build before reads
+were sized to the contacts (every slot read while a finger was down):
+
+| | Idle | One finger | Two | Three |
+|---|---|---|---|---|
+| Pad read | 0.6 ms | 1.65 ms | 2.6 ms | 4.5 ms |
+| Matrix scans per second | 483 | 330 | 300 | 252 |
+
+The longest scan gap was up to 9 ms, and once 24.6 ms with one finger on each
+pad, with no failed pad read or split fetch.
 
 ## Not covered yet
 
