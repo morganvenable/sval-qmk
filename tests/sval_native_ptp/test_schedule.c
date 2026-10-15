@@ -27,7 +27,16 @@ typedef struct {
     uint32_t window;        // next window opens (us)
     bool     restart_model; // the chip restarts its cycle when comms end
     uint32_t nominal;       // the period the firmware assumes (0: the chip's)
+    uint32_t per_slot;      // transfer time each contact slot adds (us)
 } chip_t;
+
+// Contact slots carried by each read: 0 throughout, or with vary_slots a
+// mix of 0 to 5 that changes every few reads (fingers landing and lifting).
+static bool    vary_slots = false;
+static uint8_t slots_for(unsigned i) {
+    static const uint8_t pattern[] = {0, 1, 1, 2, 2, 3, 5, 4, 1, 0, 3, 2};
+    return vary_slots ? pattern[(i / 7) % sizeof(pattern)] : 0;
+}
 
 typedef struct {
     unsigned reads, late, fails, long_waits; // long_waits: stretched over 1 ms
@@ -43,7 +52,7 @@ static uint32_t jitter(uint32_t max) {
 
 // One read starting at s. Returns its end; *ok false when fail is set (the
 // bus is held until the 30 ms I2C timeout).
-static uint32_t chip_read(chip_t *c, uint32_t s, bool fail, bool *late, uint32_t *took) {
+static uint32_t chip_read(chip_t *c, uint32_t s, uint8_t slots, bool fail, bool *late, uint32_t *took) {
     if (fail) {
         *late = false;
         *took = 30000;
@@ -55,7 +64,7 @@ static uint32_t chip_read(chip_t *c, uint32_t s, bool fail, bool *late, uint32_t
     uint32_t begin = s;
     *late          = (int32_t)(s - c->window) >= 0;
     if (!*late) begin = c->window; // stretched until the window opens
-    uint32_t end = begin + c->xfer;
+    uint32_t end = begin + c->xfer + slots * c->per_slot;
     *took        = end - s;
     if (c->restart_model)
         c->window = end + c->period;
@@ -102,7 +111,7 @@ static stats_t run_old(chip_t c, uint32_t base, unsigned n) {
         first   = false;
         last_ms = ms;
         bool     late;
-        uint32_t took, e = chip_read(&c, t, false, &late, &took);
+        uint32_t took, e = chip_read(&c, t, 0, false, &late, &took);
         if (i >= 50) add(&st, t, e, took, late, c.xfer);
         t = e;
         i++;
@@ -120,14 +129,15 @@ static stats_t run_new(chip_t c, uint32_t base, unsigned n, unsigned skip, unsig
     for (unsigned i = 0; i < n;) {
         t = next_chance(t + 1, base);
         if (!pad_sched_due(&s, t)) continue;
-        bool     fail = i >= fail_from && i < fail_to, late;
-        uint32_t took, e = chip_read(&c, t, fail, &late, &took);
+        bool     fail  = i >= fail_from && i < fail_to, late;
+        uint8_t  slots = slots_for(i);
+        uint32_t took, e = chip_read(&c, t, slots, fail, &late, &took);
         if (prev_failed) assert(t - prev_fail_end >= c.period); // never back to back
-        pad_sched_done(&s, t, e, !fail, true, c.nominal ? c.nominal : c.period);
+        pad_sched_done(&s, t, e, !fail, true, slots, c.nominal ? c.nominal : c.period);
         prev_failed   = fail;
         prev_fail_end = e;
         if (fail) st.fails++;
-        if (i >= skip && !fail) add(&st, t, e, took, late, c.xfer);
+        if (i >= skip && !fail) add(&st, t, e, took, late, c.xfer + slots * c.per_slot);
         if (fail) st.busy += took;
         t = e;
         i++;
@@ -157,12 +167,12 @@ int main(void) {
     // New schedule, the chip's own rate kept, little waiting.
     pad_sched_t s;
     stats_t     st = run_new(chip, 0, 2000, 50, ~0u, ~0u, &s);
-    printf("new schedule:  %.1f Hz, read avg %.2f ms max %.2f ms, late %u of %u, lead %d us, xfer %u us\n", rate_hz(&st), avg_ms(&st), st.took_max / 1000.0, st.late, st.reads, (int)s.lead, s.xfer);
+    printf("new schedule:  %.1f Hz, read avg %.2f ms max %.2f ms, late %u of %u, lead %d us, xfer %u us\n", rate_hz(&st), avg_ms(&st), st.took_max / 1000.0, st.late, st.reads, (int)s.lead, s.xfer[0]);
     assert(st.late > st.reads / 2); // most reads land just after the window opens
     assert(avg_ms(&st) < 2.2);
     assert(rate_hz(&st) > 122 && rate_hz(&st) < 126);
-    assert(st.long_waits < st.reads / 50);    // few reads blocked past 1 ms
-    assert(s.xfer >= X && s.xfer <= X + 300); // the shortest read seen: about the bare transfer
+    assert(st.long_waits < st.reads / 50);          // few reads blocked past 1 ms
+    assert(s.xfer[0] >= X && s.xfer[0] <= X + 300); // the shortest read seen: about the bare transfer
 
     // Every starting phase converges within a few reads.
     for (uint32_t w = 0; w < P; w += 500) {
@@ -187,7 +197,7 @@ int main(void) {
         uint32_t t = 1000;
         uint32_t gaps[10];
         for (int i = 0; i < 10; i++) {
-            pad_sched_done(&b, t, t + 30000, false, true, P);
+            pad_sched_done(&b, t, t + 30000, false, true, 0, P);
             gaps[i] = b.delay;
             assert(!pad_sched_due(&b, t + 30000 + b.delay - 1) && pad_sched_due(&b, t + 30000 + b.delay));
             t = t + 30000 + b.delay;
@@ -198,11 +208,11 @@ int main(void) {
         printf("dead pad:      blocked %.1f%% of the loop once backed off\n", 100 * blocked);
         assert(blocked < 0.03);
         // It answers again: back to one period at once.
-        pad_sched_done(&b, t, t + 1300, true, true, P);
+        pad_sched_done(&b, t, t + 1300, true, true, 0, P);
         assert(b.fails == 0 && b.delay <= P);
         // A retried read (after a NACK) says nothing about the window.
         int32_t lead = b.lead;
-        pad_sched_done(&b, t + 9000, t + 9000 + 5000, true, false, P);
+        pad_sched_done(&b, t + 9000, t + 9000 + 5000, true, false, 0, P);
         assert(b.lead == lead);
     }
 
@@ -211,7 +221,7 @@ int main(void) {
     {
         pad_sched_t g;
         pad_sched_init(&g);
-        pad_sched_done(&g, 1000, 2300, true, true, P);
+        pad_sched_done(&g, 1000, 2300, true, true, 0, P);
         assert(pad_sched_due(&g, 2300 + 40u * 60 * 1000000)); // 40 minutes later
         assert(pad_sched_due(&g, 2300 + 0x80000000u));        // half the clock later
         assert(!pad_sched_due(&g, 2300 + 1000));
@@ -274,7 +284,25 @@ int main(void) {
     printf("10-byte reads: %.1f Hz avg %.2f ms\n", rate_hz(&b10), avg_ms(&b10));
     assert(rate_hz(&b10) > 122 && avg_ms(&b10) < 1.3);
 
+    // Reads sized to the contacts down: 10 bytes plus 7 a slot (about 160 us
+    // a slot at 400 kHz), the slot count changing as fingers land and lift.
+    // A longer read is not mistaken for a stretch: the rate and the short
+    // waits hold, and each length learns its own bare transfer.
+    {
+        chip_t sized   = base10;
+        sized.per_slot = 160;
+        vary_slots     = true;
+        pad_sched_t vs;
+        stats_t     v = run_new(sized, 0, 3000, 100, ~0u, ~0u, &vs);
+        vary_slots    = false;
+        printf("sized reads:   %.1f Hz read avg %.2f ms, blocked over 1 ms %u of %u, lead %d us\n", rate_hz(&v), avg_ms(&v), v.long_waits, v.reads, (int)vs.lead);
+        assert(rate_hz(&v) > 122 && rate_hz(&v) < 126);
+        assert(v.long_waits < v.reads / 50);
+        for (uint8_t k = 0; k < SVAL_PAD_SIZES; k++)
+            assert(vs.xfer[k] >= base10.xfer + k * sized.per_slot && vs.xfer[k] <= base10.xfer + k * sized.per_slot + 300);
+    }
+
     puts("pad schedule: old lock-step reproduced; new keeps the chip rate with short reads from any phase, "
-         "backs off a dead pad to ~1 s, survives the clock wrap and long gaps, reaches the restart-model rate, keeps the rate with a 2.1 ms loop and 10-byte reads");
+         "backs off a dead pad to ~1 s, survives the clock wrap and long gaps, reaches the restart-model rate, keeps the rate with a 2.1 ms loop, 10-byte reads and reads sized to the contacts");
     return 0;
 }

@@ -16,8 +16,9 @@
 #        include "../perf.h"
 #    endif
 _Static_assert(CH_CFG_ST_FREQUENCY == 1000000, "the pad schedule assumes a 1 MHz system timer");
-// The driver's last contact read: status and the read's own start and end.
-i2c_status_t       azoteq_iqs5xx_last_read(uint32_t *start_us, uint32_t *end_us, bool *retried);
+// The driver's last contact read: status, the read's own start and end, and
+// the contact slots it carried.
+i2c_status_t       azoteq_iqs5xx_last_read(uint32_t *start_us, uint32_t *end_us, bool *retried, uint8_t *slots);
 static pad_sched_t azo_sched;
 static bool        azo_sched_ready = false;
 
@@ -28,7 +29,7 @@ uint32_t sval_mt_now_us(void) {
 #    ifdef SVAL_PERF_STATS
 void sval_pad_sched_stats(uint32_t *lead_us, uint32_t *xfer_us, uint32_t *wait_us) {
     *lead_us = azo_sched_ready ? (uint32_t)azo_sched.lead : 0;
-    *xfer_us = azo_sched_ready && azo_sched.xfer != UINT32_MAX ? azo_sched.xfer : 0;
+    *xfer_us = azo_sched_ready && azo_sched.xfer[0] != UINT32_MAX ? azo_sched.xfer[0] : 0; // no contacts
     *wait_us = azo_sched_ready ? azo_sched.wait : 0;
 }
 #    endif
@@ -115,16 +116,19 @@ report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
     if (pad_sched_due(&azo_sched, sval_mt_now_us())) {
 #    ifdef SVAL_PERF_STATS
         uint32_t call_started = sval_mt_now_us();
+        uint8_t  perf_prev    = sval_perf_enter(SVAL_PERF_GAP_PAD);
 #    endif
         mouse_report     = azoteq_iqs5xx_get_report(mouse_report);
 #    ifdef SVAL_PERF_STATS
+        sval_perf_leave(perf_prev);
         sval_perf_section(SVAL_PERF_SEC_PAD_CALL, sval_mt_now_us() - call_started);
 #    endif
         azo_held_buttons = mouse_report.buttons;
         uint32_t start, end;
         bool     retried;
-        bool     ok = azoteq_iqs5xx_last_read(&start, &end, &retried) == I2C_STATUS_SUCCESS;
-        pad_sched_done(&azo_sched, start, end, ok, !retried, AZOTEQ_IQS5XX_REPORT_RATE * 1000u);
+        uint8_t  slots;
+        bool     ok = azoteq_iqs5xx_last_read(&start, &end, &retried, &slots) == I2C_STATUS_SUCCESS;
+        pad_sched_done(&azo_sched, start, end, ok, !retried, slots, AZOTEQ_IQS5XX_REPORT_RATE * 1000u);
         mouse_report.x = azo_scale(mouse_report.x, azo_num_x, AZO_FULL_X, &azo_rem[0]);
         mouse_report.y = azo_scale(mouse_report.y, azo_num_y, AZO_FULL_Y, &azo_rem[1]);
         mouse_report.h = azo_scale(mouse_report.h, azo_num_x, AZO_FULL_X, &azo_rem[2]);
@@ -135,10 +139,12 @@ report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
         azo_timer = timer_read();
 #    ifdef SVAL_PERF_STATS
         // Timed around the whole call: the read and its end of session.
-        uint32_t started = sval_perf_now_us();
+        uint32_t started   = sval_perf_now_us();
+        uint8_t  perf_prev = sval_perf_enter(SVAL_PERF_GAP_PAD);
 #    endif
         mouse_report = azoteq_iqs5xx_get_report(mouse_report);
 #    ifdef SVAL_PERF_STATS
+        sval_perf_leave(perf_prev);
         sval_perf_i2c(sval_perf_now_us() - started, true);
 #    endif
         azo_held_buttons = mouse_report.buttons;

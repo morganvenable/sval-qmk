@@ -59,6 +59,8 @@ python3 -I $MU $N.uf2 -o $N.svup --kb $K
 | `SVAL_UPDATE_TEST_HOOKS=yes` | Adds the `TEST_HALT` op and the commit halt points (hardware tests only) |
 | `SVAL_UPDATE_RELEASE=yes` | Release updater build: DIAGNOSTIC images refused. Cannot be combined with the test hooks, `SVAL_KEYTEST` or `SVAL_HOST_BOOTLOADER`. Release CI builds its four images this way (see "Releases") |
 | `SVAL_TEST_WIPE=yes` | Bench builds only, never released: a settings magic (`0xB1A0`) no release uses. Every build now resets settings on its first boot anyway (D39); the wipe magic also resets when the same image is flashed over a normal one |
+| `SVAL_NATIVE_PTP=no` | Builds the auto images without the native touchpad (on by default there; `keyboards/svalboard/docs/native-touchpad.md`) |
+| `SVAL_TOUCH_DEV=yes`, `SVAL_PERF_STATS=yes` | Dev builds only: the touchpad dev command and the timing counters (raw HID 0xFC). A release build refuses both, and `check_release_elf.py` rejects their symbols |
 | `SVAL_FW_VERSION=N` | The numeric version (D17), reported by INFO and presence. Default: `kb/updater/fw_version.txt` (D32). The older `EXTRAFLAGS=-DSVAL_FW_VERSION=N` still works |
 | `SVAL_FW_VERSION_STRING=S` | The version string, at most 16 of `A-Z a-z 0-9 . _ + -` (INFO page 1). Default empty; release CI passes the tag |
 
@@ -596,7 +598,8 @@ one-shot forms agree.
 **What a release is (D34, D40).** Four images: `svalboard/left:sval`,
 `svalboard/right:sval`, `svalboard/left:blank` and `svalboard/right:blank`, the
 auto builds, which carry every pointing driver and start whichever module is
-attached (pointing ID 5). The `blank` images have no key bindings: a test image
+attached (pointing ID 5), and the native touchpad for Azoteq pads
+(`keyboards/svalboard/docs/native-touchpad.md`). The `blank` images have no key bindings: a test image
 for checking every key after a build. Each image has its `.uf2` and its
 `.svup`. The per-module builds (`svalboard/trackball/...`, `trackpoint`,
 `azoteq`) still build but are not released. `SVAL_TEST_WIPE` is for bench builds only:

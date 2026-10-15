@@ -39,11 +39,18 @@ typedef struct {
     uint32_t     rpc_n, rpc_fail, rpc_sum, rpc_max, rpc_new, rpc_hint;
     uint32_t     raw_down, raw_changes; // raw matrix frames with a key down; raw changes
     uint32_t     sec_sum[SVAL_PERF_SECTIONS], sec_max[SVAL_PERF_SECTIONS];
+    // The scan gap now running, by part, and the slowest one so far.
+    uint32_t     gap_at, gap_part[SVAL_PERF_GAP_PARTS], gap_passes, gap_pass_max, gap_reads, gap_fetches;
+    uint32_t     worst_gap, worst_part[SVAL_PERF_GAP_PARTS], worst_passes, worst_pass_max, worst_at_ms, worst_reads, worst_fetches;
     bool         raw_seen;
     matrix_row_t raw_last[SVAL_PERF_MATRIX_ROWS];
 } perf_t;
 
 static perf_t s;
+// The part running now, since when, and the part a matrix scan interrupted.
+// Not reset with the counters: a reset can come in the middle of a part.
+static uint8_t  phase = SVAL_PERF_GAP_OTHER, scan_prev = SVAL_PERF_GAP_OTHER;
+static uint32_t phase_at;
 
 // Kept in the ELF so check_release_elf.py finds it.
 __attribute__((used)) const uint8_t sval_perf_stats_build = 1;
@@ -80,20 +87,65 @@ static uint32_t get32(const uint8_t *p) {
 void sval_perf_reset(void) {
     memset(&s, 0, sizeof(s));
     s.since_ms = timer_read32();
+    phase_at   = sval_perf_now_us();
+}
+
+// Charges the time since the last change to the part running.
+static void charge(uint32_t now) {
+    s.gap_part[phase] += now - phase_at;
+    phase_at = now;
+}
+
+uint8_t sval_perf_enter(uint8_t part) {
+    uint8_t prev = phase;
+    charge(sval_perf_now_us());
+    phase = part < SVAL_PERF_GAP_PARTS ? part : SVAL_PERF_GAP_OTHER;
+    if (part == SVAL_PERF_GAP_PAD) s.gap_reads++;
+    if (part == SVAL_PERF_GAP_FETCH) s.gap_fetches++;
+    return prev;
+}
+
+void sval_perf_leave(uint8_t prev) {
+    charge(sval_perf_now_us());
+    phase = prev;
 }
 
 void sval_perf_loop(void) {
     uint32_t now = sval_perf_now_us();
-    if (s.last_loop) add(now - s.last_loop, &s.loops, &s.loop_sum, &s.loop_max, s.loop_hist);
+    if (s.last_loop) {
+        add(now - s.last_loop, &s.loops, &s.loop_sum, &s.loop_max, s.loop_hist);
+        if (now - s.last_loop > s.gap_pass_max) s.gap_pass_max = now - s.last_loop;
+    }
+    s.gap_passes++;
     s.last_loop = now;
 }
 
+// A matrix scan starts: the last scan gap ends here. Its parts are summed on
+// the same clock as the phases, so they add up to it exactly.
 void sval_perf_scan(uint32_t now) {
     if (s.last_scan) add(now - s.last_scan, &s.scans, &s.scan_sum, &s.scan_max, s.scan_hist);
     s.last_scan = now;
+    uint32_t t = sval_perf_now_us();
+    charge(t);
+    if (s.gap_at && t - s.gap_at > s.worst_gap) {
+        s.worst_gap = t - s.gap_at;
+        memcpy(s.worst_part, s.gap_part, sizeof(s.gap_part));
+        s.worst_passes   = s.gap_passes;
+        s.worst_pass_max = s.gap_pass_max;
+        s.worst_at_ms    = timer_elapsed32(s.since_ms);
+        s.worst_reads    = s.gap_reads;
+        s.worst_fetches  = s.gap_fetches;
+    }
+    memset(s.gap_part, 0, sizeof(s.gap_part));
+    s.gap_at     = t;
+    s.gap_passes = s.gap_pass_max = s.gap_reads = s.gap_fetches = 0;
+    scan_prev    = phase;
+    phase        = SVAL_PERF_GAP_MATRIX;
 }
 
+// The scan's row reads are done (matrix.c): back to what the scan interrupted.
 void sval_perf_matrix(const matrix_row_t *rows, uint8_t count) {
+    sval_perf_leave(scan_prev);
     if (count > SVAL_PERF_MATRIX_ROWS) count = SVAL_PERF_MATRIX_ROWS;
     bool down = false;
     for (uint8_t i = 0; i < count; i++)
@@ -125,7 +177,7 @@ void sval_perf_rpc_hint(void) {
     s.rpc_hint++;
 }
 
-// Five pages of 13 counters; layout in tools/multitouch/perf.py.
+// Six pages of 13 counters; layout in tools/multitouch/perf.py.
 bool sval_perf_page(uint8_t page, uint32_t out[SVAL_PERF_PAGE_WORDS]) {
     memset(out, 0, SVAL_PERF_PAGE_WORDS * sizeof(uint32_t));
     uint32_t frames = 0, busy = 0, lead = 0, xfer = 0, wait = 0, pads = 0, merge_waits = 0, host_silent = 0;
@@ -181,6 +233,16 @@ bool sval_perf_page(uint8_t page, uint32_t out[SVAL_PERF_PAGE_WORDS]) {
                 out[6 + 2 * i] = s.sec_max[i];
             }
             return true;
+        case 5: // the slowest scan gap: its length, its parts, where it fell
+            _Static_assert(SVAL_PERF_GAP_PARTS == 7, "page 5 layout (perf.py)");
+            out[0] = s.worst_gap;
+            memcpy(out + 1, s.worst_part, sizeof(s.worst_part));
+            out[8]  = s.worst_passes;
+            out[9]  = s.worst_pass_max;
+            out[10] = s.worst_at_ms;
+            out[11] = s.worst_reads;
+            out[12] = s.worst_fetches;
+            return true;
     }
     return false;
 }
@@ -209,7 +271,10 @@ bool sval_perf_split_rpc(uint8_t in_len, const uint8_t *in, uint8_t out_len, uin
 static bool remote(uint8_t page, uint8_t part, uint8_t *reply) {
     uint8_t req[3] = {SVAL_PERF_RPC_OP, page, part};
     if (perf_split_busy() || !is_transport_connected()) return false;
-    return transaction_rpc_exec(KEYBOARD_SYNC_B, sizeof(req), req, SVAL_PERF_RPC_REPLY, reply) && reply[0] == SVAL_PERF_RPC_OP && reply[1];
+    uint8_t prev = sval_perf_enter(SVAL_PERF_GAP_COUNTERS);
+    bool    ok   = transaction_rpc_exec(KEYBOARD_SYNC_B, sizeof(req), req, SVAL_PERF_RPC_REPLY, reply) && reply[0] == SVAL_PERF_RPC_OP && reply[1];
+    sval_perf_leave(prev);
+    return ok;
 }
 
 // Raw HID 0xFC op 0x43. data[7] 0 this half, 1 the other half, 2 reset both;

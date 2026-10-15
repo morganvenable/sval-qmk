@@ -39,7 +39,7 @@ class OwnerReply(unittest.TestCase):
 
 class PerfReport(unittest.TestCase):
     def half(self, **kw):
-        s = {k: 0 for k in perf.PAGE0 + perf.PAGE1 + perf.PAGE2 + perf.PAGE3 + perf.PAGE4}
+        s = {k: 0 for page in perf.PAGES for k in page}
         s.update(ms=30000, loops=12000, loop_sum=30000000, scans=12000, scan_sum=30000000, i2c_n=3700, i2c_sum=3700 * 1600, pads=3 | 1 << 8, prewait=90, postwait=90)
         s.update(kw)
         s["native"] = bool(s["pads"] >> 8)
@@ -56,6 +56,22 @@ class PerfReport(unittest.TestCase):
         text = perf.report("USB half", self.half(pads=0))
         self.assertIn("read + end of session", text)
         self.assertNotIn("touchpad", text)
+
+    def test_frames_since_power_up_are_a_total(self):
+        # The frame counter is never reset: a short window must not turn it into a rate.
+        text = perf.report("USB half", self.half(ms=200, frames=6345), frames_total=True)
+        self.assertIn("6345 frames since power-up", text)
+        self.assertNotIn("frames/s", text)
+        self.assertIn("frames/s", perf.report("USB half", self.half(frames=3000)))
+
+    def test_slowest_gap(self):
+        self.assertIn("slowest gap   none yet", perf.report("USB half", self.half()))
+        parts = dict(gap_0=400, gap_1=900, gap_2=20500, gap_3=1650, gap_4=0, gap_5=30, gap_6=0)
+        text = perf.report("USB half", self.half(gap=23480, gap_at_ms=12300, gap_passes=3, gap_pass_max=21900, gap_reads=1, **parts))
+        self.assertIn("slowest gap   23.48 ms at 12.3 s: split sync 20.50, pad read 1.65, matrix 0.90, other 0.40 ms;", text)
+        self.assertNotIn("USB", text.splitlines()[-1])  # under 50 us: left out
+        self.assertIn("3 loop passes (longest 21.90 ms), 1 pad reads, 0 split fetches", text)
+        self.assertEqual(len(perf.PAGE5), 13)
 
     def test_long_window_refused(self):
         self.assertIn("over 70 minutes", perf.report("USB half", self.half(ms=71 * 60 * 1000)))

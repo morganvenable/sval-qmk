@@ -2,7 +2,8 @@
 
 usage: python perf.py --serial EXACT_SERIAL {get,reset,watch,run} [SECONDS]
 
-  get          counters since the last reset, both halves
+  get          counters since the last reset, both halves (touchpad frames:
+               the total since power-up, which a reset does not clear)
   reset        zero the counters on both halves
   run SECONDS  reset, wait, then print the window's numbers once
   watch [N]    reset, then print one line per second for N seconds (default 10)
@@ -10,7 +11,10 @@ usage: python perf.py --serial EXACT_SERIAL {get,reset,watch,run} [SECONDS]
 Rates are per second over the window: matrix frames (scans), main-loop
 passes, pad reads, split fetches of the other pad, touchpad frames. Maximums
 are the worst single gap or read in the window. Each half also reports the
-scan settings in effect and how often its raw matrix saw a key down.
+scan settings in effect and how often its raw matrix saw a key down, and what
+its main loop was doing in the slowest scan gap: the matrix row reads, the
+split exchange of every scan, the pad read, the other pad's split fetch, USB
+sends, these counters' own reads of the other half, and everything else.
 
 On a native touchpad build the pad read is the contact read alone; on a build
 without it, the whole driver call (read and end of session). The counters'
@@ -32,6 +36,10 @@ PAGE2 = tuple(f"i2c_h{i}" for i in range(6)) + tuple(f"scan_h{i}" for i in range
 PAGE3 = ("scan_period", "scan_period_now", "prewait", "postwait", "turbo", "idle_stage", "flipfet", "raw_down", "raw_changes", "sched_wait", "pads", "merge_waits", "host_silent")
 SECTIONS = ("touch task", "pad driver call", "sample to touchpad", "touchpad task")
 PAGE4 = tuple(f"raw_row{i}" for i in range(5)) + tuple(f"sec{i}_{k}" for i in range(len(SECTIONS)) for k in ("sum", "max"))
+# The slowest scan gap, by part (perf.h SVAL_PERF_GAP_*, in that order).
+GAP_PARTS = ("other", "matrix", "split sync", "pad read", "split fetch", "USB", "counters")
+PAGE5 = ("gap",) + tuple(f"gap_{i}" for i in range(len(GAP_PARTS))) + ("gap_passes", "gap_pass_max", "gap_at_ms", "gap_reads", "gap_fetches")
+PAGES = (PAGE0, PAGE1, PAGE2, PAGE3, PAGE4, PAGE5)
 STAGES = ("active", "light idle", "deep idle")
 
 
@@ -47,7 +55,7 @@ class Counters:
 
     def half(self, target):
         out = {}
-        for page, names in enumerate((PAGE0, PAGE1, PAGE2, PAGE3, PAGE4)):
+        for page, names in enumerate(PAGES):
             status, native, words = self.op(target, page)
             if status:
                 return None
@@ -67,7 +75,19 @@ def avg(s, k):
     return s[k + "_sum"] / s[k + "_n"] / 1000 if s.get(k + "_n") else 0.0
 
 
-def report(name, s):
+def gap_line(s, at=True):
+    """The slowest scan gap and where its time went, largest part first."""
+    if not s.get("gap"):
+        return "slowest gap   none yet"
+    parts = sorted(((s[f"gap_{i}"], n) for i, n in enumerate(GAP_PARTS)), reverse=True)
+    spent = ", ".join(f"{n} {us / 1000:.2f}" for us, n in parts if us >= 50)
+    when = f" at {s['gap_at_ms'] / 1000:.1f} s" if at else ""
+    return (f"slowest gap   {s['gap'] / 1000:.2f} ms{when}: {spent} ms;"
+            f" {s['gap_passes']} loop passes (longest {s['gap_pass_max'] / 1000:.2f} ms),"
+            f" {s['gap_reads']} pad reads, {s['gap_fetches']} split fetches")
+
+
+def report(name, s, frames_total=False):
     if s is None:
         return f"{name}: no answer (split link down?)"
     if s["ms"] > MAX_WINDOW_MS:
@@ -91,7 +111,8 @@ def report(name, s):
                      f"  on news {s['rpc_hint']}")
     if s["native"]:
         hands = [h for bit, h in ((1, "left"), (2, "right")) if s["pads"] & bit]
-        lines.append(f"  touchpad      {s['frames'] / sec:7.1f} frames/s  endpoint busy {s['busy']}"
+        frames = f"{s['frames']} frames since power-up" if frames_total else f"{s['frames'] / sec:7.1f} frames/s"
+        lines.append(f"  touchpad      {frames}  endpoint busy {s['busy']}"
                      f"  held for the other pad {s['merge_waits']}  host silent {s['host_silent']}"
                      f"  pads: {', '.join(hands) or 'none'}")
         lines.append(f"  pad schedule  lead {s['sched_lead'] / 1000:.2f} ms  bare read {s['sched_xfer'] / 1000:.2f} ms"
@@ -100,6 +121,7 @@ def report(name, s):
         lines.append("  time in       " + ", ".join(f"{name} {s[f'sec{i}_sum'] / 10 / max(s['ms'], 1):.1f}% (max {s[f'sec{i}_max'] / 1000:.2f} ms)" for i, name in enumerate(SECTIONS)))
     for key, label in (("loop_h", "loop gaps"), ("scan_h", "scan gaps"), ("i2c_h", "pad reads")):
         lines.append(f"  {label:10s} ms " + "  ".join(f"{b}:{s[f'{key}{i}']}" for i, b in enumerate(BUCKETS)))
+    lines.append("  " + gap_line(s))
     return "\n".join(lines)
 
 
@@ -116,9 +138,8 @@ def main():
         if args.action == "reset":
             print("reset" if c.reset() else "reset this half only (the other half did not answer)")
         elif args.action == "get":
-            print("(touchpad frames: since power-up, not since the reset)")
-            print(report("USB half", c.half(0)))
-            print(report("other half", c.half(1)))
+            print(report("USB half", c.half(0), frames_total=True))
+            print(report("other half", c.half(1), frames_total=True))
         elif args.action == "run":
             f0 = c.half(0)["frames"]  # frames_sent is never reset
             c.reset()
@@ -133,6 +154,7 @@ def main():
             print("  sec  frames/s  scans/s  loops/s  loop max  scan max  read avg  read max"
                   "  read busy  other scan max  (ms)")
             worst = {"loop": 0, "scan": 0, "other": 0}
+            worst_gap = {}
             c.reset()
             prev_frames = c.half(0)["frames"]
             for t in range(1, int(args.seconds) + 1):
@@ -146,6 +168,9 @@ def main():
                 worst["loop"] = max(worst["loop"], d["loop_max"])
                 worst["scan"] = max(worst["scan"], d["scan_max"])
                 worst["other"] = max(worst["other"], o["scan_max"] if o else 0)
+                for name, h in (("USB half", d), ("other half", o)):
+                    if h and h["gap"] and h["gap"] > worst_gap.get(name, {}).get("gap", 0):
+                        worst_gap[name] = dict(h, second=t)
                 print(
                     f"{t:5d}  {frames / sec:8.1f}  {d['scans'] / sec:7.0f}  {d['loops'] / sec:7.0f}"
                     f"  {d['loop_max'] / 1000:8.2f}  {d['scan_max'] / 1000:8.2f}  {avg(d, 'i2c'):8.2f}"
@@ -154,6 +179,8 @@ def main():
                 )
             print(f"worst over the watch: loop {worst['loop'] / 1000:.2f} ms, scan gap "
                   f"{worst['scan'] / 1000:.2f} ms, other half scan gap {worst['other'] / 1000:.2f} ms")
+            for name, h in worst_gap.items():
+                print(f"  {name}, second {h['second']}: " + gap_line(h, at=False))
     finally:
         c.close()
 
