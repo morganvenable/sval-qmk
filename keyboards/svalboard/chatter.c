@@ -32,7 +32,7 @@ const sval_chatter_t *sval_chatter_stats(void) {
     return &st;
 }
 
-void sval_chatter_frame(const uint8_t *old_rows, const uint8_t *new_rows, uint32_t now_us) {
+void sval_chatter_frame(const uint8_t *old_rows, const uint8_t *new_rows, uint32_t now_us, uint32_t frame) {
     static bool init = false;
     if (!init) {
         sval_chatter_clear(now_us);
@@ -48,7 +48,8 @@ void sval_chatter_frame(const uint8_t *old_rows, const uint8_t *new_rows, uint32
             if (st.seen[r] & bit) {
                 uint32_t gap = now_us - st.last_us[r][c];
                 if (gap < st.min_gap_us[r][c]) st.min_gap_us[r][c] = (uint16_t)gap;
-                if (gap < SVAL_CHATTER_FAST_US) {
+                bool one_frame = (frame - st.last_frame[r][c]) <= 1 && gap < SVAL_CHATTER_ONE_FRAME_MAX_US;
+                if (gap < SVAL_CHATTER_FAST_US || one_frame) {
                     if (st.fast[r][c] < 0xFFFF) st.fast[r][c]++;
 #if defined(CONSOLE_ENABLE) && !defined(SVAL_DEBOUNCE_HOST_TEST)
                     uprintf("chatter r%u c%u %s after %lu us\n", r, c, (new_rows[r] & bit) ? "down" : "up", (unsigned long)gap);
@@ -56,7 +57,8 @@ void sval_chatter_frame(const uint8_t *old_rows, const uint8_t *new_rows, uint32
                 }
             }
             st.seen[r] |= bit;
-            st.last_us[r][c] = now_us;
+            st.last_us[r][c]    = now_us;
+            st.last_frame[r][c] = frame;
         }
     }
 }

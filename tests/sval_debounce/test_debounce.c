@@ -187,11 +187,11 @@ static void test_chatter(void) {
     uint32_t t = 10000;
     for (int k = 0; k < 10; k++) {
         b[1] = 0x01;
-        sval_chatter_frame(a, b, t);
+        sval_chatter_frame(a, b, t, t / 1000);
         memcpy(a, b, 5);
         t += 40000;
         b[1] = 0;
-        sval_chatter_frame(a, b, t);
+        sval_chatter_frame(a, b, t, t / 1000);
         memcpy(a, b, 5);
         t += 60000;
     }
@@ -202,7 +202,7 @@ static void test_chatter(void) {
     const uint32_t at[3] = {t, t + 1000, t + 2500};
     for (int k = 0; k < 3; k++) {
         b[0] = (k & 1) ? 0 : 0x20;
-        sval_chatter_frame(a, b, at[k]);
+        sval_chatter_frame(a, b, at[k], at[k] / 1000);
         memcpy(a, b, 5);
     }
     CHECK(s->transitions[0][5] == 3, "3 transitions");
@@ -211,10 +211,33 @@ static void test_chatter(void) {
     CHECK(s->fast[1][0] == 0 && s->transitions[2][0] == 0, "other keys untouched");
     // A gap of exactly the limit is not fast.
     b[0] = 0;
-    sval_chatter_frame(a, b, at[2] + SVAL_CHATTER_FAST_US);
+    sval_chatter_frame(a, b, at[2] + SVAL_CHATTER_FAST_US, (at[2] + SVAL_CHATTER_FAST_US) / 1000);
     CHECK(s->fast[0][5] == 2, "gap at the limit is not fast");
     sval_chatter_clear(t);
     CHECK(s->transitions[0][5] == 0 && s->min_gap_us[0][5] == 0xFFFF && s->seen[0] == 0, "clear");
+
+    // A slow main loop (6 ms frames): a one-frame pulse is still fast, a
+    // two-frame one is not. With 100 ms idle frames a one-frame pulse is not.
+    memset(a, 0, 5);
+    uint32_t f = 1000;
+    const struct {
+        uint32_t frames, frame_us;
+        uint16_t fast;
+    } cases[] = {{1, 6000, 1}, {2, 6000, 0}, {1, 100000, 0}};
+    for (int k = 0; k < 3; k++) {
+        sval_chatter_clear(t);
+        b[4] = 0x08;
+        sval_chatter_frame(a, b, t, f);
+        memcpy(a, b, 5);
+        t += cases[k].frames * cases[k].frame_us;
+        f += cases[k].frames;
+        b[4] = 0;
+        sval_chatter_frame(a, b, t, f);
+        memcpy(a, b, 5);
+        CHECK(s->fast[4][3] == cases[k].fast, "slow frames case %d: fast %u", k, s->fast[4][3]);
+        t += 1000000;
+        f += 100;
+    }
 }
 
 int main(void) {

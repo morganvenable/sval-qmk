@@ -3,8 +3,9 @@
 
 Clears the chatter counters on both halves, waits (type normally, or leave the
 board alone for an idle test), then prints every key that changed and flags
-"fast" transitions: a press or release shorter than 3 ms, faster than any
-finger. Exit status 1 when any key chattered, 2 when the board has no log.
+"fast" transitions: a press or release shorter than 3 ms, or lasting a
+single scan frame, faster than any finger. Exit status 1 when any key
+chattered, 2 when the board has no log.
 
   python chatter.py --serial sval:XXXX --seconds 120
 
@@ -124,7 +125,7 @@ def main():
             g = f"{gap[c] / 1000:.2f} ms" if seen[c] and gap[c] != 0xFFFF else "-"
             rows.append((fast[c], f"{HANDS[hand]:5} {name:5} r{row}c{c}  {trans[c]:6}  {fast[c]:5}  {g:>10}"))
     secs = max((v[0][2] for v in data.values()), default=0) / 1000
-    print(f"\n{secs:.0f} s logged, {total} transitions, {fast_total} fast (< 3 ms apart)\n")
+    print(f"\n{secs:.0f} s logged, {total} transitions, {fast_total} fast (under 3 ms, or one frame)\n")
     if rows:
         print("hand  key   pos   trans   fast   shortest")
         for _, line in sorted(rows, key=lambda x: -x[0]):

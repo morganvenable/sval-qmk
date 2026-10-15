@@ -317,6 +317,10 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         idle_stage = 0;
         sval_clock_full();
     }
+#ifdef SVAL_CHATTER_LOG
+    static uint32_t frame_no = 0;
+    frame_no++;
+#endif
     if (frame_start_us) ema32(&stat_frame_us, now - frame_start_us);
     frame_start_us = now;
     led_on_acc_us  = 0;
@@ -356,7 +360,7 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         bool changed = memcmp(raw_matrix, curr_matrix, sizeof(curr_matrix)) != 0;
         if (changed) {
 #ifdef SVAL_CHATTER_LOG
-            sval_chatter_frame(raw_matrix, curr_matrix, now);
+            sval_chatter_frame(raw_matrix, curr_matrix, now, frame_no);
 #endif
             memcpy(raw_matrix, curr_matrix, sizeof(curr_matrix));
             last_change_ms = timer_read32();
