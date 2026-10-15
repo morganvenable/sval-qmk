@@ -287,7 +287,14 @@ bool sval_mt_rpc(uint8_t in_len, const uint8_t *in, uint8_t out_len, uint8_t *ou
 
 static bool remote_rpc(const uint8_t *req, uint8_t req_len, uint8_t *reply) {
     if (mt_updater_busy() || !is_transport_connected()) return false;
+#ifdef SVAL_PERF_STATS
+    uint8_t perf_prev = sval_perf_enter(SVAL_PERF_GAP_FETCH);
+    bool    ok        = transaction_rpc_exec(KEYBOARD_SYNC_B, req_len, req, SVAL_MT_RPC_REPLY, reply);
+    sval_perf_leave(perf_prev);
+    return ok;
+#else
     return transaction_rpc_exec(KEYBOARD_SYNC_B, req_len, req, SVAL_MT_RPC_REPLY, reply);
+#endif
 }
 
 static void remote_gone(uint8_t pad) {
