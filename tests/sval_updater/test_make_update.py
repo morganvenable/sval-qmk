@@ -264,7 +264,7 @@ def main():
     refuse_rel("a record with reserved0 set", "reserved", release_img(reserved0=2))
     refuse_rel("a protocol-1 build", "protocol", release_img(proto=1))
     refuse_rel("a protocol-2 build (32-byte reports)", "protocol", release_img(proto=2))
-    refuse_rel("the wrong tag", "expected 'vLaunch9'", None, *rel_common, "--expect-version", "vLaunch9")
+    refuse_rel("the wrong tag", "expected 'v9'", None, *rel_common, "--expect-version", "v9")
     refuse_rel("the wrong number", "expected 4", None, *rel_common, "--expect-fw-version", "4")
     refuse_rel("a blank-keymap image labeled sval", "keymap_id 1, the image was built with 2", release_img(keymap_id=2))
     refuse_rel("an image built from another keymap", "not a release keymap build", release_img(keymap_id=0), "--kb", "svalboard/right", "--keymap-id", "1", "--release")

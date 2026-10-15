@@ -604,46 +604,52 @@ a release updater build refuses to compile with it.
 
 **Settings (D39).** The first boot of a different firmware build resets every stored setting to that build's defaults, on each half, whether it arrived through the updater or a `.uf2` (`kb/build_reset.c`; `keyboards/svalboard/docs/settings-storage.md`). Flashing the identical image keeps them. GET_INFO byte 18 bit 2 tells the host. Keybard and a command-line tool will save a `.svil` before flashing and load it afterwards (D35).
 
-**Versions (D17, D32).** Launch tags are names (`vLaunch2`), so the number is
-committed in `kb/updater/fw_version.txt` and the version string is the tag
-name. Raise the number in the commit you tag. Release CI's first job
-(`kb/tools/release_version.py`) fails unless the tag is a valid version string
-(at most 16 of `A-Z a-z 0-9 . _ + -`) and the committed number is greater
-than the highest one committed at any published release that is not a draft,
-a dry run or this tag (a release from before the file existed counts as 0).
-Dry runs are not compared, so they never use up a number. A tag whose name
-contains `dryrun` or `dry-run` (any case), such as `vLaunch3-dryrun1`, is a
-dry run: its release is always a prerelease.
+**Tag names (D41).** Two kinds of tag release, and nothing else:
 
-**Tag names (D38).** Release CI accepts only three kinds of tag: stable
-`vLaunch<N>` (`vLaunch3`), bleeding-edge `vNext<N>`, and dry runs. Every
-other `v*` tag is refused, since it would publish as the latest release.
-Point-release names such as `vLaunch2.3` belong to Keybard and Keybard Host
-releases only and are never tagged here. The tagged commit must be on the
-`svalboard` branch, and only `svalboard/qmk` publishes: on a fork the run
-stops at the first job.
+| Tag | Matches | Release |
+|---|---|---|
+| `v3`, `v3.1` | `^v[0-9]+(\.[0-9]+)*$` | A full release, published as a **draft**: a person checks it and publishes it, and it then becomes the latest release |
+| `x3`, `x3.1` | `^x[0-9]+(\.[0-9]+)*$` | A **prerelease**, for next.keybard.svalboard.com, published at once, so it never becomes the latest release |
 
-**Graduating a vNext (D38).** A stable release is a new build: raise
-`fw_version.txt` above every `vNext` before it, run a dry run, then tag
-`vLaunch<N>`. Never edit a `vNext` release into a non-prerelease by hand: it
-would become the latest release with a number the next stable tag must still
-exceed.
+Every other tag is refused by the first job (`vLaunch3`, `vNext1`, `v3-rc1`,
+`x`, `3`), so it cannot publish. The same tag name marks the firmware,
+Keybard and Keybard Host releases that go together: `x3` on all three, then
+`v3`. Both kinds must name a commit on the `svalboard` branch, and only
+`svalboard/qmk` publishes: on a fork the run stops at the first job. Older
+releases (`vLaunch`, `vLaunch2`) keep their tags and still count for the
+version check; new releases use `v` and `x` tags only.
 
-**Bleeding edge (D36).** A `vNext` tag with a number, such as `vNext1`, is a
-bleeding-edge release, for use with next.keybard.svalboard.com. It is
-published as a prerelease, so it never becomes the latest release, but its
-number counts: each `vNext` raises it, and the next stable release must be
-higher than every `vNext` before it. Any other tag starting with `vNext` (any
-case) is refused.
+**Versions (D17, D32).** Tags are names, so the number is committed in
+`kb/updater/fw_version.txt` and the version string is the tag name. Raise the
+number in the commit you tag. Release CI's first job
+(`kb/tools/release_version.py`) fails unless the tag is a release tag (above)
+and a valid version string (at most 16 of `A-Z a-z 0-9 . _ + -`), and the
+committed number is greater than the highest one committed at any published
+release that is not a draft or this tag (a release from before the file
+existed counts as 0). Prereleases count: each `x` tag raises the number, and
+the next `v` tag must be higher than every `x` tag before it.
 
-**The jobs** (`.github/workflows/release.yml`, on `v*` tags):
+**Graduating an x tag (D41).** A full release is a new build: after `x3` has
+been tried on next.keybard, raise `fw_version.txt` in a commit on `svalboard`,
+tag it `v3`, check the draft release, then publish it. Never edit an `x`
+release into a full release by hand: it would become the latest release with
+a number the next `v` tag must still exceed. A draft does not count until it
+is published.
+
+**Running a release again.** If a run fails, delete the tag's release if one
+was made, then re-run the failed jobs, or start a new run on the tag:
+`gh workflow run release.yml -R svalboard/qmk --ref x3 -f tag=x3`. The run
+must be on the tag itself and name the same tag, or the first job stops.
+
+**The jobs** (`.github/workflows/release.yml`, on `v<N>` and `x<N>` tags, or a
+re-run by hand):
 
 | Job | What it does |
 |---|---|
-| version | The check above. Outputs the version, the number and whether the release is a prerelease |
+| version | The check above. Outputs the version, the number, and whether the release is a prerelease or a draft |
 | build | The 2 release builds as **release updater builds** (`SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes SVAL_FW_VERSION_STRING=<tag>`), through `build-firmware.yml` with `updater: true`, in the pinned image with the pinned toolchain (below). Each runs `check_ram_funcs.py`, then `make_update.py --release --expect-version <tag> --expect-fw-version <N>`, which writes the `.svup` next to the `.uf2`. It uploads the `.uf2`, the `.svup` and the ELF. No build job can write to the repository (`contents: read`, no Git credentials kept) |
 | lint | `check_tag_commit.sh`: the tag still names the run's commit. `check_release_artifacts.py`: exactly the 2 builds' files; each `.svup`'s image is its ELF's flash contents (as `objcopy -O binary` writes them) and its `.uf2`'s image; each manifest's hash, version, side, pointing device and keymap, and each image's build-info record, match the build's name, and the release checks pass. `check_release_elf.py` on the 2 ELFs: an updater build whose build-info record says RELEASE and nothing else, the auto pointing build and the `sval` keymap, with no test-hook, keytest or host-bootloader symbols. `check_split_tables.py --golden`: the left/right pairing has the same split message table, and each build's table equals `kb/tools/split_table_golden.json` |
-| publish | Creates the release for the tag directly (not a draft; a prerelease for a dry run or a `vNext` tag) with the 2 `.uf2` and 2 `.svup` files. Refuses if the tag already has a release |
+| publish | Creates the release named after the tag (a draft for a `v` tag, a published prerelease for an `x` tag) with the 4 `.uf2` and 4 `.svup` files. Refuses if the tag already has a release |
 
 Every job checks out the run's commit (`github.sha`), never the tag by name,
 and `check_tag_commit.sh` stops the run from publishing under a tag that now
@@ -681,8 +687,9 @@ python3 -I $T --write-golden $G BUILD.elf
 ```
 
 **Checking a published release.** `kb/tools/m3/check_release.sh TAG [REPO]`
-downloads its assets and runs `check_release_assets.py`: not a draft (and a
-prerelease for a dry-run tag), exactly 2 `.uf2` and 2 `.svup`, each `.svup`
+downloads its assets and runs `check_release_assets.py`: a prerelease for an
+`x` tag and a full release (a draft until published) for a `v` tag, exactly 4
+`.uf2` and 4 `.svup`, each `.svup`
 holds its `.uf2`'s image with the build's side, pointing device and keymap,
 and a release build accepts it.
 

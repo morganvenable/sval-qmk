@@ -16,7 +16,7 @@ keytest or host bootloader, and that its build-info record says the same
 version and keymap as the manifest:
 
     make_update.py IN.uf2 -o OUT.svup --kb svalboard/right --keymap sval \\
-        --release [--expect-version vLaunch3] [--expect-fw-version N]
+        --release [--expect-version v3] [--expect-fw-version N]
 
     make_update.py verify FILE.svup [--build release|plain]
 
