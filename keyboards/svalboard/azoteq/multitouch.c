@@ -21,6 +21,9 @@ extern usb_endpoint_in_t usb_endpoints_in[USB_ENDPOINT_IN_COUNT];
 #ifdef SVAL_NATIVE_PTP
 #    include "ptp.h"
 #endif
+#ifdef SVAL_PERF_STATS
+#    include "perf.h"
+#endif
 
 #ifndef SVAL_MT_DEFAULT_PERIOD_MS
 #    define SVAL_MT_DEFAULT_PERIOD_MS 10
@@ -192,6 +195,38 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
         put32(data + 24, max_read_ms);
         return;
     }
+#ifdef SVAL_PERF_STATS
+    // 0xFC op 0x43: timing counters. data[7] 0 this half, 1 the other half,
+    // 2 reset both; data[8] page. Reply: 0xC3, status, page, target, native
+    // built, 0xA5, then 13 little-endian u32 from data[12].
+    if (op == 0x43) {
+        uint8_t  target = data[7], page = data[8];
+        uint32_t words[SVAL_PERF_PAGE_WORDS] = {0};
+        memset(data + 6, 0, length - 6);
+        data[6] = 0xC3; data[8] = page; data[9] = target;
+        data[11] = 0xA5; // marks a counters reply (older builds answer 0xC3 too)
+#    ifdef SVAL_NATIVE_PTP
+        data[10] = 1;
+#    endif
+        if (target == 0) {
+            data[7] = sval_perf_page(page, words) ? 0 : 2;
+        } else if (target == 1 || target == 2) {
+#    ifdef SVAL_MT_SPLIT
+            uint8_t req = target == 2 ? 0x20 : 0x10 | (page & 0x0F), reply[60] = {0};
+            bool    ok  = !updater_active() && is_transport_connected() && transaction_rpc_exec(KEYBOARD_MT, 1, &req, sizeof(reply), reply) && reply[0] == 0xA8 && reply[1];
+            data[7] = ok ? 0 : 1;
+            if (ok && target == 1) memcpy(words, reply + 4, sizeof(words));
+#    else
+            data[7] = 1;
+#    endif
+            if (target == 2) sval_perf_reset();
+        } else {
+            data[7] = 2;
+        }
+        for (uint8_t i = 0; i < SVAL_PERF_PAGE_WORDS; i++) put32(data + 12 + 4 * i, words[i]);
+        return;
+    }
+#endif
 #ifdef SVAL_NATIVE_PTP
     if (op == 0x42) {
         owner_command(data, length);
@@ -323,6 +358,23 @@ void sval_mt_sample(const uint8_t *raw, bool valid) {
 // Wire v1: magic, valid, sample age:u16, coherent 56-byte contact frame.
 // The two MCU clocks remain separate; age is measured on the source MCU.
 static void mt_rpc(uint8_t in_len, const void *in, uint8_t out_len, void *out) {
+#ifdef SVAL_PERF_STATS
+    // 0x10 | page: this half's counters; 0x20: reset them. Same 60-byte reply.
+    if (in_len == 1 && out_len == 60 && (*(const uint8_t *)in & 0xF0)) {
+        uint8_t  req = *(const uint8_t *)in, *reply = out;
+        uint32_t words[SVAL_PERF_PAGE_WORDS];
+        memset(reply, 0, out_len);
+        reply[0] = 0xA8;
+        if (req == 0x20) {
+            sval_perf_reset();
+            reply[1] = 1;
+        } else if ((req & 0xF0) == 0x10 && sval_perf_page(req & 0x0F, words)) {
+            reply[1] = 1; reply[2] = req & 0x0F;
+            memcpy(reply + 4, words, sizeof(words));
+        }
+        return;
+    }
+#endif
     if (in_len != 1 || *(const uint8_t *)in != 1 || out_len != 60) return;
     uint8_t *reply = out;
     memset(reply, 0, out_len);
@@ -348,7 +400,16 @@ static void poll_remote(void) {
     if (timer_elapsed32(remote_poll) < 10 || updater_active()) return;
     remote_poll = timer_read32();
     uint8_t request = 1, reply[60] = {0};
-    bool ok = is_transport_connected() && transaction_rpc_exec(KEYBOARD_MT, 1, &request, sizeof(reply), reply);
+#ifdef SVAL_PERF_STATS
+    uint32_t rpc_started = sval_perf_now_us();
+    bool     connected   = is_transport_connected();
+#else
+    const bool connected = is_transport_connected();
+#endif
+    bool ok = connected && transaction_rpc_exec(KEYBOARD_MT, 1, &request, sizeof(reply), reply);
+#ifdef SVAL_PERF_STATS
+    bool rpc_fresh = false;
+#endif
     if (ok && reply[0] == 0xA7 && reply[1] && reply[4] == 1 &&
         reply[5] == (is_keyboard_left() ? 1 : 0)) {
         uint8_t *frame = reply + 4;
@@ -362,11 +423,20 @@ static void poll_remote(void) {
                 if (sval_ptp_wants_frames()) sval_ptp_feed(frame); // only the mouse hold
 #endif
                 queue_remote(frame);
+#ifdef SVAL_PERF_STATS
+                rpc_fresh = true;
+#endif
             }
             remote_sequence = seq; remote_seen = true; remote_stale = false;
+#ifdef SVAL_PERF_STATS
+            sval_perf_rpc(sval_perf_now_us() - rpc_started, true, rpc_fresh);
+#endif
             return;
         }
     }
+#ifdef SVAL_PERF_STATS
+    if (connected) sval_perf_rpc(sval_perf_now_us() - rpc_started, ok, false);
+#endif
     if (remote_seen && !remote_stale && timer_elapsed32(remote_received) > 100) {
         uint8_t frame[FRAME_SIZE] = {0};
         frame[0] = 1; frame[1] = is_keyboard_left() ? 1 : 0;
@@ -388,7 +458,16 @@ static void poll_remote_ptp(void) {
     ptp_poll_at = timer_read32();
     uint8_t request = 1, reply[60] = {0};
     uint8_t remote_pad = is_keyboard_left() ? 1 : 0;
-    bool ok = is_transport_connected() && transaction_rpc_exec(KEYBOARD_MT, 1, &request, sizeof(reply), reply);
+#ifdef SVAL_PERF_STATS
+    uint32_t rpc_started = sval_perf_now_us();
+    bool     connected   = is_transport_connected();
+#else
+    const bool connected = is_transport_connected();
+#endif
+    bool ok = connected && transaction_rpc_exec(KEYBOARD_MT, 1, &request, sizeof(reply), reply);
+#ifdef SVAL_PERF_STATS
+    bool rpc_fresh = false;
+#endif
     if (ok && reply[0] == 0xA7 && reply[1] && reply[4] == 1 && reply[5] == remote_pad) {
         uint8_t *frame = reply + 4;
         uint16_t seq   = frame[4] | (uint16_t)frame[5] << 8;
@@ -396,14 +475,25 @@ static void poll_remote_ptp(void) {
         uint32_t ep    = get32(frame + 12);
         if (age <= SVAL_PTP_REMOTE_STALE_MS) {
             ptp_received = timer_read32();
-            if (!ptp_remote_seen || ptp_remote_lost || seq != ptp_remote_sequence || ep != ptp_remote_epoch) sval_ptp_feed(frame);
+            if (!ptp_remote_seen || ptp_remote_lost || seq != ptp_remote_sequence || ep != ptp_remote_epoch) {
+                sval_ptp_feed(frame);
+#    ifdef SVAL_PERF_STATS
+                rpc_fresh = true;
+#    endif
+            }
             ptp_remote_sequence = seq;
             ptp_remote_epoch    = ep;
             ptp_remote_seen     = true;
             ptp_remote_lost     = false;
+#    ifdef SVAL_PERF_STATS
+            sval_perf_rpc(sval_perf_now_us() - rpc_started, true, rpc_fresh);
+#    endif
             return;
         }
     }
+#    ifdef SVAL_PERF_STATS
+    if (connected) sval_perf_rpc(sval_perf_now_us() - rpc_started, ok, false);
+#    endif
     if (ptp_remote_seen && !ptp_remote_lost && timer_elapsed32(ptp_received) > SVAL_PTP_REMOTE_STALE_MS) {
         sval_ptp_pad_lost(remote_pad);
         ptp_remote_lost = true;
@@ -422,6 +512,9 @@ void sval_mt_init(void) {
 }
 
 void sval_mt_task(void) {
+#ifdef SVAL_PERF_STATS
+    sval_perf_loop();
+#endif
     if (!is_keyboard_master()) return;
     if (restore_pending && azoteq_iqs5xx_mt_config(5, SVAL_MT_DEFAULT_PERIOD_MS)) {
         configured_max = 5; configured_period = SVAL_MT_DEFAULT_PERIOD_MS; restore_pending = false; reset_stream();

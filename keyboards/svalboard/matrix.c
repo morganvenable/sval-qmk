@@ -314,6 +314,10 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         sval_clock_full();
     }
     if (frame_start_us) ema32(&stat_frame_us, now - frame_start_us);
+#ifdef SVAL_PERF_STATS
+    extern void sval_perf_scan(uint32_t now_us);
+    sval_perf_scan(now);
+#endif
     frame_start_us = now;
     led_on_acc_us  = 0;
 

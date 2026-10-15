@@ -38,3 +38,13 @@ ifeq ($(strip $(SVAL_NATIVE_PTP)),yes)
     OPT_DEFS += -DSVAL_PTP_MOUSE_BEFORE_MODE3=0
   endif
 endif
+
+# Timing counters (main loop, matrix frames, pad I2C, split RPC, touchpad
+# frames), read with tools/multitouch/perf.py. Off by default.
+ifeq ($(strip $(SVAL_PERF_STATS)),yes)
+  ifneq ($(strip $(SVAL_AZOTEQ_MULTITOUCH)),yes)
+    $(error SVAL_PERF_STATS requires SVAL_AZOTEQ_MULTITOUCH=yes)
+  endif
+  OPT_DEFS += -DSVAL_PERF_STATS
+  SRC += azoteq/perf.c
+endif

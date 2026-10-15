@@ -367,3 +367,17 @@ lease (`unified_lab.py` and friends) is refused (status 5) until the owner is
 - `ptp_hid.py`: the small HID descriptor parser both use.
 - Host tests: `util/test_native_ptp.sh` (unifier, feature reports, owner
   command, descriptor; hid-tools cross-check when it is installed).
+
+## Timing counters (SVAL_PERF_STATS)
+
+ (with ) adds
+: per-half counters of main-loop passes, matrix frames, pad
+I2C reads (whole read and end session, in microseconds) and, on the USB
+half, the KEYBOARD_MT RPC to the other half, with maximums and gap
+histograms (<1, 1-2, 2-4, 4-8, 8-16, >=16 ms). Raw HID 0xFC op 0x43 reads
+them (data[7] 0 this half, 1 the other half, 2 reset both; data[8] page
+0-2); the other half answers KEYBOARD_MT requests 0x10|page and 0x20. With
+the flag off the firmware is byte-identical to the build without it.
+
+    python perf.py --serial SERIAL run 30     # one 30 s window, both halves
+    python perf.py --serial SERIAL watch 10   # one line per second

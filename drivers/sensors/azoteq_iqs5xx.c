@@ -157,6 +157,11 @@ i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
     extern void sval_mt_read_status(i2c_status_t read_status, i2c_status_t end_status, uint32_t elapsed_ms);
     uint8_t raw[45] = {0};
     uint32_t started = timer_read32();
+#    ifdef SVAL_PERF_STATS
+    extern uint32_t sval_perf_now_us(void);
+    extern void     sval_perf_i2c(uint32_t us, bool ok);
+    uint32_t started_us = sval_perf_now_us();
+#    endif
     i2c_status_t status = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, raw, sizeof(raw), AZOTEQ_IQS5XX_CONTACT_TIMEOUT_MS);
     // IQS5xx datasheet 8.8.2: a low-power wake may NACK the first address.
     // Retry exactly once after >=150 us, only for a pure ACK failure (HAL bit
@@ -178,6 +183,9 @@ i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
         memcpy(base_data, raw, sizeof(*base_data));
         status = end_status = azoteq_iqs5xx_end_session();
     }
+#    ifdef SVAL_PERF_STATS
+    sval_perf_i2c(sval_perf_now_us() - started_us, status == I2C_STATUS_SUCCESS);
+#    endif
     sval_mt_read_status(read_status, end_status, timer_elapsed32(started));
     sval_mt_sample(raw, status == I2C_STATUS_SUCCESS);
     return status;
