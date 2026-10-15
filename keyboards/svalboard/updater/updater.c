@@ -329,6 +329,9 @@ static update_status_t op_info(const uint8_t *req, uint8_t *rsp) {
 #ifdef SVAL_UPDATE_TEST_HOOKS
     rsp[21] |= 0x08;
 #endif
+#ifdef SVAL_UPDATE_NO_CHORD
+    rsp[21] |= 0x80;
+#endif
     rsp[22] = s.last_error;
     info_sizes(rsp);
     return die_ok && !failing ? UPDATE_OK : UPDATE_UNAVAILABLE;
