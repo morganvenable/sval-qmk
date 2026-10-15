@@ -64,8 +64,8 @@ The keyboard definition (`sval.json`, keymaps `sval` and `blank`) describes each
 `POINTING_MOTION` (`0x2D`) returns each hand's pointing motion since the previous read and the pointing modes in force, for a live picture of the modules. Reading clears the counts.
 
 - Discovery: GET_INFO byte 19, bit 3 (`sval_flag2_pointing_motion`, `0x08`). Older firmware leaves it zero.
-- Request: `DF 2D`
-- Response: `DF 2D` then 24 bytes (offsets from the first of them). `format` `0` means no data.
+- Request: `DF 2D <reader>`. `reader` is one byte naming the app that reads (see [Readers](#readers)); `0`, or nothing (the zero padding older clients send), is a client that names none.
+- Response: `DF 2D` then 24 bytes (offsets from the first of them), then the 5-byte extension when the board sets bit 4 and the packet has room. `format` `0` means no data.
 
 | off | size | field |
 |---|---|---|
@@ -75,6 +75,9 @@ The keyboard definition (`sval.json`, keymaps `sval` and `blank`) describes each
 | 3 | 10 | left hand |
 | 13 | 10 | right hand |
 | 23 | 1 | axis lock: `0` free, `1` locked vertical, `2` locked horizontal (`0` while axis lock is off) |
+| 24 | 1 | the `reader` the request named (extension) |
+| 25 | 2 | left hand's sensor CPI, uint16 little-endian; `0` when that hand has no CPI-based sensor (extension) |
+| 27 | 2 | right hand's sensor CPI, as above (extension) |
 
 Each hand:
 
@@ -90,8 +93,18 @@ Each hand:
 | 9 | 1 | touch y, 0-255 down the pad (only with bit 4) |
 
 - The counts are both halves' reports in the native split pointing path (`pointing_device_task_combined_kb`), after rotation and invert and before sniper, boost and scroll conversion, so they are raw sensor counts at the hand's CPI. Scroll-mode motion still shows in dx/dy with bit 1 set; h and v carry what the module itself reports as wheel (an Azoteq scroll gesture).
-- Motion is counted only while a host app has read `POINTING_MOTION` within the last 1.5 s (`SVAL_HOST_ACTIVE_MS`). These reads don't count as host activity, so a host that keeps polling doesn't hold the board out of deep idle; a read can then take up to one deep-idle nap (20 ms) to answer.
+- Motion is counted for a reader only while it has read `POINTING_MOTION` within the last 1.5 s (`SVAL_HOST_ACTIVE_MS`). These reads don't count as host activity, so a host that keeps polling doesn't hold the board out of deep idle; a read can then take up to one deep-idle nap (20 ms) to answer.
 - A hand that is not valid (no module, the driver didn't start, or the other half is disconnected) has an all-zero block.
 - Touch positions and finger counts are not reported yet: bit 4 and bits 5-6 read `0`.
+
+### Readers
+
+Each reader keeps its own counts, so two apps polling one board (Keybard in a browser and the Keybard Host, say) each see all of the motion rather than splitting it. A read clears only the reading app's counts and restarts only its 1.5 s window and its elapsed time (byte 2).
+
+- Discovery: GET_INFO byte 19, bit 4 (`sval_flag2_pointing_motion_readers`, `0x10`). Firmware without it ignores the `reader` byte and keeps one set of counts that every read clears, so each of two apps polling it gets part of the motion.
+- Reader ids: `0` a client that names none, `1` Keybard, `2` the Keybard Host. Other values are free for other apps.
+- The board keeps counts for up to 4 readers. A reader that hasn't read for 1.5 s stops counting, and its slot can go to a new reader; when all 4 are taken, a new reader takes the one read longest ago. A reader's first read in a slot returns zero counts and elapsed `0`.
+- The extension (bytes 24-28) needs a 64-byte report; in a client-wrapped 32-byte report only the 24-byte report fits.
+- CPI is the setting sent to a trackball's sensor (PMW3360 or PMW3389). A host turns counts into distance with it: counts / (CPI / 25.4) is millimeters of ball surface. A TrackPoint or touchpad hand reads `0`.
 
 Packet formats: [client-ID protocol](../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [layer state](../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), [command definitions](../../../modules/svalboard/core/sval.h).

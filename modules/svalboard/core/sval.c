@@ -181,7 +181,7 @@ uint8_t sval_get_feature_flags(void) {
 uint8_t sval_get_feature_flags2(void) {
     uint8_t flags = sval_flag2_default_layer_set | sval_flag2_pointing_hardware | sval_flag2_modifier_state;
 #ifdef POINTING_DEVICE_ENABLE
-    flags |= sval_flag2_pointing_motion;
+    flags |= sval_flag2_pointing_motion | sval_flag2_pointing_motion_readers;
 #endif
     return flags;
 }
@@ -764,13 +764,15 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         }
 
         case sval_cmd_pointing_motion: {
-            // Request:  [0xDF] [0x2D]
+            // Request:  [0xDF] [0x2D] [reader]
             // Response: [0xDF] [0x2D] [format] [report...]
-            // Read-and-clear. format 0: no data. The keyboard defines the report
-            // (Svalboard: keyboards/svalboard/docs/protocol.md).
+            // Read-and-clear, per reader (0 for a client that names none). format 0:
+            // no data. The keyboard defines the report (Svalboard:
+            // keyboards/svalboard/docs/protocol.md).
             if (length > 2) {
+                uint8_t reader = data[2];
                 memset(&data[2], 0, length - 2);
-                sval_pointing_motion_kb(&data[2], length - 2);
+                sval_pointing_motion_kb(reader, &data[2], length - 2);
             }
             break;
         }
@@ -1074,7 +1076,7 @@ __attribute__((weak)) void sval_host_packet_kb(void) {}
 
 __attribute__((weak)) void sval_pointing_hardware_kb(uint8_t *out, uint8_t length) {}
 
-__attribute__((weak)) void sval_pointing_motion_kb(uint8_t *out, uint8_t length) {}
+__attribute__((weak)) void sval_pointing_motion_kb(uint8_t reader, uint8_t *out, uint8_t length) {}
 
 // Override via_command_kb to intercept wrapper and Sval protocol
 bool via_command_kb(uint8_t *data, uint8_t length) {

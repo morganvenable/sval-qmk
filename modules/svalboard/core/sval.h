@@ -108,10 +108,11 @@ enum sval_feature_flags {
 // Second feature byte, GET_INFO byte 19 (after the storage flags in byte 18).
 // Older firmware leaves it zero.
 enum sval_feature_flags2 {
-    sval_flag2_default_layer_set = (1 << 0), // 0x2B sets the saved default layer
-    sval_flag2_pointing_hardware = (1 << 1), // 0x2C reports each half's side and pointing sensor
-    sval_flag2_modifier_state    = (1 << 2), // 0x16 appends the board's modifiers, Caps Word and Caps Lock
-    sval_flag2_pointing_motion   = (1 << 3), // 0x2D reports pointing motion since the last read
+    sval_flag2_default_layer_set       = (1 << 0), // 0x2B sets the saved default layer
+    sval_flag2_pointing_hardware       = (1 << 1), // 0x2C reports each half's side and pointing sensor
+    sval_flag2_modifier_state          = (1 << 2), // 0x16 appends the board's modifiers, Caps Word and Caps Lock
+    sval_flag2_pointing_motion         = (1 << 3), // 0x2D reports pointing motion since the last read
+    sval_flag2_pointing_motion_readers = (1 << 4), // 0x2D keeps counts per reader id and reports each hand's CPI
 };
 
 // Status byte after the modifiers in the 0x16 reply (sval_flag2_modifier_state).
@@ -365,9 +366,9 @@ void sval_host_packet_kb(void);
 void sval_pointing_hardware_kb(uint8_t *out, uint8_t length);
 
 // POINTING_MOTION (0x2D): the keyboard fills out[0..length-1] (already zeroed) with
-// the motion since the previous read, then clears it. Weak no-op in the module;
-// out[0] = 0 means no data.
-void sval_pointing_motion_kb(uint8_t *out, uint8_t length);
+// the motion since `reader`'s previous read, then clears that reader's counts. Weak
+// no-op in the module; out[0] = 0 means no data.
+void sval_pointing_motion_kb(uint8_t reader, uint8_t *out, uint8_t length);
 
 void sval_keycode_down(uint16_t keycode);
 void sval_keycode_up(uint16_t keycode);
