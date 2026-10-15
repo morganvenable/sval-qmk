@@ -60,6 +60,9 @@ const update_build_info_t sval_update_build_info = {
 #ifdef SVAL_KEYTEST
              | UPDATE_BUILD_KEYTEST
 #endif
+#ifdef SVAL_UPDATE_NO_CHORD
+             | UPDATE_BUILD_NO_CHORD
+#endif
              | BI_HOST_BOOTLOADER,
     .reserved0 = 0,
     .updater_proto = UPDATE_PROTOCOL_VERSION,
