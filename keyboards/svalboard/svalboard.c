@@ -17,6 +17,12 @@
 #include "identity.h"
 #include "build_reset.h"
 #include "nvm_via.h"
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+#    include "azoteq/multitouch.h"
+#endif
+#ifdef SVAL_PERF_STATS
+#    include "perf.h"
+#endif
 #ifdef SVAL_UPDATER
 #    include "updater/updater.h"
 #    include "updater/update_split.h"
@@ -505,6 +511,14 @@ void kb_sync_listener(uint8_t in_buflen, const void *in_data, uint8_t out_buflen
 
 // Scan Lab requests from the master run here on the other half.
 static void scanlab_rpc_listener(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    // The native touchpad's requests for this half's pad share this RPC
+    // (azoteq/multitouch.h): the split message table stays the same.
+    if (sval_mt_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return;
+#endif
+#ifdef SVAL_PERF_STATS
+    if (sval_perf_split_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return;
+#endif
     uint8_t req[SCANLAB_REQ_LEN] = {0};
     uint8_t rsp[SCANLAB_RSP_LEN] = {0};
     memcpy(req, in_data, in_buflen < SCANLAB_REQ_LEN ? in_buflen : SCANLAB_REQ_LEN);
@@ -514,6 +528,9 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void *in_data, uint8_t
 
 void keyboard_post_init_kb(void) {
     build_reset_post_init(); // the settings were reset in quantum_init()
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    sval_mt_init();
+#endif
     read_eeprom_kb();
     sval_pointer_rest_apply(); // the sensor was initialised before the flags were read
     sval_sleep_gating_init();
@@ -548,6 +565,13 @@ void sval_pointing_hardware_kb(uint8_t *out, uint8_t length) {
     out[0] = 1;
     memcpy(&out[1], &mine, sizeof(mine));
     if (is_connected) memcpy(&out[1 + sizeof(mine)], &other_pointer, sizeof(other_pointer));
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    // The OS drives these pads as a touchpad: the pointer settings don't apply.
+    for (uint8_t b = 0; b < 2; b++) {
+        sval_pointer_identity_t *id = (sval_pointer_identity_t *)&out[1 + b * sizeof(mine)];
+        if ((id->flags & SVAL_POINTER_REPORTED) && sval_mt_os_touchpad((id->flags & SVAL_POINTER_LEFT) ? 0 : 1)) id->flags |= SVAL_POINTER_OS_TOUCHPAD;
+    }
+#endif
 }
 
 // The identity block for one hand: this half's, or the other half's while it is connected.
@@ -562,6 +586,20 @@ static inline bool sval_pointer_for_hand(bool left, sval_pointer_identity_t *id,
     }
     return false;
 }
+
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+// Hands whose pointing module is an Azoteq pad (bit 0 left, bit 1 right), for
+// the native touchpad (azoteq/multitouch.c).
+uint8_t sval_pad_hands(void) {
+    uint8_t mask = 0;
+    for (uint8_t hand = 0; hand < 2; hand++) {
+        sval_pointer_identity_t id;
+        bool                    local;
+        if (sval_pointer_for_hand(hand == 0, &id, &local) && id.detected == SVAL_SENSOR_AZOTEQ) mask |= 1u << hand;
+    }
+    return mask;
+}
+#endif
 
 #ifdef SVAL_FRAGMENT_IDX_LEFT_POINTING
 // Each hand's pointing fragment (Sval 0x18) from the module identity 0x2C reports.
@@ -598,10 +636,22 @@ static bool              motion_read_once = false;
 // Both halves' reports after rotation and invert, before sniper, boost and scroll
 // conversion (keymap_support.c). Counted only while a host app is reading them.
 report_mouse_t pointing_device_task_combined_kb(report_mouse_t left_report, report_mouse_t right_report) {
+#if defined(SVAL_AZOTEQ_MULTITOUCH) && defined(MOUSE_EXTENDED_REPORT)
+    // The other half's pad news counter rides in boot_x (azoteq.c); take it
+    // off before anything else sees the report.
+    sval_mt_remote_hint((uint8_t)(is_keyboard_left() ? right_report.boot_x : left_report.boot_x));
+    left_report.boot_x = right_report.boot_x = 0;
+#endif
     if (motion_read_once && timer_elapsed32(motion_last_read) < SVAL_HOST_ACTIVE_MS) {
         sval_motion_accumulate(&motion_acc[0], left_report.x, left_report.y, left_report.h, left_report.v, left_report.buttons);
         sval_motion_accumulate(&motion_acc[1], right_report.x, right_report.y, right_report.h, right_report.v, right_report.buttons);
     }
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+    // While the native touchpad has the pads, their mouse output is zero; a
+    // hand with a trackball or TrackPoint is never touched.
+    if (sval_mt_suppress_hand(0)) left_report = (report_mouse_t){0};
+    if (sval_mt_suppress_hand(1)) right_report = (report_mouse_t){0};
+#endif
     return pointing_device_task_combined_user(left_report, right_report);
 }
 
@@ -650,7 +700,44 @@ static void sval_usb_wake_handler(void) {
     }
 }
 
+#if defined(SVAL_TOUCH_DEV) || defined(SVAL_PERF_STATS)
+// Raw HID 0xFC (modules/svalboard/core/client_wrapper.c): the dev builds'
+// touchpad command (op 0x42) and timing counters (op 0x43). Not a released
+// protocol; release builds have neither.
+void sval_dev_command(uint8_t *data, uint8_t length) {
+    if (length != RAW_EPSIZE) return;
+    uint8_t op = data[6];
+#    ifdef SVAL_PERF_STATS
+    if (op == 0x43) {
+        sval_perf_command(data, length);
+        return;
+    }
+#    endif
+#    ifdef SVAL_TOUCH_DEV
+    if (op == 0x42) {
+        sval_mt_command(data, length);
+        return;
+    }
+#    endif
+    memset(data + 6, 0, length - 6);
+    data[6] = 0x80 | op;
+    data[7] = 2; // unknown op
+}
+#endif
+
 void housekeeping_task_kb(void) {
+#ifdef SVAL_PERF_STATS
+    sval_perf_loop();
+#endif
+#ifdef SVAL_AZOTEQ_MULTITOUCH
+#    ifdef SVAL_PERF_STATS
+    uint32_t mt_started = sval_perf_now_us();
+    sval_mt_task();
+    sval_perf_section(SVAL_PERF_SEC_TOUCH_TASK, sval_perf_now_us() - mt_started);
+#    else
+    sval_mt_task();
+#    endif
+#endif
     sval_pointer_probe_task();
     sval_usb_wake_handler();
     scanlab_housekeeping();

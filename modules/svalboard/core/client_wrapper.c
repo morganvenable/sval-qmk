@@ -9,6 +9,11 @@
 #include "timer.h"
 #include <string.h>
 
+#if defined(SVAL_TOUCH_DEV) || defined(SVAL_PERF_STATS)
+// Touchpad dev builds only (keyboards/svalboard/azoteq/multitouch.mk).
+extern void sval_dev_command(uint8_t *data, uint8_t length);
+#endif
+
 // Nonce size for bootstrap
 #define NONCE_SIZE 20
 
@@ -155,6 +160,12 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
     uint8_t protocol = data[5];
 
     switch (protocol) {
+#if defined(SVAL_TOUCH_DEV) || defined(SVAL_PERF_STATS)
+        case 0xFC: // Touchpad dev command and timing counters; never in a release.
+            sval_dev_command(data, length);
+            host_raw_hid_send(data, length);
+            return true;
+#endif
         case SVAL_PREFIX: {
             // Sval (0xDF) - handle directly
             // Inner payload starts at data[5] (includes protocol byte)

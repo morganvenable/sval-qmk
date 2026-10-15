@@ -517,6 +517,12 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM ConsoleReport[] = {
 };
 #endif
 
+#ifdef SVAL_NATIVE_PTP
+// Svalboard native Precision Touchpad: the report descriptor lives with the
+// keyboard (keyboards/svalboard/azoteq/ptp.c, ptp_descriptor.h).
+#    include "usb_ptp.h"
+#endif
+
 /*
  * Device descriptor
  */
@@ -1165,6 +1171,47 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor = {
         .PollingIntervalMS      = USB_POLLING_INTERVAL_MS
     },
 #endif
+
+#ifdef SVAL_NATIVE_PTP
+    /*
+     * Svalboard native Precision Touchpad: one interrupt IN endpoint, feature
+     * reports on the control endpoint, no boot protocol.
+     */
+    .Ptp_Interface = {
+        .Header = {
+            .Size               = sizeof(USB_Descriptor_Interface_t),
+            .Type               = DTYPE_Interface
+        },
+        .InterfaceNumber        = PTP_INTERFACE,
+        .AlternateSetting       = 0x00,
+        .TotalEndpoints         = 1,
+        .Class                  = HID_CSCP_HIDClass,
+        .SubClass               = HID_CSCP_NonBootSubclass,
+        .Protocol               = HID_CSCP_NonBootProtocol,
+        .InterfaceStrIndex      = NO_DESCRIPTOR
+    },
+    .Ptp_HID = {
+        .Header = {
+            .Size               = sizeof(USB_HID_Descriptor_HID_t),
+            .Type               = HID_DTYPE_HID
+        },
+        .HIDSpec                = VERSION_BCD(1, 1, 1),
+        .CountryCode            = 0x00,
+        .TotalReportDescriptors = 1,
+        .HIDReportType          = HID_DTYPE_Report,
+        .HIDReportLength        = sizeof(SvalPtpReport)
+    },
+    .Ptp_INEndpoint = {
+        .Header = {
+            .Size               = sizeof(USB_Descriptor_Endpoint_t),
+            .Type               = DTYPE_Endpoint
+        },
+        .EndpointAddress        = (ENDPOINT_DIR_IN | PTP_IN_EPNUM),
+        .Attributes             = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
+        .EndpointSize           = PTP_EPSIZE,
+        .PollingIntervalMS      = 1
+    },
+#endif
 };
 
 /*
@@ -1460,6 +1507,12 @@ uint16_t get_usb_descriptor(const uint16_t wValue, const uint16_t wIndex, const 
 
                     break;
 #endif
+#ifdef SVAL_NATIVE_PTP
+                case PTP_INTERFACE:
+                    Address = &ConfigurationDescriptor.Ptp_HID;
+                    Size    = sizeof(USB_HID_Descriptor_HID_t);
+                    break;
+#endif
             }
 
             break;
@@ -1522,6 +1575,12 @@ uint16_t get_usb_descriptor(const uint16_t wValue, const uint16_t wIndex, const 
                 case DIGITIZER_INTERFACE:
                     Address = &DigitizerReport;
                     Size    = sizeof(DigitizerReport);
+                    break;
+#endif
+#ifdef SVAL_NATIVE_PTP
+                case PTP_INTERFACE:
+                    Address = &SvalPtpReport;
+                    Size    = sizeof(SvalPtpReport);
                     break;
 #endif
             }

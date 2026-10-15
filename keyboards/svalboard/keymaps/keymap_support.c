@@ -23,6 +23,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "caps_word.h"
 #include "pointing_motion.h"
 #include <string.h>
+#ifdef SVAL_NATIVE_PTP
+#    include "../azoteq/ptp.h"
+#    include "../azoteq/ptp_descriptor.h"
+#endif
 
 // in keymap.c:
 #ifdef POINTING_DEVICE_AUTO_MOUSE_ENABLE
@@ -238,6 +242,26 @@ void update_boost_multiplier(void) {
     set_mult_axis(&boost_v, (uint8_t)mult);
 }
 
+#ifdef SVAL_NATIVE_PTP
+// Native touchpad contact motion feeds the same accumulator as mouse motion,
+// with the same per-hand gates, threshold and decay, normalized to the
+// mouse's 800 DPI. A pad is SVAL_PTP_PAD_X counts over 43 mm.
+#    define SVAL_PTP_COUNTS_PER_INCH ((SVAL_PTP_PAD_X * 254 + 215) / 430)
+#    define SVAL_PTP_AUTOMOUSE_DPI 800
+static void sval_ptp_automouse(void) {
+    int32_t left  = sval_ptp_take_motion(0);
+    int32_t right = sval_ptp_take_motion(1);
+    if (!global_saved_values.left_automouse) left = 0;
+    if (!global_saved_values.right_automouse) right = 0;
+    int32_t movement = ((left > right ? left : right) * SVAL_PTP_AUTOMOUSE_DPI) / SVAL_PTP_COUNTS_PER_INCH;
+    if (movement <= 0) return;
+    uint16_t decay_ms = global_saved_values.automouse_decay * 10;
+    if (decay_ms > 0 && timer_elapsed(automouse_accumulator_timer) > decay_ms) automouse_accumulator = 0;
+    automouse_accumulator_timer = timer_read();
+    automouse_accumulator += movement;
+    if (global_saved_values.automouse_threshold == 0 || automouse_accumulator >= global_saved_values.automouse_threshold) mouse_mode(true);
+}
+#endif
 
 report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, report_mouse_t reportMouse2) {
     report_mouse_t ret_mouse;
@@ -266,6 +290,10 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
         reportMouse2.h = add_to_axis(&boost_h, reportMouse2.h);
         reportMouse2.v = add_to_axis(&boost_v, reportMouse2.v);
     }
+
+#ifdef SVAL_NATIVE_PTP
+    sval_ptp_automouse();
+#endif
 
     if (reportMouse1.x == 0 && reportMouse1.y == 0 && reportMouse2.x == 0 && reportMouse2.y == 0)
         return pointing_device_combine_reports(reportMouse1, reportMouse2);
@@ -500,6 +528,13 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
             }
         }
     }
+
+#if defined(SVAL_NATIVE_PTP) && SVAL_PTP_KEY_BUTTONS
+    // Build option: while the native touchpad reports and the host takes its
+    // buttons, MS_BTN1/2 are its buttons and never reach the mouse report. A
+    // release follows its press.
+    if (keycode >= MS_BTN1 && keycode <= MS_BTN3 && sval_ptp_key_button(keycode - MS_BTN1, record->event.pressed)) return false;
+#endif
 
     if (record->event.pressed) { // key pressed
         switch (keycode) {

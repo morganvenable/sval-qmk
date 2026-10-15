@@ -9,3 +9,8 @@ QUANTUM_LIB_SRC += spi_master.c i2c_master.c
 PS2_ENABLE = yes
 PS2_DRIVER = vendor
 VPATH += modules/svalboard/pointing_device_ps2
+
+# Native Precision Touchpad for the Azoteq pads (azoteq/multitouch.mk): on
+# unless SVAL_NATIVE_PTP=no.
+SVAL_NATIVE_PTP ?= yes
+include keyboards/svalboard/azoteq/multitouch.mk
