@@ -263,6 +263,7 @@ void sval_point_mouse(report_mouse_t *report) {
 }
 void sval_point_task(void) {
     if (!is_keyboard_master()) return;
+    sval_point_transport_install();
     static bool was_connected;
     bool connected = sval_other_half_connected();
     if (was_connected && !connected) stop_all(false);

@@ -21,6 +21,7 @@ bool is_keyboard_master(void) { return true; }
 bool sval_other_half_connected(void) { return connected; }
 int usb_device_state_get_configure_state(void) { return configured; }
 usb_hid_protocol_t usb_device_state_get_protocol(void) { return USB_PROTOCOL_REPORT; }
+void sval_point_transport_install(void) {}
 bool sval_point_transport_keyboard(report_keyboard_t *r) { (void)r; return true; }
 bool sval_point_transport_nkro(report_nkro_t *r) { (void)r; return true; }
 bool sval_point_transport_extra(report_extra_t *r) { if (r->report_id==REPORT_ID_CONSUMER) last_consumer=r->usage; return true; }

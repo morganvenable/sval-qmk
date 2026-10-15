@@ -10,6 +10,7 @@ bool is_keyboard_master(void) { return true; }
 bool sval_other_half_connected(void) { return false; }
 int usb_device_state_get_configure_state(void) { return USB_DEVICE_STATE_CONFIGURED; }
 usb_hid_protocol_t usb_device_state_get_protocol(void) { return USB_PROTOCOL_REPORT; }
+void sval_point_transport_install(void) {}
 bool sval_point_transport_keyboard(report_keyboard_t *r) { if(r->keys[0]){last_down=*r;presses++;}return true; }
 bool sval_point_transport_nkro(report_nkro_t *r) { (void)r;return true; }
 bool sval_point_transport_extra(report_extra_t *r) { (void)r;return true; }
