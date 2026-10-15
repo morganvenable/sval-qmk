@@ -15,6 +15,10 @@
 #    error "release updater builds cannot have SVAL_KEYTEST"
 #elif defined(SVAL_TEST_WIPE) && defined(SVAL_UPDATE_RELEASE)
 #    error "release updater builds cannot have SVAL_TEST_WIPE (bench builds only)"
+#elif defined(SVAL_UPDATE_NO_CHORD) && defined(SVAL_UPDATE_RELEASE)
+#    error "release updater builds cannot have SVAL_UPDATE_NO_CHORD (dev builds only)"
+#elif defined(SVAL_DEV_KEEP_SETTINGS) && defined(SVAL_UPDATE_RELEASE)
+#    error "release updater builds cannot have SVAL_DEV_KEEP_SETTINGS (dev builds only)"
 #endif
 #if defined(SVAL_UPDATE_RELEASE) && defined(SVAL_HOST_BOOTLOADER)
 #    if SVAL_HOST_BOOTLOADER
@@ -59,6 +63,12 @@ const update_build_info_t sval_update_build_info = {
 #endif
 #ifdef SVAL_KEYTEST
              | UPDATE_BUILD_KEYTEST
+#endif
+#ifdef SVAL_UPDATE_NO_CHORD
+             | UPDATE_BUILD_NO_CHORD
+#endif
+#ifdef SVAL_DEV_KEEP_SETTINGS
+             | UPDATE_BUILD_DEV_KEEP
 #endif
              | BI_HOST_BOOTLOADER,
     .reserved0 = 0,

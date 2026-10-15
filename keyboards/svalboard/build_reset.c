@@ -57,6 +57,14 @@ _Static_assert(SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE <= BUILD_RESET_SECTOR, "the s
 
 extern const uint8_t __flash_binary_end[]; // RP2040_FLASH_TIMECRIT.ld
 
+#    ifdef SVAL_DEV_KEEP_SETTINGS
+#        ifdef SVAL_UPDATE_RELEASE
+#            error "release builds cannot have SVAL_DEV_KEEP_SETTINGS (dev builds only)"
+#        endif
+// Kept in the ELF so check_release_elf.py finds it.
+__attribute__((used)) const volatile uint8_t sval_dev_keep_settings = 1;
+#    endif
+
 static uint32_t image_hash;
 static bool     pending, notice, record_failed;
 
@@ -65,6 +73,9 @@ static const build_reset_record_t *record(void) {
 }
 
 void build_reset_pre_init(void) {
+#    ifdef SVAL_DEV_KEEP_SETTINGS
+    if (sval_dev_keep_settings) return; // dev "keep" builds: settings carry over, the record is left alone
+#    endif
     // On a smaller die the sector does not exist (its address would wrap onto
     // the firmware), so there is no record to keep.
     if (!identity_available()) return;

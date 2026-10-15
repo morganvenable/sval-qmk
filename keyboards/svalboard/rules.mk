@@ -57,10 +57,13 @@ endif
 
 # In-firmware updater (docs/updater.md); opt in with -e SVAL_UPDATER=yes.
 # SVAL_UPDATE_TEST_HOOKS adds the commit halt points for hardware tests.
+# SVAL_UPDATE_NO_CHORD makes a dev build: every ARM counts as confirmed, so
+# updates need no chord (util/sval_dev_flash.sh). Never in a release.
 # SVAL_UPDATE_RELEASE makes a release updater build: images flagged DIAGNOSTIC
 # are refused, and test hooks, keytest and the host bootloader are not allowed.
 SVAL_UPDATER ?= no
 SVAL_UPDATE_TEST_HOOKS ?= no
+SVAL_UPDATE_NO_CHORD ?= no
 SVAL_UPDATE_RELEASE ?= no
 ifeq ($(strip $(SVAL_UPDATER)), yes)
   ifeq ($(strip $(SVAL_KEYTEST)), yes)
@@ -117,13 +120,30 @@ ifeq ($(strip $(SVAL_UPDATER)), yes)
     endif
     OPT_DEFS += -DSVAL_UPDATE_TEST_HOOKS
   endif
+  ifeq ($(strip $(SVAL_UPDATE_NO_CHORD)), yes)
+    ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
+      $(error SVAL_UPDATE_NO_CHORD cannot be part of a release build)
+    endif
+    OPT_DEFS += -DSVAL_UPDATE_NO_CHORD
+  endif
   ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
     OPT_DEFS += -DSVAL_UPDATE_RELEASE
   endif
 else
-  ifneq ($(filter yes,$(strip $(SVAL_UPDATE_TEST_HOOKS)) $(strip $(SVAL_UPDATE_RELEASE))),)
-    $(error SVAL_UPDATE_TEST_HOOKS and SVAL_UPDATE_RELEASE need SVAL_UPDATER=yes)
+  ifneq ($(filter yes,$(strip $(SVAL_UPDATE_TEST_HOOKS)) $(strip $(SVAL_UPDATE_RELEASE)) $(strip $(SVAL_UPDATE_NO_CHORD))),)
+    $(error SVAL_UPDATE_TEST_HOOKS, SVAL_UPDATE_RELEASE and SVAL_UPDATE_NO_CHORD need SVAL_UPDATER=yes)
   endif
+endif
+
+# Dev builds that keep stored settings across flashes (build_reset.c, D37):
+# -e SVAL_DEV_KEEP_SETTINGS=yes skips the reset on the first boot of a new build
+# and leaves the record alone, so util/sval_dev_flash.sh keep can iterate on a
+# board's own settings. Never in a release.
+ifeq ($(strip $(SVAL_DEV_KEEP_SETTINGS)), yes)
+  ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
+    $(error SVAL_DEV_KEEP_SETTINGS cannot be part of a release build)
+  endif
+  OPT_DEFS += -DSVAL_DEV_KEEP_SETTINGS
 endif
 
 # Pointing tools (experimental): keyboards/svalboard/docs/pointing-tools.md.

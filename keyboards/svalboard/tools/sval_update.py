@@ -255,6 +255,7 @@ def decode_info(st, r):
         release_build=bool(r[20] & 4),
         test_hooks=bool(r[20] & 8),
         other_half_mismatch=bool(r[20] & 32),
+        no_chord=bool(r[20] & 0x80),
         last_error=status_name(r[21]),
         chunk_max=r[22],
         manifest_max=r[23],
@@ -537,12 +538,14 @@ class Session:
         usb_half = info["hand"]
         print()
         print(f"  MANIFEST HASH  {mhash.hex()}   ({version}, {len(image)} bytes" + (f", for the {HANDS[self.hand]} half without USB)" if self.other else ")"))
-        print(f"  Check this matches what you expect, then confirm on the keyboard: hold Index South + Middle South")
-        print(f"  for 1 second on the {usb_half} half, the one with USB (M and , on the right; C and V on the left).")
-        print("  The LED blinks blue.")
-        print()
+        if not info["no_chord"]:
+            print(f"  Check this matches what you expect, then confirm on the keyboard: hold Index South + Middle South")
+            print(f"  for 1 second on the {usb_half} half, the one with USB (M and , on the right; C and V on the left).")
+            print("  The LED blinks blue.")
+            print()
         self.poll(lambda s: s["chord_made"], "waiting for the chord", 35)
-        print("chord recognized")
+        if not info["no_chord"]:
+            print("chord recognized")
         self.need("BEGIN", self.nonce_op(BEGIN), ACCEPTED)
         s = self.poll(lambda s: s["state_id"] == ST_RECEIVING, "verifying the manifest and erasing", 120)
         print(f"manifest checked; erased {s['sectors_to_erase']} sectors, longest {s['erase_ms_max']} ms")
@@ -772,7 +775,8 @@ def pair(dev, args, paths, sessions):
             raise UpdaterError(f"pair: {p.name} would be refused by the {HANDS[m['hand']]} half ({why}); nothing was sent")
     # The hands match by construction; another pointing device is a warning (D33), asked once.
     confirm_mismatches([f"{p.name}: {w}" for p, m in other + this for w in image_mismatches(m, infos[m["hand"]])], args)
-    print("pair: the chord is made twice, both times on this half (the one with USB): once for each image")
+    if not infos[board]["no_chord"]:
+        print("pair: the chord is made twice, both times on this half (the one with USB): once for each image")
     print(f"== 1/2: the other ({HANDS[board ^ 1]}) half, {other[0][0].name} ==")
     sessions.append(Session(dev, args))
     rc = sessions[-1].run(other[0][0], confirm_other=False, confirmed=True)
