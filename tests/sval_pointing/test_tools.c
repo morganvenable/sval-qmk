@@ -170,7 +170,9 @@ int main(void) {
     event(SV_POINT_L_TOOL1_HOLD, false);
     configure(SVAL_TOOL_HISTORY_Y, 0);
     motion(64, 0, SVAL_AXIS_BOTH);
-    assert(last_down.keys[0] == KC_Y && last_down.mods == cmd);
+    assert(last_down.keys[0] == KC_Z && last_down.mods == (cmd | shift)); // Mac redo, not Command+Y
+    motion(-64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_Z && last_down.mods == cmd);
     event(SV_POINT_L_TOOL1_HOLD, false);
     configure(SVAL_TOOL_TABS, 0);
     motion(64, 0, SVAL_AXIS_BOTH);

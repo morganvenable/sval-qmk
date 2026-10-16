@@ -371,10 +371,12 @@ void sval_point_task(void) {
                 keycode = positive ? KC_EQUAL : KC_MINUS;
                 mods    = command;
             } else if (tool == SVAL_TOOL_HISTORY || tool == SVAL_TOOL_HISTORY_Y) {
-                // Undo Ctrl+Z; redo Ctrl+Shift+Z or Ctrl+Y (Command on macOS).
-                keycode = positive && tool == SVAL_TOOL_HISTORY_Y ? KC_Y : KC_Z;
+                // Undo Ctrl+Z; redo Ctrl+Shift+Z or Ctrl+Y. macOS: Command+Z, and both
+                // redo with Command+Shift+Z, since many Mac apps ignore Command+Y.
+                bool y  = positive && tool == SVAL_TOOL_HISTORY_Y && !host_mac;
+                keycode = y ? KC_Y : KC_Z;
                 mods    = command;
-                if (positive && tool == SVAL_TOOL_HISTORY) mods |= MOD_BIT(KC_LSFT);
+                if (positive && !y) mods |= MOD_BIT(KC_LSFT);
             } else if (tool == SVAL_TOOL_TABS && host_mac) {
                 // Command+Shift+] / Command+Shift+[: next / previous tab.
                 keycode = positive ? KC_RBRC : KC_LBRC;
