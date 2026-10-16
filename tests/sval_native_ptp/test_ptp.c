@@ -663,17 +663,35 @@ static void test_dead_pad(void) {
     }
     assert(frames >= 1 && flags_of(last(), 0) == 1);
     assert(ptp_test_us - died <= SVAL_PTP_STALE_MS * 1000u + 16000u);
+    uint8_t old_id = id_of(last(), 0);
     run(100000);
     assert(new_reports() == 0); // no keepalive for it afterwards
-    // It answers again: it must show all-up before it reports.
+    // It answers again with the finger still down: the finger is reported
+    // again at once, as a new contact (not unseen until it lifts).
     FEED(0, {0, 1, 120, 100});
+    run(8000);
+    assert(new_reports() == 1 && count_of(last()) == 1 && flags_of(last(), 0) == 3 && id_of(last(), 0) != old_id && x_of(last(), 0) == 120);
+    up(0);
+    run(8000);
+    assert(new_reports() == 1 && flags_of(last(), 0) == 1);
+    // A pad lifted for a chip reset still waits for an all-up sample.
+    FEED(0, {0, 1, 100, 100});
+    run(8000);
+    new_reports();
+    flagged(0, 0x08);
+    run(8000);
+    assert(new_reports() == 1 && flags_of(last(), 0) == 1);
+    FEED(0, {0, 1, 140, 100});
     run(8000);
     assert(new_reports() == 0);
     up(0);
-    FEED(0, {0, 2, 130, 100});
+    FEED(0, {0, 2, 150, 100});
     run(8000);
     assert(new_reports() == 1 && flags_of(last(), 0) == 3);
-    puts("  dead pad: a contact on a pad that stops answering lifts after the stale time");
+    up(0);
+    run(8000);
+    new_reports();
+    puts("  dead pad: a contact on a pad that stops answering lifts after the stale time, and a finger still down comes back when it answers");
 }
 
 static void test_sample_time(void) {
