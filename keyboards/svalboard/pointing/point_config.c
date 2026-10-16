@@ -73,7 +73,7 @@ static bool decode_options(const uint8_t *data, bool apply) {
     return true;
 }
 static const uint16_t distances[64] = {1024, 948, 878, 813, 753, 697, 645, 597, 553, 512, 474, 439, 406, 376, 348, 323, 299, 276, 256, 237, 219, 203, 188, 174, 161, 149, 138, 128, 119, 110, 102, 94, 87, 81, 75, 69, 64, 59, 55, 51, 47, 44, 40, 37, 35, 32, 30, 27, 25, 24, 22, 20, 19, 17, 16, 15, 14, 13, 12, 11, 10, 9, 9, 8};
-static uint16_t get_bits(const uint8_t *data, uint8_t *bit, uint8_t width) {
+static uint16_t       get_bits(const uint8_t *data, uint8_t *bit, uint8_t width) {
     uint16_t value = 0;
     for (uint8_t i = 0; i < width; ++i, ++*bit)
         value |= ((data[*bit / 8] >> (*bit % 8)) & 1) << i;
@@ -172,6 +172,16 @@ const sval_point_profile_t *sval_point_profile(uint8_t control) {
 uint8_t sval_point_tool(uint8_t control) {
     if (!loaded) sval_point_config_reload();
     return tools[control >= 1 && control <= 4 ? control - 1 : 0];
+}
+static bool is_switcher(uint8_t tool) {
+    return tool == SVAL_TOOL_TABS || tool == SVAL_TOOL_TASKS;
+}
+uint8_t sval_point_step_scale(uint8_t tool) {
+    return is_switcher(tool) ? SVAL_POINT_SWITCH_STEP_SCALE : 1;
+}
+uint16_t sval_point_interval(uint8_t control) {
+    uint16_t interval = sval_point_profile(control)->interval_ms;
+    return !interval && is_switcher(sval_point_tool(control)) ? SVAL_POINT_SWITCH_INTERVAL_MS : interval;
 }
 bool sval_point_inverted(uint8_t control, uint8_t axis) {
     if (!loaded) sval_point_config_reload();
