@@ -23,10 +23,10 @@ Four tool slots. Each slot runs one of eight actions:
 | 3 | Tasks | horizontal | Alt+Tab / Alt+Shift+Tab, Alt held until the session ends | Command+Tab / Command+Shift+Tab, Command held |
 | 4 | Zoom | vertical | Ctrl+= / Ctrl+- | Command+= / Command+- |
 | 5 | Undo / Redo | horizontal | Ctrl+Z / Ctrl+Shift+Z | Command+Z / Command+Shift+Z |
-| 6 | Undo / Redo (Ctrl+Y) | horizontal | Ctrl+Z / Ctrl+Y | Command+Z / Command+Y |
+| 6 | Undo / Redo (Ctrl+Y) | horizontal | Ctrl+Z / Ctrl+Y | Command+Z / Command+Shift+Z |
 | 7 | Proportional scroll | both | wheel speed proportional to the displacement from where the tool started | the same |
 
-The defaults are slot 1 Volume, 2 Arrows, 3 Tabs and 4 Tasks. Shortcuts assume a US layout. The board switches to the macOS column by itself when it detects a macOS or iOS host (the same detection that turns the axis lock off there); there is no setting.
+The defaults are slot 1 Volume, 2 Arrows, 3 Tabs and 4 Tasks. Shortcuts assume a US layout. The board switches to the macOS column by itself when it detects a macOS or iOS host (the same detection that turns the axis lock off there); there is no setting. On macOS both Undo / Redo variants redo with Command+Shift+Z, the Mac standard, because many Mac apps ignore Command+Y.
 
 Each slot has a horizontal and a vertical speed (travel per step), an optional rate limit (uncapped by default), a reversal tolerance (for Proportional scroll, the center dead zone) and a reverse flag per axis. "Use shared speeds for every tool" is on by default; with it off, a slot can follow the shared speeds or set its own.
 
