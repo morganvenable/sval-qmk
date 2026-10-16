@@ -87,8 +87,8 @@ int main(void) {
     tick(500);
     assert(volume_up == before);
     activate(SV_POINT_TOOL2_TOGGLE);
-    motion(2 * 64, -2 * 64);
-    tick(20);
+    motion(2 * 160, -2 * 160); // Arrows: 160 counts a step, about 15 a second
+    tick(300);
     assert(right == 2 && up == 2);
     activate(SV_POINT_TOOL1_TOGGLE);
     before = volume_up;

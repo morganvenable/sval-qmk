@@ -319,14 +319,14 @@ int main(void) {
     hand_sensor[0]                       = SVAL_SENSOR_PMW3389;
     clock_ms += 600;
     key(5, SV_POINT_TOOL2_HOLD, true);
-    input(70, 0, 0, 0, 1);
+    input(170, 0, 0, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(!pending_count(0));
     key(5, SV_POINT_TOOL2_HOLD, false);
     hand_sensor[0] = SVAL_SENSOR_TRACKPOINT;
     input(0, 0, 0, 0, 600); // the module is looked up every 500 ms
     key(5, SV_POINT_TOOL2_HOLD, true);
-    input(70, 0, 0, 0, 1);
+    input(170, 0, 0, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(pending_count(0));
     key(5, SV_POINT_TOOL2_HOLD, false);
@@ -343,19 +343,19 @@ int main(void) {
     global_saved_values.left_scroll = global_saved_values.right_scroll = false;
     scroll_policy                                                      = (sval_scroll_policy_t){0};
     clock_ms += 600;
-    key(5, SV_POINT_TOOL2_HOLD, true); // slot 2: Arrows
+    key(5, SV_POINT_TOOL2_HOLD, true); // slot 2: Arrows, 160 counts a step
     uint32_t steps = recognized;
-    input(70, 0, 0, 0, 1);
+    input(170, 0, 0, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(recognized == steps + 1);
     sniper_hold_5 = 1;
     update_sniper_divisor();
     steps = recognized;
-    input(70, 0, 0, 0, 1);
+    input(170, 0, 0, 0, 1);
     input(0, 0, 0, 0, 11);
-    assert(recognized == steps + 1); // not 70 / 5 = 14 counts
+    assert(recognized == steps + 1); // not 170 / 5 = 34 counts
     steps = recognized;
-    r     = input(0, 0, 70, 0, 1);
+    r     = input(0, 0, 170, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(recognized == steps + 1 && !r.x); // the other pointer runs the tool, unslowed too
     sniper_hold_5 = 0;
@@ -363,11 +363,11 @@ int main(void) {
     boost_hold_5 = 1;
     update_boost_multiplier();
     steps = recognized;
-    input(70, 0, 0, 0, 1);
+    input(170, 0, 0, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(recognized == steps + 1); // not 5 steps
     steps = recognized;
-    input(0, 0, 70, 0, 1);
+    input(0, 0, 170, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(recognized == steps + 1);
     key(5, SV_POINT_TOOL2_HOLD, false);

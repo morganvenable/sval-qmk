@@ -35,7 +35,7 @@ static void record(bool down, bool *was) {
     *was = down;
 }
 bool sval_point_transport_keyboard(report_keyboard_t *r) {
-    // Escape is the Tasks session's own cancel (its 10 s timeout), not a step.
+    // Escape is the Tasks session's own cancel, not a step.
     bool down = false;
     for (unsigned i = 0; i < sizeof(r->keys); ++i)
         down |= r->keys[i] && r->keys[i] != KC_ESC;
@@ -119,10 +119,10 @@ int main(void) {
     const uint8_t tools[] = {SVAL_TOOL_VOLUME, SVAL_TOOL_ARROWS, SVAL_TOOL_TABS, SVAL_TOOL_TASKS, SVAL_TOOL_ZOOM, SVAL_TOOL_HISTORY, SVAL_TOOL_HISTORY_Y};
     for (unsigned i = 0; i < sizeof(tools); ++i) {
         uint8_t tool = tools[i];
-        // The tool's own pacing: Tabs and Tasks default to 140 ms, the others are uncapped.
+        // The action's own default pace (none for Volume).
         configure(tool, 0);
         uint16_t pace = sval_point_interval(1);
-        assert(pace == (tool == SVAL_TOOL_TABS || tool == SVAL_TOOL_TASKS ? SVAL_POINT_SWITCH_INTERVAL_MS : 0));
+        assert(pace == sval_point_action_default(tool)->interval_ms);
         // A hard flick (about 3 m/s at 800 CPI, falling to rest over 400 ms), then stop.
         unsigned during = flick(tool, pace, 100, 400);
         assert(during >= 1);
@@ -136,18 +136,44 @@ int main(void) {
         configure(tool, 0);
         flick(tool, pace, 200, 60);
     }
-    // Tabs: one step per 320 counts (about 10 mm at 800 CPI), five times Volume's.
-    configure(SVAL_TOOL_TABS, 0);
-    assert(sval_point_step_scale(SVAL_TOOL_TABS) == 5 && sval_point_step_scale(SVAL_TOOL_VOLUME) == 1);
-    steady          = true;
-    unsigned during = flick(SVAL_TOOL_TABS, SVAL_POINT_SWITCH_INTERVAL_MS, 1, 319);
-    assert(during == 0); // 319 counts: not a step yet
-    during = flick(SVAL_TOOL_TABS, SVAL_POINT_SWITCH_INTERVAL_MS, 1, 320);
-    assert(during == 1);
-    during = flick(SVAL_TOOL_TABS, SVAL_POINT_SWITCH_INTERVAL_MS, 2, 330); // 660 counts
-    assert(during == 2);
+    // The defaults table: each action's travel per step (counts at 800 CPI at the default
+    // speed of 64) and its default spacing between presses when no rate limit is set.
+    static const struct {
+        uint8_t  tool;
+        int32_t  counts;
+        uint16_t pace;
+    } table[] = {
+        {SVAL_TOOL_VOLUME, 64, 0}, {SVAL_TOOL_ARROWS, 160, 65}, {SVAL_TOOL_TABS, 320, 140}, {SVAL_TOOL_TASKS, 320, 140}, {SVAL_TOOL_ZOOM, 192, 100}, {SVAL_TOOL_HISTORY, 256, 150}, {SVAL_TOOL_HISTORY_Y, 256, 150},
+    };
+    steady = true;
+    for (unsigned i = 0; i < sizeof(table) / sizeof(table[0]); ++i) {
+        uint8_t tool = table[i].tool;
+        configure(tool, 0);
+        assert(sval_point_step_counts(tool, 64) == table[i].counts);
+        assert(sval_point_interval(1) == table[i].pace);
+        // Travel: one count short of a step sends nothing; a step's worth sends one.
+        assert(flick(tool, table[i].pace, 1, table[i].counts - 1) == 0);
+        assert(flick(tool, table[i].pace, 1, table[i].counts) == 1);
+        // Spacing: a steady fast roll for a second gives presses exactly that far apart.
+        unsigned first = presses;
+        unsigned sent  = flick(tool, table[i].pace, 50, 1000);
+        if (table[i].pace) {
+            assert(sent >= 1000u / table[i].pace - 1 && sent <= 1000u / table[i].pace + 1);
+            for (unsigned k = first + 1; k < presses; ++k)
+                assert(press_time[k] - press_time[k - 1] >= table[i].pace && press_time[k] - press_time[k - 1] <= table[i].pace + BATCH_MS + 0u);
+        }
+        // An explicit rate limit still wins, faster or slower than the default.
+        configure(tool, 30);
+        assert(sval_point_interval(1) == 30);
+        configure(tool, 250);
+        assert(sval_point_interval(1) == 250);
+    }
+    // Proportional scroll is continuous and keeps the slot's own limit.
+    assert(sval_point_step_counts(SVAL_TOOL_PROPORTIONAL, 64) == 64 && sval_point_action_default(SVAL_TOOL_PROPORTIONAL)->interval_ms == 0);
+    // The slot's speed still scales the action's travel: half the distance, half the step.
+    assert(sval_point_step_counts(SVAL_TOOL_ARROWS, 32) == 80 && sval_point_step_counts(SVAL_TOOL_TABS, 1024) == 5120);
     configure(SVAL_TOOL_VOLUME, 0);
-    during = flick(SVAL_TOOL_VOLUME, 0, 1, 320); // the same 320 counts: 5 Volume steps
+    unsigned during = flick(SVAL_TOOL_VOLUME, 0, 1, 320); // 320 counts: 5 Volume steps
     assert(during == 5);
-    puts("catch-up: every discrete tool paced by its rate limit under hard flicks, nothing after the ball stops, Tabs / Tasks step and default pace passed");
+    puts("catch-up: every discrete tool paced by its rate limit under hard flicks, nothing after the ball stops, per-action default travel and spacing passed");
 }

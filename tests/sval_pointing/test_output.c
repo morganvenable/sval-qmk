@@ -128,6 +128,20 @@ int main(void) {
     tick(10000);
     settle();
     assert(!sval_point_output_session() && !seen_nkro.mods);
+    // A held session never times out; the safety end counts from the hold's release.
+    assert(sval_point_output_start(SVAL_POINT_TASK, KC_TAB, 4, clock_ms));
+    sval_point_output_session_held(true, clock_ms);
+    tick(1);
+    settle();
+    tick(60000);
+    settle();
+    assert(sval_point_output_session() && seen_nkro.mods == 4);
+    sval_point_output_session_held(false, clock_ms);
+    tick(9000);
+    assert(sval_point_output_session());
+    tick(1000);
+    settle();
+    assert(!sval_point_output_session() && !seen_nkro.mods);
     // A failed release survives switching from NKRO to a 6KRO base report.
     assert(sval_point_output_start(SVAL_POINT_TASK, KC_TAB, 4, clock_ms));
     tick(1);
@@ -138,5 +152,5 @@ int main(void) {
     tick(1);
     assert(seen_nkro.mods == 0 && !seen_nkro.bits[KC_TAB / 8]);
     assert(seen_key.mods == 2 && seen_key.keys[0] == 4);
-    puts("output broker: ownership, collisions, acceptance, release retry, expiry, NKRO, cancellation, watchdog passed");
+    puts("output broker: ownership, collisions, acceptance, release retry, expiry, NKRO, cancellation, toggled-session safety end, no timeout while held passed");
 }

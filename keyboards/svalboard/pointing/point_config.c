@@ -173,15 +173,26 @@ uint8_t sval_point_tool(uint8_t control) {
     if (!loaded) sval_point_config_reload();
     return tools[control >= 1 && control <= 4 ? control - 1 : 0];
 }
-static bool is_switcher(uint8_t tool) {
-    return tool == SVAL_TOOL_TABS || tool == SVAL_TOOL_TASKS;
+// Indexed by SVAL_TOOL_*. The reasons are in docs/pointing-tools.md.
+static const sval_point_action_default_t action_defaults[SVAL_TOOL_COUNT] = {
+    [SVAL_TOOL_VOLUME]       = {2, 0},    // 1x, uncapped: fine steps, sweeps fast
+    [SVAL_TOOL_ARROWS]       = {5, 65},   // 2.5x (about 5 mm), about 15 a second
+    [SVAL_TOOL_TABS]         = {10, 140}, // 5x (about 10 mm), about 7 a second
+    [SVAL_TOOL_TASKS]        = {10, 140}, // 5x (about 10 mm), about 7 a second
+    [SVAL_TOOL_ZOOM]         = {6, 100},  // 3x (about 6 mm), about 10 a second
+    [SVAL_TOOL_HISTORY]      = {8, 150},  // 4x (about 8 mm), about 7 a second
+    [SVAL_TOOL_HISTORY_Y]    = {8, 150},  // 4x (about 8 mm), about 7 a second
+    [SVAL_TOOL_PROPORTIONAL] = {2, 0},    // continuous: speeds and limit used as they are
+};
+const sval_point_action_default_t *sval_point_action_default(uint8_t tool) {
+    return &action_defaults[tool < SVAL_TOOL_COUNT ? tool : SVAL_TOOL_VOLUME];
 }
-uint8_t sval_point_step_scale(uint8_t tool) {
-    return is_switcher(tool) ? SVAL_POINT_SWITCH_STEP_SCALE : 1;
+int32_t sval_point_step_counts(uint8_t tool, uint16_t distance) {
+    return (int32_t)distance * sval_point_action_default(tool)->travel_x2 / 2;
 }
 uint16_t sval_point_interval(uint8_t control) {
     uint16_t interval = sval_point_profile(control)->interval_ms;
-    return !interval && is_switcher(sval_point_tool(control)) ? SVAL_POINT_SWITCH_INTERVAL_MS : interval;
+    return interval ? interval : sval_point_action_default(sval_point_tool(control))->interval_ms;
 }
 bool sval_point_inverted(uint8_t control, uint8_t axis) {
     if (!loaded) sval_point_config_reload();

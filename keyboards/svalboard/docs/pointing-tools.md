@@ -30,12 +30,21 @@ The defaults are slot 1 Volume, 2 Arrows, 3 Tabs and 4 Tasks. Shortcuts assume a
 
 The slots are shared by every pointer. Each slot has a horizontal and a vertical speed (travel per step), an optional rate limit, a reversal tolerance (for Proportional scroll, the center dead zone) and a reverse flag per axis. "Use shared speeds for every tool" is on by default; with it off, a slot can follow the shared speeds or set its own.
 
-### Tabs and Tasks take bigger, slower steps
+### Every action has its own step and pace
 
-Switching tabs or windows is a jump of one whole item, and the host needs time to show each one, so these two actions step differently from the others whatever slot runs them:
+One step of a tool is a different size of thing for each action: a notch of volume, a character, a tab, a window, a zoom level, an undo. So every action has its own default travel per step and its own default pace, whatever slot runs it. The travel is a multiple of the slot's speed (64 counts at 800 CPI, about 2 mm of ball travel, at the default speed); the pace is the shortest time between presses while the slot's rate limit is 0.
 
-- **Five times the travel per step.** At the default speed a step is 320 counts at 800 CPI, about 10 mm of ball travel, against about 2 mm (64 counts) for Volume, Arrows, Zoom and Undo / Redo. A deliberate roll then moves one or two items, not a dozen. The Tool speeds still scale it: the speed sets the step for the slot, and Tabs or Tasks multiply it by five.
-- **About 7 steps a second by default.** With no rate limit set, Tabs and Tasks wait at least 140 ms between presses: about the time a browser takes to show a tab, or the switcher to move its highlight, and fast enough to sweep through a row of items. A rate limit set for the slot replaces it, faster or slower. The other actions stay uncapped unless a limit is set.
+| Action | Travel per step (default speed) | Default pace | Why |
+| --- | --- | --- | --- |
+| Volume | 1x: 64 counts, about 2 mm | none | Steps are small and the host shows the level at once, so fine, fast steps feel like a knob. |
+| Arrows | 2.5x: 160 counts, about 5 mm | 65 ms, about 15 a second | One character or line per step: at 1x a small roll jumps several, so a step is a deliberate nudge, and the pace stays near key repeat so long moves are still quick. |
+| Tabs | 5x: 320 counts, about 10 mm | 140 ms, about 7 a second | A whole tab per step, and the browser needs time to show each one: a deliberate roll moves one or two, and you can stop on the one you want. |
+| Tasks | 5x: 320 counts, about 10 mm | 140 ms, about 7 a second | The same for windows: the switcher needs time to move its highlight. |
+| Zoom | 3x: 192 counts, about 6 mm | 100 ms, about 10 a second | Each step redraws the page at a new size; a little more travel and a pace the redraw can follow keep it from overshooting. |
+| Undo / Redo (both) | 4x: 256 counts, about 8 mm | 150 ms, about 7 a second | Each step changes the document and is easy to lose track of, so steps are big and slow enough to watch each one land. |
+| Proportional scroll | unchanged | none | Continuous scrolling, not steps: its speed and rate limit work as they always have. |
+
+The slot's settings still apply on top: its speed scales the action's travel (half the speed, half the step), and a rate limit set for the slot replaces the default pace, faster or slower.
 
 ### Held modifiers
 
@@ -78,7 +87,7 @@ Earlier test builds had a set of slot keys per pointer (`SV_POINT_L_TOOL1_HOLD` 
 - Only physical keys activate tools. Codes from combos, macros, tap dances and other synthetic events are dropped; mod-tap and layer-tap wrapping are not supported.
 - No layer turns the pointers into a tool by itself; put a tool key on the layer instead.
 - Changing the tool ends what each pointer was sending and starts the new tool from rest. Pressing a Proportional scroll key re-centers it, even when that tool was already on.
-- While a Tasks session is open: Enter or a left click accepts, Escape or another click cancels, any other key accepts and then goes through, and 10 s without a step cancels. The session belongs to the pointer whose step opened it; the other pointer is ignored until it ends. After it ends, a held Tasks key does nothing more until it is released.
+- While a Tasks session is open: Enter or a left click accepts, Escape or another click cancels, any other key accepts and then goes through. A held Tasks key never times out: the switcher stays open as long as the key is held, and releasing it accepts. A toggled session is cancelled after 10 s without a step, because nothing on the board is held to show that Alt (Command) is still down on the host; that is the only timed end of a tool. The session belongs to the pointer whose step opened it; the other pointer is ignored until it ends. After it ends, a held Tasks key does nothing more until it is released.
 
 ## Motion
 
@@ -110,7 +119,7 @@ A little-endian bit stream, least significant bit first:
 | 28 × 4 | per slot: horizontal index (6), vertical index (6), linked (1), use shared speeds (1), rate limit in ms (8: `0` none, else `4`-`250`), reversal tolerance − 1 (6) |
 | 2 | zero |
 
-A speed index `i` (`0`-`63`) is `round(1024 × 2^(−i/9))` counts at 800 CPI per step, from 1024 down to 8; the default is `36` (64 counts). Tabs and Tasks multiply it by five (default 320 counts). A rate limit of `0` means none, except for Tabs and Tasks, which then use 140 ms. For Proportional scroll the reversal field holds the dead zone + 1 (`0`-`63` counts, default 7). SET refuses linked speeds that differ, rate limits of `1`-`3` or over `250`, and nonzero padding.
+A speed index `i` (`0`-`63`) is `round(1024 × 2^(−i/9))` counts at 800 CPI per step, from 1024 down to 8; the default is `36` (64 counts). Each action multiplies it by its own travel (see [Every action has its own step and pace](#every-action-has-its-own-step-and-pace)). A rate limit of `0` means the action's default pace. For Proportional scroll the reversal field holds the dead zone + 1 (`0`-`63` counts, default 7). SET refuses linked speeds that differ, rate limits of `1`-`3` or over `250`, and nonzero padding.
 
 ### `tools` (3 bytes)
 

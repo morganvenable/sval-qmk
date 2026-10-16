@@ -7,7 +7,7 @@
 static report_keyboard_t base_keyboard;
 static report_nkro_t     base_nkro;
 static uint16_t          base_consumer;
-static bool              use_nkro, keyboard_dirty, consumer_dirty, session, interrupted;
+static bool              use_nkro, keyboard_dirty, consumer_dirty, session, interrupted, session_held;
 static bool              retired_keyboard, retired_nkro;
 static uint8_t           key, mods, session_mod;
 static uint16_t          consumer;
@@ -153,8 +153,15 @@ bool sval_point_output_start(sval_point_output_kind_t kind, uint16_t usage, uint
     phase_time = now;
     return true;
 }
+void sval_point_output_session_held(bool held, uint32_t now) {
+    // The safety end counts from the last step or from the hold's release, never across a hold.
+    if (session_held && !held) session_time = now;
+    session_held = held;
+}
 void sval_point_output_task(uint32_t now) {
-    if (session && (uint32_t)(now - session_time) >= 10000) {
+    // A toggled session with no step for 10 s is cancelled, so Alt (Command) never stays
+    // down on the host with nothing held on the board. A held session never times out.
+    if (session && !session_held && (uint32_t)(now - session_time) >= 10000) {
         interrupted = true;
         sval_point_output_end(true);
     }
