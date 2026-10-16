@@ -4,7 +4,11 @@
 #include <stdint.h>
 #include "report.h"
 
-typedef enum { SVAL_POINT_KEY, SVAL_POINT_CONSUMER, SVAL_POINT_TASK } sval_point_output_kind_t;
+// SVAL_POINT_KEY waits for every held key and modifier to be released, because a held
+// modifier would change what its shortcut means. SVAL_POINT_KEY_WITH_MODS (Arrows) goes
+// out with the modifiers the user holds (Shift+arrow selects, Ctrl+arrow jumps words), and
+// waits only for held keys.
+typedef enum { SVAL_POINT_KEY, SVAL_POINT_KEY_WITH_MODS, SVAL_POINT_CONSUMER, SVAL_POINT_TASK } sval_point_output_kind_t;
 // A single owned contribution; never writes QMK's real/weak modifier bitmasks.
 bool sval_point_output_start(sval_point_output_kind_t kind, uint16_t usage, uint8_t mods, uint32_t now);
 void sval_point_output_task(uint32_t now);

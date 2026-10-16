@@ -8,12 +8,15 @@
 _Static_assert(EECONFIG_USER_DATA_SIZE == 0, "Pointing tools require the unused user config word");
 #include <string.h>
 
-// Unused tail of the existing 100-byte VIA custom block. Never moves keymaps,
-// macros or Sval tables, and never changes their layout stamps.
-#define CONFIG_OFFSET 80
+// The speed record's own range of the VIA custom block (via_custom_map.h).
+#include "via_custom_map.h"
+#define CONFIG_OFFSET SVAL_VIA_POINT_TOOLS_OFFSET
 #define CONFIG_SIZE 20
-_Static_assert(sizeof(saved_values_t) + 6 <= CONFIG_OFFSET, "Pointing settings overlap board settings/magic");
-_Static_assert(CONFIG_OFFSET + CONFIG_SIZE <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "Pointing settings exceed reserved VIA block");
+// The record: 0x50, RECORD_VERSION, the 16 speeds bytes, CRC-16/CCITT of the first 18.
+#define RECORD_VERSION 3
+_Static_assert(CONFIG_SIZE <= SVAL_VIA_POINT_TOOLS_SIZE, "pointing tools record fits its VIA custom config range");
+_Static_assert(sizeof(saved_values_t) + 6 <= SVAL_VIA_BOARD_OFFSET + SVAL_VIA_BOARD_SIZE, "board settings and magic stay in their range");
+_Static_assert(SVAL_VIA_POINT_TOOLS_OFFSET + SVAL_VIA_POINT_TOOLS_SIZE <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "pointing tools range is inside the VIA custom block");
 static sval_point_profile_t       profiles[SVAL_POINT_PROFILE_COUNT];
 static bool                       loaded;
 static uint16_t                   generation;
@@ -70,18 +73,6 @@ static bool decode_options(const uint8_t *data, bool apply) {
     return true;
 }
 static const uint16_t distances[64] = {1024, 948, 878, 813, 753, 697, 645, 597, 553, 512, 474, 439, 406, 376, 348, 323, 299, 276, 256, 237, 219, 203, 188, 174, 161, 149, 138, 128, 119, 110, 102, 94, 87, 81, 75, 69, 64, 59, 55, 51, 47, 44, 40, 37, 35, 32, 30, 27, 25, 24, 22, 20, 19, 17, 16, 15, 14, 13, 12, 11, 10, 9, 9, 8};
-static uint8_t        nearest(uint16_t distance) {
-           uint8_t  best = 0;
-           uint16_t diff = 65535;
-           for (uint8_t i = 0; i < 64; ++i) {
-               uint16_t d = distances[i] > distance ? distances[i] - distance : distance - distances[i];
-               if (d < diff) {
-                   best = i;
-                   diff = d;
-        }
-    }
-           return best;
-}
 static uint16_t get_bits(const uint8_t *data, uint8_t *bit, uint8_t width) {
     uint16_t value = 0;
     for (uint8_t i = 0; i < width; ++i, ++*bit)
@@ -166,28 +157,7 @@ void sval_point_config_reload(void) {
     }
     resolve();
     if (via_read_custom_config(stored, CONFIG_OFFSET, sizeof(stored)) == sizeof(stored) && stored[0] == 0x50 && crc(stored, 18) == (uint16_t)(stored[18] | stored[19] << 8)) {
-        if (stored[1] == 2 || stored[1] == 3)
-            decode(stored + 2, true);
-        else if (stored[1] == 1) {
-            bool valid = true;
-            for (uint8_t i = 0; i < 4; ++i) {
-                uint8_t *p = stored + 2 + i * 4;
-                uint16_t d = p[0] | p[1] << 8;
-                if (d < 8 || d > 1024 || p[2] < 40 || p[2] > 250 || !p[3] || p[3] > 64 || p[3] > d) valid = false;
-            }
-            if (valid) {
-                universal = false;
-                for (uint8_t i = 0; i < 4; ++i) {
-                    uint8_t *p              = stored + 2 + i * 4;
-                    uint8_t  code           = nearest(p[0] | p[1] << 8);
-                    speeds[i]               = (speed_t){code, code, true};
-                    inherit[i]              = code == 36;
-                    profiles[i].interval_ms = p[2];
-                    profiles[i].reversal    = p[3];
-                }
-                resolve();
-            }
-        }
+        if (stored[1] == RECORD_VERSION) decode(stored + 2, true);
     }
     uint32_t options  = eeconfig_read_user();
     uint8_t  extra[3] = {options, options >> 8, (options >> 16) & 15};
@@ -231,8 +201,7 @@ bool sval_point_command(uint8_t *data, uint8_t length) {
         else if (sval_point_active(0) || sval_point_active(1))
             status = 1;
         else {
-            // Keep the speed record readable by the previous tuning branch.
-            uint8_t stored[CONFIG_SIZE] = {0x50, 3}, check[CONFIG_SIZE];
+            uint8_t stored[CONFIG_SIZE] = {0x50, RECORD_VERSION}, check[CONFIG_SIZE];
             memcpy(stored + 2, candidate, 16);
             uint32_t options = options_word(candidate + 16);
             uint16_t sum     = crc(stored, 18);

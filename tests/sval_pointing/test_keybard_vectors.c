@@ -23,7 +23,7 @@ int  main(int argc, char **argv) {
         if (line[0] == '#') continue;
         char *expected = strchr(line, '|');
         if (!expected) return 2;
-        *expected++                        = 0;
+        *expected++                         = 0;
         expected[strcspn(expected, "\r\n")] = 0;
         uint8_t payload[19];
         char   *s = line;

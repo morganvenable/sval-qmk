@@ -6,7 +6,7 @@ static uint32_t          clock_ms;
 static report_keyboard_t last_down;
 static unsigned          presses;
 uint32_t                 timer_read32(void) {
-                    return clock_ms;
+    return clock_ms;
 }
 bool is_keyboard_master(void) {
     return true;
@@ -62,11 +62,17 @@ static void configure(uint8_t action, uint8_t reverse) {
     assert(!p[2]);
     sval_point_config_reload();
     assert(sval_point_tool(1) == action);
-    event(SV_POINT_L_VOLUME_HOLD, true);
+    event(SV_POINT_L_TOOL1_HOLD, true);
+}
+// What QMK itself sends: the user's held modifiers and keys.
+static void hold_base(uint8_t mods, uint8_t key) {
+    report_keyboard_t base = {.mods = mods, .keys = {key}};
+    sval_point_output_observe_keyboard(&base);
+    tick();
 }
 static void motion(int x, int y, uint8_t axes) {
     ++clock_ms;
-    sval_point_buffer(0, x, y, 800, 1);
+    sval_point_buffer(0, x, y, 800);
     sval_point_finish_interval(axes);
     tick();
 }
@@ -81,11 +87,11 @@ int main(void) {
     assert(presses == before);
     motion(0, -640, SVAL_AXIS_H);
     assert(presses == before); // shared axis policy still wins
-    event(SV_POINT_L_VOLUME_HOLD, false);
+    event(SV_POINT_L_TOOL1_HOLD, false);
     configure(SVAL_TOOL_ZOOM, 2);
     motion(0, -64, SVAL_AXIS_V);
     assert(last_down.keys[0] == KC_MINUS);
-    event(SV_POINT_L_VOLUME_HOLD, false);
+    event(SV_POINT_L_TOOL1_HOLD, false);
     configure(SVAL_TOOL_HISTORY, 0);
     motion(-64, 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_Z && last_down.mods == 1);
@@ -95,20 +101,106 @@ int main(void) {
     motion(0, -640, SVAL_AXIS_BOTH);
     assert(presses == before);
     // A stopped ball does not replay surplus undo/redo actions.
-    sval_point_buffer(0, 0, 0, 800, 1);
+    sval_point_buffer(0, 0, 0, 800);
     tick();
     assert(presses == before);
-    event(SV_POINT_L_VOLUME_HOLD, false);
+    event(SV_POINT_L_TOOL1_HOLD, false);
     configure(SVAL_TOOL_HISTORY_Y, 1);
     motion(-64, 0, SVAL_AXIS_H);
     assert(last_down.keys[0] == KC_Y && last_down.mods == 1);
-    event(SV_POINT_L_VOLUME_HOLD, false);
+    event(SV_POINT_L_TOOL1_HOLD, false);
     // Session lifecycle follows the selected tool, not the original slot label.
     configure(SVAL_TOOL_TASKS, 0);
     motion(64, 0, SVAL_AXIS_H);
     assert(sval_point_output_session());
-    event(SV_POINT_L_VOLUME_HOLD, false);
+    event(SV_POINT_L_TOOL1_HOLD, false);
     tick();
     assert(!sval_point_output_session());
+    // Arrows carry the held modifiers: Shift+arrow selects, Ctrl+arrow jumps words.
+    configure(SVAL_TOOL_ARROWS, 0);
+    hold_base(MOD_BIT(KC_LSFT), 0);
+    motion(64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_RIGHT && last_down.mods == MOD_BIT(KC_LSFT));
+    hold_base(MOD_BIT(KC_LCTL) | MOD_BIT(KC_LSFT), 0);
+    motion(-64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_LEFT && last_down.mods == (MOD_BIT(KC_LCTL) | MOD_BIT(KC_LSFT)));
+    hold_base(MOD_BIT(KC_LCTL), 0);
+    motion(0, -64, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_UP && last_down.mods == MOD_BIT(KC_LCTL));
+    // A held key (not a modifier) still holds Arrows back.
+    hold_base(0, KC_Z);
+    motion(0, -64, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_Z && !last_down.keys[1]); // only the user's own key
+    hold_base(0, 0);
+    motion(0, -64, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_UP && !last_down.mods);
+    event(SV_POINT_L_TOOL1_HOLD, false);
+    // Tabs, Tasks, Zoom and both Undo / Redo still wait for held modifiers: an extra
+    // modifier would change what the shortcut means.
+    const uint8_t blocked[] = {SVAL_TOOL_TABS, SVAL_TOOL_TASKS, SVAL_TOOL_ZOOM, SVAL_TOOL_HISTORY, SVAL_TOOL_HISTORY_Y};
+    for (unsigned i = 0; i < sizeof(blocked); ++i) {
+        configure(blocked[i], 0);
+        const int dx = blocked[i] == SVAL_TOOL_ZOOM ? 0 : 64, dy = blocked[i] == SVAL_TOOL_ZOOM ? -64 : 0;
+        hold_base(MOD_BIT(KC_LSFT), 0);
+        before = presses;
+        motion(dx, dy, SVAL_AXIS_BOTH);
+        assert(presses == before && !sval_point_output_session());
+        hold_base(0, 0);
+        before = presses;
+        motion(dx, dy, SVAL_AXIS_BOTH);
+        assert(presses > before); // goes out once the modifier is up
+        event(SV_POINT_L_TOOL1_HOLD, false);
+        tick();
+        assert(!sval_point_output_session());
+    }
+    // macOS: the Command shortcuts, with no setting.
+    sval_point_host_mac(true);
+    const uint8_t cmd = MOD_BIT(KC_LGUI), shift = MOD_BIT(KC_LSFT);
+    configure(SVAL_TOOL_ZOOM, 0);
+    motion(0, -64, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_EQUAL && last_down.mods == cmd);
+    motion(0, 64, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_MINUS && last_down.mods == cmd);
+    event(SV_POINT_L_TOOL1_HOLD, false);
+    configure(SVAL_TOOL_HISTORY, 0);
+    motion(-64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_Z && last_down.mods == cmd);
+    motion(64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_Z && last_down.mods == (cmd | shift));
+    event(SV_POINT_L_TOOL1_HOLD, false);
+    configure(SVAL_TOOL_HISTORY_Y, 0);
+    motion(64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_Y && last_down.mods == cmd);
+    event(SV_POINT_L_TOOL1_HOLD, false);
+    configure(SVAL_TOOL_TABS, 0);
+    motion(64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_RBRC && last_down.mods == (cmd | shift));
+    motion(-64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_LBRC && last_down.mods == (cmd | shift));
+    event(SV_POINT_L_TOOL1_HOLD, false);
+    configure(SVAL_TOOL_TASKS, 0);
+    motion(64, 0, SVAL_AXIS_BOTH);
+    assert(sval_point_output_session() && last_down.keys[0] == KC_TAB && last_down.mods == cmd);
+    motion(-64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_TAB && last_down.mods == (cmd | shift));
+    event(SV_POINT_L_TOOL1_HOLD, false);
+    tick();
+    assert(!sval_point_output_session());
+    configure(SVAL_TOOL_ARROWS, 0);
+    motion(64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_RIGHT && !last_down.mods); // arrows are the same keys
+    event(SV_POINT_L_TOOL1_HOLD, false);
+    // Back on Windows: the Ctrl and Alt shortcuts again.
+    sval_point_host_mac(false);
+    configure(SVAL_TOOL_TABS, 0);
+    motion(64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_TAB && last_down.mods == MOD_BIT(KC_LCTL));
+    event(SV_POINT_L_TOOL1_HOLD, false);
+    configure(SVAL_TOOL_TASKS, 0);
+    motion(64, 0, SVAL_AXIS_BOTH);
+    assert(last_down.keys[0] == KC_TAB && last_down.mods == MOD_BIT(KC_LALT));
+    event(SV_POINT_L_TOOL1_HOLD, false);
+    tick();
+    puts("tools: arrows carry held modifiers; tabs, tasks, zoom and undo / redo wait for them; macOS Command shortcuts passed");
     puts("tools: zoom, both redo shortcuts, direction, axes, no replay, persistence, remapped task release passed");
 }

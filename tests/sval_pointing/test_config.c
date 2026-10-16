@@ -3,13 +3,16 @@
 #include <stdio.h>
 #include <string.h>
 #include "point_config.h"
-extern uint8_t  test_storage[100];
+#include "via.h"
+extern uint8_t  test_storage[VIA_EEPROM_CUSTOM_CONFIG_SIZE];
+extern uint32_t test_write_first, test_write_end;
+#define AT SVAL_VIA_POINT_TOOLS_OFFSET
 extern bool     test_write_failed;
 extern uint32_t test_user_word;
 static bool     active;
 bool            sval_point_active(uint8_t side) {
-               (void)side;
-               return active;
+    (void)side;
+    return active;
 }
 void sval_point_status(uint8_t *data) {
     data[2] = 1;
@@ -93,29 +96,19 @@ int main(void) {
     assert(p[2] == 4);
     test_write_failed = false;
     assert(sval_point_profile(1)->distance == 16);
-    test_storage[85] ^= 1;
+    test_storage[AT + 5] ^= 1;
     sval_point_config_reload();
     assert(sval_point_profile(1)->distance == 64);
-    // Migrate the original persisted table without touching any other settings.
-    uint8_t  old[20] = {0x50, 1, 64, 0, 80, 8, 32, 0, 80, 8, 96, 0, 80, 8, 96, 0, 160, 8};
+    // Records from the earlier test builds (versions 1 and 2) are not read: nothing at
+    // this address was ever written by them, and every new build resets settings anyway.
+    uint8_t  old[20] = {0x50, 2, 36, 57, 73, 14, 117, 144, 228, 80, 7, 73, 14, 117, 144, 228, 160, 7};
     uint16_t sum     = crc(old);
     old[18]          = sum;
     old[19]          = sum >> 8;
-    memcpy(test_storage + 80, old, 20);
+    memcpy(test_storage + AT, old, 20);
     sval_point_config_reload();
-    assert(sval_point_profile(2)->distance == 32);
-    assert(sval_point_profile(4)->interval_ms == 160);
-    assert(test_storage[81] == 1); // no write on boot
-    const uint8_t v2[16] = {36, 57, 73, 14, 117, 144, 228, 80, 7, 73, 14, 117, 144, 228, 160, 7};
-    old[0]               = 0x50;
-    old[1]               = 2;
-    memcpy(old + 2, v2, 16);
-    sum     = crc(old);
-    old[18] = sum;
-    old[19] = sum >> 8;
-    memcpy(test_storage + 80, old, 20);
-    sval_point_config_reload();
-    assert(sval_point_profile(1)->distance == 64 && sval_point_profile(1)->interval_ms == 80 && sval_point_profile(4)->interval_ms == 160 && test_storage[81] == 2);
+    assert(sval_point_profile(1)->interval_ms == 0 && sval_point_profile(4)->interval_ms == 0);
+    assert(test_storage[AT + 1] == 2); // no write on boot
     // v4 options round-trip independently, keeping a v3 speed record for rollback.
     p[1] = sval_cmd_point_tools_get;
     sval_point_command(p, 26);
@@ -125,14 +118,14 @@ int main(void) {
     assert(!p[2]);
     sval_point_config_reload();
     assert(sval_point_tool(1) == SVAL_TOOL_ZOOM && sval_point_inverted(1, 1));
-    assert(test_storage[81] == 3);
-    assert(crc(test_storage + 80) == (uint16_t)(test_storage[98] | test_storage[99] << 8));
+    assert(test_storage[AT + 1] == 3);
+    assert(crc(test_storage + AT) == (uint16_t)(test_storage[AT + 18] | test_storage[AT + 19] << 8));
     uint32_t intact = test_user_word;
     for (int bit = 0; bit < 32; ++bit) {
         test_user_word = intact ^ (1u << bit);
         sval_point_config_reload();
         assert(sval_point_tool(1) == SVAL_TOOL_VOLUME);
-        assert(sval_point_profile(4)->interval_ms == 160);
+        assert(sval_point_profile(4)->interval_ms == 0);
     }
     test_user_word = intact;
     sval_point_config_reload();
@@ -153,7 +146,9 @@ int main(void) {
     make_set(p);
     sval_point_command(p, 23);
     assert(p[2] == 3); // truncated request
-    for (int i = 0; i < 80; ++i)
-        assert(test_storage[i] == 0xA3);
-    puts("config: axis pairs, inheritance, overrides, persistence, migration, CRC, stale/busy/invalid/failure guards passed");
+    // Every write stayed inside the pointing tools' own range (via_custom_map.h).
+    assert(test_write_first >= SVAL_VIA_POINT_TOOLS_OFFSET && test_write_end <= SVAL_VIA_POINT_TOOLS_OFFSET + SVAL_VIA_POINT_TOOLS_SIZE);
+    for (int i = 0; i < VIA_EEPROM_CUSTOM_CONFIG_SIZE; ++i)
+        if (i < AT || i >= AT + 20) assert(test_storage[i] == 0xA3);
+    puts("config: axis pairs, inheritance, overrides, persistence, own storage range, CRC, stale/busy/invalid/failure guards passed");
 }

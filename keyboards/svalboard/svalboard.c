@@ -83,6 +83,7 @@ bool sval_hw_rev_is_flipfet(void) {
 // can never be mistaken for a stamp.
 #define SVALBOARD_MAGIC_SIZE 6
 #define SVALBOARD_MAGIC_OFFSET (SVALBOARD_VIA_CONFIG_OFFSET + SVALBOARD_VIA_CONFIG_SIZE)
+_Static_assert(SVALBOARD_VIA_CONFIG_OFFSET == SVAL_VIA_BOARD_OFFSET && SVALBOARD_MAGIC_OFFSET + SVALBOARD_MAGIC_SIZE <= SVAL_VIA_BOARD_OFFSET + SVAL_VIA_BOARD_SIZE, "board settings fit their VIA custom config range (via_custom_map.h)");
 
 #if VIA_ENABLE
 static void svalboard_get_magic(uint8_t *magic) {

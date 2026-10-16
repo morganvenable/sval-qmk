@@ -92,6 +92,9 @@ bool process_detected_host_os_kb(os_variant_t os) {
 	    is_mac = false;
 	    break;
     }
+#ifdef SVAL_POINT_CONTROLS
+    sval_point_host_mac(is_mac);
+#endif
     return true;
 }
 
@@ -319,33 +322,44 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
     if (sval_point_blocked(1)) reportMouse2.x = reportMouse2.y = reportMouse2.h = reportMouse2.v = 0;
     bool control_left = sval_point_active(0), control_right = sval_point_active(1);
     sval_point_policy_changed(global_saved_values.axis_scroll_lock && !is_mac);
-    sval_point_buffer(0, reportMouse1.x, reportMouse1.y, point_tool_cpi(true, get_left_dpi()), sniper_x.div);
-    sval_point_buffer(1, reportMouse2.x, reportMouse2.y, point_tool_cpi(false, get_right_dpi()), sniper_x.div);
+    // The tools take raw counts: sniper and boost never change a tool's feel.
+    sval_point_buffer(0, reportMouse1.x, reportMouse1.y, point_tool_cpi(true, get_left_dpi()));
+    sval_point_buffer(1, reportMouse2.x, reportMouse2.y, point_tool_cpi(false, get_right_dpi()));
+#else
+    const bool control_left = false, control_right = false;
 #endif
 
+    // A pointer running a tool skips sniper and boost, including the motion it feeds
+    // the shared axis lock.
     if (any_sniper_active()) {
-        reportMouse1.x = add_to_axis(&sniper_x, reportMouse1.x);
-        reportMouse1.y = add_to_axis(&sniper_y, reportMouse1.y);
-        reportMouse1.h = add_to_axis(&sniper_h, reportMouse1.h);
-        reportMouse1.v = add_to_axis(&sniper_v, reportMouse1.v);
-
-        reportMouse2.x = add_to_axis(&sniper_x, reportMouse2.x);
-        reportMouse2.y = add_to_axis(&sniper_y, reportMouse2.y);
-        reportMouse2.h = add_to_axis(&sniper_h, reportMouse2.h);
-        reportMouse2.v = add_to_axis(&sniper_v, reportMouse2.v);
+        if (!control_left) {
+            reportMouse1.x = add_to_axis(&sniper_x, reportMouse1.x);
+            reportMouse1.y = add_to_axis(&sniper_y, reportMouse1.y);
+            reportMouse1.h = add_to_axis(&sniper_h, reportMouse1.h);
+            reportMouse1.v = add_to_axis(&sniper_v, reportMouse1.v);
+        }
+        if (!control_right) {
+            reportMouse2.x = add_to_axis(&sniper_x, reportMouse2.x);
+            reportMouse2.y = add_to_axis(&sniper_y, reportMouse2.y);
+            reportMouse2.h = add_to_axis(&sniper_h, reportMouse2.h);
+            reportMouse2.v = add_to_axis(&sniper_v, reportMouse2.v);
+        }
     }
 
     // Pointer accel: mirror of sniper, multiplier instead of divisor.
     if (any_boost_active()) {
-        reportMouse1.x = add_to_axis(&boost_x, reportMouse1.x);
-        reportMouse1.y = add_to_axis(&boost_y, reportMouse1.y);
-        reportMouse1.h = add_to_axis(&boost_h, reportMouse1.h);
-        reportMouse1.v = add_to_axis(&boost_v, reportMouse1.v);
-
-        reportMouse2.x = add_to_axis(&boost_x, reportMouse2.x);
-        reportMouse2.y = add_to_axis(&boost_y, reportMouse2.y);
-        reportMouse2.h = add_to_axis(&boost_h, reportMouse2.h);
-        reportMouse2.v = add_to_axis(&boost_v, reportMouse2.v);
+        if (!control_left) {
+            reportMouse1.x = add_to_axis(&boost_x, reportMouse1.x);
+            reportMouse1.y = add_to_axis(&boost_y, reportMouse1.y);
+            reportMouse1.h = add_to_axis(&boost_h, reportMouse1.h);
+            reportMouse1.v = add_to_axis(&boost_v, reportMouse1.v);
+        }
+        if (!control_right) {
+            reportMouse2.x = add_to_axis(&boost_x, reportMouse2.x);
+            reportMouse2.y = add_to_axis(&boost_y, reportMouse2.y);
+            reportMouse2.h = add_to_axis(&boost_h, reportMouse2.h);
+            reportMouse2.v = add_to_axis(&boost_v, reportMouse2.v);
+        }
     }
 
 #ifdef SVAL_NATIVE_PTP
