@@ -249,7 +249,7 @@ static void recognize(uint8_t side, uint8_t axis, int32_t delta, uint32_t now) {
     if ((axis == 0 && (tool == SVAL_TOOL_VOLUME || tool == SVAL_TOOL_ZOOM)) || (axis == 1 && tool != SVAL_TOOL_VOLUME && tool != SVAL_TOOL_ZOOM && tool != SVAL_TOOL_ARROWS)) return;
     if (sval_point_inverted(control, axis)) delta = -delta;
     const sval_point_profile_t *profile  = sval_point_profile(control);
-    int32_t                     counts   = (int32_t)(axis ? profile->vertical_distance : profile->distance) * sval_point_step_scale(tool);
+    int32_t                     counts   = sval_point_step_counts(tool, axis ? profile->vertical_distance : profile->distance);
     int32_t                     distance = counts * SVAL_POINT_ONE;
     // A new stroke after quantizer idle must not inherit the previous stroke's tail.
     if (pointers[side].turn[axis].moved && (uint32_t)(now - pointers[side].turn[axis].last_motion) >= 250) clear_pending(side, axis);
@@ -326,6 +326,8 @@ void sval_point_task(void) {
     suspended = unavailable;
     if (unavailable) return;
     uint32_t now = timer_read32();
+    // The held key wins over the toggle, so a held Tasks key owns any open session.
+    sval_point_output_session_held(is_tasks(hold.control), now);
     sval_point_output_task(now);
     if (sval_point_output_interrupted()) {
         output_owned = false;

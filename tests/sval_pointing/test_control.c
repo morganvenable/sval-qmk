@@ -5,6 +5,7 @@
 static uint32_t          clock_ms;
 static int               configured = USB_DEVICE_STATE_CONFIGURED;
 static report_keyboard_t last;
+static unsigned          escapes;
 uint32_t                 timer_read32(void) {
     return clock_ms;
 }
@@ -23,6 +24,7 @@ usb_hid_protocol_t usb_device_state_get_protocol(void) {
 void sval_point_transport_install(void) {}
 bool sval_point_transport_keyboard(report_keyboard_t *r) {
     last = *r;
+    if (r->keys[0] == KC_ESC) ++escapes;
     return true;
 }
 bool sval_point_transport_nkro(report_nkro_t *r) {
@@ -70,7 +72,7 @@ int main(void) {
     assert(!pending_count(0));
     event(3, SV_POINT_TOOL2_HOLD, true);
     uint32_t before = recognized;
-    motion(64, -64, SVAL_AXIS_BOTH);
+    motion(160, -160, SVAL_AXIS_BOTH); // one Arrows step each way: 2.5 x 64 counts
     assert(recognized == before + 2);
     event(3, 4, false);
     assert(!pending_count(0));
@@ -88,6 +90,68 @@ int main(void) {
     assert(!sval_point_output_session() && pointers[0].inhibited);
     event(4, 4, false);
     assert(pointers[0].control == 1 && !pointers[0].inhibited);
+    // Holding never times out: a held Tasks session stays open with no step for a minute,
+    // and only the release ends it, accepting (no Escape).
+    event(4, SV_POINT_TOOL4_HOLD, true);
+    motion(320, 0, SVAL_AXIS_BOTH);
+    for (int i = 0; i < 60000; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    assert(sval_point_output_session() && last.mods == 4 && !pointers[0].inhibited);
+    unsigned escaped = escapes;
+    event(4, 4, false);
+    for (int i = 0; i < 8; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    assert(!sval_point_output_session() && !last.mods && escapes == escaped);
+    // A toggled session has a safety end: 10 s with no step cancels it (Escape), so Alt
+    // never stays down on the host with nothing held on the board. The toggle turns off.
+    event(4, SV_POINT_TOOL4_TOGGLE, true);
+    event(4, 4, false);
+    motion(320, 0, SVAL_AXIS_BOTH);
+    sval_point_task();
+    ++clock_ms;
+    sval_point_task();
+    assert(sval_point_output_session());
+    for (int i = 0; i < 9900; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    assert(sval_point_output_session());
+    for (int i = 0; i < 200; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    assert(!sval_point_output_session() && escapes == escaped + 1 && !last.mods && toggled == NONE);
+    // A hold over an open toggled session takes it over: no timeout while held, and the
+    // 10 s start again from the release, with the toggle still on.
+    event(4, SV_POINT_TOOL4_TOGGLE, true);
+    event(4, 4, false);
+    motion(320, 0, SVAL_AXIS_BOTH);
+    sval_point_task();
+    assert(sval_point_output_session());
+    event(5, SV_POINT_TOOL4_HOLD, true);
+    for (int i = 0; i < 30000; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    assert(sval_point_output_session());
+    event(5, 4, false); // the toggle still runs Tasks: the session stays open
+    for (int i = 0; i < 9900; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    assert(sval_point_output_session());
+    for (int i = 0; i < 200; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    assert(!sval_point_output_session() && toggled == NONE);
+    event(4, SV_POINT_TOOL1_TOGGLE, true);
+    event(4, 4, false);
+    assert(pointers[0].control == 1);
     // Suspend clears activations but consumes their eventual releases.
     event(6, SV_POINT_TOOL3_HOLD, true);
     configured = USB_DEVICE_STATE_SUSPEND;
@@ -110,7 +174,7 @@ int main(void) {
     assert(packet[2] == 0);
     event(7, SV_POINT_TOOL2_HOLD, true);
     before = recognized;
-    motion(64, -32, SVAL_AXIS_BOTH);
+    motion(160, -80, SVAL_AXIS_BOTH); // Arrows: 2.5 x the 64 across and 32 up
     assert(recognized == before + 2);
     event(7, 4, false);
 
@@ -123,7 +187,7 @@ int main(void) {
     event(8, SV_POINT_TOOL2_HOLD, true);
     assert(pointers[0].control == 2 && pointers[1].control == 2);
     before = recognized;
-    both(64, 0, 0, -32); // slot 2 now steps every 64 counts across, 32 up (set above)
+    both(160, 0, 0, -80); // slot 2 (Arrows) now steps every 160 counts across, 80 up (set above)
     assert(recognized == before + 2 && pointers[0].pending[0].count == 1 && pointers[1].pending[1].count == 1);
     event(8, 4, false);
     assert(!sval_point_active(0) && !sval_point_active(1) && !pending_count(0) && !pending_count(1));
