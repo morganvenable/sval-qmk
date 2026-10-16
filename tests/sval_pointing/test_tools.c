@@ -70,23 +70,25 @@ static void hold_base(uint8_t mods, uint8_t key) {
     sval_point_output_observe_keyboard(&base);
     tick();
 }
+// Motions come 200 ms apart: past every action's default pace (at most 150 ms) and inside
+// the 250 ms that starts a new stroke.
 static void motion(int x, int y, uint8_t axes) {
-    ++clock_ms;
+    clock_ms += 200;
     sval_point_buffer(0, x, y, 800);
     sval_point_finish_interval(axes);
     tick();
 }
-// Tabs and Tasks take five times the travel per step, and 140 ms between presses unless a
-// rate limit is set.
-#define SWITCH (64 * SVAL_POINT_SWITCH_STEP_SCALE)
+// Each action's own travel per step at the default speed (Tabs and Tasks 320 counts).
+#define STEP(tool) ((int)sval_point_step_counts(tool, 64))
+#define SWITCH STEP(SVAL_TOOL_TABS)
 static void wait_rate(void) {
-    clock_ms += SVAL_POINT_SWITCH_INTERVAL_MS;
+    clock_ms += sval_point_action_default(SVAL_TOOL_TABS)->interval_ms;
 }
 int main(void) {
     configure(SVAL_TOOL_ZOOM, 0);
-    motion(0, -64, SVAL_AXIS_BOTH);
+    motion(0, -STEP(SVAL_TOOL_ZOOM), SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_EQUAL && last_down.mods == 1);
-    motion(0, 64, SVAL_AXIS_BOTH);
+    motion(0, STEP(SVAL_TOOL_ZOOM), SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_MINUS && last_down.mods == 1);
     unsigned before = presses;
     motion(640, 0, SVAL_AXIS_BOTH);
@@ -95,13 +97,13 @@ int main(void) {
     assert(presses == before); // shared axis policy still wins
     event(SV_POINT_TOOL1_HOLD, false);
     configure(SVAL_TOOL_ZOOM, 2);
-    motion(0, -64, SVAL_AXIS_V);
+    motion(0, -STEP(SVAL_TOOL_ZOOM), SVAL_AXIS_V);
     assert(last_down.keys[0] == KC_MINUS);
     event(SV_POINT_TOOL1_HOLD, false);
     configure(SVAL_TOOL_HISTORY, 0);
-    motion(-64, 0, SVAL_AXIS_BOTH);
+    motion(-STEP(SVAL_TOOL_HISTORY), 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_Z && last_down.mods == 1);
-    motion(64, 0, SVAL_AXIS_BOTH);
+    motion(STEP(SVAL_TOOL_HISTORY), 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_Z && last_down.mods == 3);
     before = presses;
     motion(0, -640, SVAL_AXIS_BOTH);
@@ -112,7 +114,7 @@ int main(void) {
     assert(presses == before);
     event(SV_POINT_TOOL1_HOLD, false);
     configure(SVAL_TOOL_HISTORY_Y, 1);
-    motion(-64, 0, SVAL_AXIS_H);
+    motion(-STEP(SVAL_TOOL_HISTORY_Y), 0, SVAL_AXIS_H);
     assert(last_down.keys[0] == KC_Y && last_down.mods == 1);
     event(SV_POINT_TOOL1_HOLD, false);
     // Session lifecycle follows the selected tool, not the original slot label.
@@ -127,20 +129,20 @@ int main(void) {
     // Arrows carry the held modifiers: Shift+arrow selects, Ctrl+arrow jumps words.
     configure(SVAL_TOOL_ARROWS, 0);
     hold_base(MOD_BIT(KC_LSFT), 0);
-    motion(64, 0, SVAL_AXIS_BOTH);
+    motion(STEP(SVAL_TOOL_ARROWS), 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_RIGHT && last_down.mods == MOD_BIT(KC_LSFT));
     hold_base(MOD_BIT(KC_LCTL) | MOD_BIT(KC_LSFT), 0);
-    motion(-64, 0, SVAL_AXIS_BOTH);
+    motion(-STEP(SVAL_TOOL_ARROWS), 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_LEFT && last_down.mods == (MOD_BIT(KC_LCTL) | MOD_BIT(KC_LSFT)));
     hold_base(MOD_BIT(KC_LCTL), 0);
-    motion(0, -64, SVAL_AXIS_BOTH);
+    motion(0, -STEP(SVAL_TOOL_ARROWS), SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_UP && last_down.mods == MOD_BIT(KC_LCTL));
     // A held key (not a modifier) still holds Arrows back.
     hold_base(0, KC_Z);
-    motion(0, -64, SVAL_AXIS_BOTH);
+    motion(0, -STEP(SVAL_TOOL_ARROWS), SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_Z && !last_down.keys[1]); // only the user's own key
     hold_base(0, 0);
-    motion(0, -64, SVAL_AXIS_BOTH);
+    motion(0, -STEP(SVAL_TOOL_ARROWS), SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_UP && !last_down.mods);
     event(SV_POINT_TOOL1_HOLD, false);
     // Tabs, Tasks, Zoom and both Undo / Redo still wait for held modifiers: an extra
@@ -148,7 +150,7 @@ int main(void) {
     const uint8_t blocked[] = {SVAL_TOOL_TABS, SVAL_TOOL_TASKS, SVAL_TOOL_ZOOM, SVAL_TOOL_HISTORY, SVAL_TOOL_HISTORY_Y};
     for (unsigned i = 0; i < sizeof(blocked); ++i) {
         configure(blocked[i], 0);
-        const int step = sval_point_step_scale(blocked[i]) * 64;
+        const int step = STEP(blocked[i]);
         const int dx = blocked[i] == SVAL_TOOL_ZOOM ? 0 : step, dy = blocked[i] == SVAL_TOOL_ZOOM ? -step : 0;
         hold_base(MOD_BIT(KC_LSFT), 0);
         before = presses;
@@ -166,21 +168,21 @@ int main(void) {
     sval_point_host_mac(true);
     const uint8_t cmd = MOD_BIT(KC_LGUI), shift = MOD_BIT(KC_LSFT);
     configure(SVAL_TOOL_ZOOM, 0);
-    motion(0, -64, SVAL_AXIS_BOTH);
+    motion(0, -STEP(SVAL_TOOL_ZOOM), SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_EQUAL && last_down.mods == cmd);
-    motion(0, 64, SVAL_AXIS_BOTH);
+    motion(0, STEP(SVAL_TOOL_ZOOM), SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_MINUS && last_down.mods == cmd);
     event(SV_POINT_TOOL1_HOLD, false);
     configure(SVAL_TOOL_HISTORY, 0);
-    motion(-64, 0, SVAL_AXIS_BOTH);
+    motion(-STEP(SVAL_TOOL_HISTORY), 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_Z && last_down.mods == cmd);
-    motion(64, 0, SVAL_AXIS_BOTH);
+    motion(STEP(SVAL_TOOL_HISTORY), 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_Z && last_down.mods == (cmd | shift));
     event(SV_POINT_TOOL1_HOLD, false);
     configure(SVAL_TOOL_HISTORY_Y, 0);
-    motion(64, 0, SVAL_AXIS_BOTH);
+    motion(STEP(SVAL_TOOL_HISTORY_Y), 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_Z && last_down.mods == (cmd | shift)); // Mac redo, not Command+Y
-    motion(-64, 0, SVAL_AXIS_BOTH);
+    motion(-STEP(SVAL_TOOL_HISTORY_Y), 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_Z && last_down.mods == cmd);
     event(SV_POINT_TOOL1_HOLD, false);
     configure(SVAL_TOOL_TABS, 0);
@@ -200,7 +202,7 @@ int main(void) {
     tick();
     assert(!sval_point_output_session());
     configure(SVAL_TOOL_ARROWS, 0);
-    motion(64, 0, SVAL_AXIS_BOTH);
+    motion(STEP(SVAL_TOOL_ARROWS), 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_RIGHT && !last_down.mods); // arrows are the same keys
     event(SV_POINT_TOOL1_HOLD, false);
     // Back on Windows: the Ctrl and Alt shortcuts again.

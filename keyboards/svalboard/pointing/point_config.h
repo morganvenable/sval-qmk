@@ -16,14 +16,18 @@ bool                        sval_point_command(uint8_t *data, uint8_t length);
 void                        sval_point_config_reload(void);
 
 uint8_t sval_point_tool(uint8_t control);
-// Travel per step is the slot's speed times the action's step scale. Tabs and Tasks take
-// five times the travel of the other actions: one tab or window per step is a big jump, so
-// at the default speed a step is 320 counts at 800 CPI, about 10 mm of ball travel.
-#define SVAL_POINT_SWITCH_STEP_SCALE 5
-uint8_t sval_point_step_scale(uint8_t tool);
-// Tabs and Tasks with no rate limit set take this one: 140 ms, about 7 steps a second, the
-// pace a host can show each tab or window and the user can stop on the one they want.
-#define SVAL_POINT_SWITCH_INTERVAL_MS 140
-// The slot's minimum interval between presses in ms (0: none), with that default applied.
+// Every action has its own default step and pace (point_config.c, docs/pointing-tools.md).
+// travel_x2 is twice the step's multiple of the slot's speed: at the default speed (64
+// counts at 800 CPI, about 2 mm of ball travel) a step is 64 * travel_x2 / 2 counts.
+// interval_ms is the minimum time between presses when the slot's rate limit is 0.
+// Proportional scroll is continuous and uses neither.
+typedef struct {
+    uint8_t travel_x2, interval_ms;
+} sval_point_action_default_t;
+const sval_point_action_default_t *sval_point_action_default(uint8_t tool);
+// Counts of ball travel at 800 CPI for one step of the action, from the slot's distance.
+int32_t sval_point_step_counts(uint8_t tool, uint16_t distance);
+// The slot's minimum interval between presses in ms (0: none): its rate limit, or the
+// action's default pace when that is 0.
 uint16_t sval_point_interval(uint8_t control);
 bool     sval_point_inverted(uint8_t control, uint8_t axis);

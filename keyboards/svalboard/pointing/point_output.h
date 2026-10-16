@@ -12,6 +12,9 @@ typedef enum { SVAL_POINT_KEY, SVAL_POINT_KEY_WITH_MODS, SVAL_POINT_CONSUMER, SV
 // A single owned contribution; never writes QMK's real/weak modifier bitmasks.
 bool sval_point_output_start(sval_point_output_kind_t kind, uint16_t usage, uint8_t mods, uint32_t now);
 void sval_point_output_task(uint32_t now);
+// A Tasks session opened from a held key stays open while it is held: release accepts,
+// Escape cancels. A toggled one is cancelled after 10 s without a step.
+void sval_point_output_session_held(bool held, uint32_t now);
 void sval_point_output_end(bool cancel);
 void sval_point_output_drop_unaccepted(void);
 bool sval_point_output_session(void);
