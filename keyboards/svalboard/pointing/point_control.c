@@ -9,17 +9,21 @@
 #include "print.h"
 #include <string.h>
 
-// Stable slot IDs retain all existing bindings; tool definitions are configurable.
+// A control is a tool slot, 1-4 (0 none). The keys are shared: one set of holds and one
+// toggle for the whole board, and every pointer runs the control they resolve to. Each
+// pointer keeps its own motion, output and inhibit state.
 enum { NONE };
 static bool is_tasks(uint8_t slot) {
     return slot && sval_point_tool(slot) == SVAL_TOOL_TASKS;
 }
 #define HOLD_SLOTS 12
 #define MOTION_SLOTS 24
-static struct { uint8_t pos, side, control; } holds[HOLD_SLOTS];
+static struct {
+    uint8_t pos, control;
+} holds[HOLD_SLOTS];
 static uint8_t hold_count;
 static bool    consumed[MATRIX_ROWS * MATRIX_COLS];
-static uint8_t toggled[2];
+static uint8_t toggled;
 static struct {
     uint8_t control, prefer_axis, next_axis;
     bool    inhibited;
@@ -40,14 +44,13 @@ static struct {
 } pointers[2];
 static sval_proportional_t proportional[2];
 static bool                is_proportional(uint8_t slot) {
-                   return slot && sval_point_tool(slot) == SVAL_TOOL_PROPORTIONAL;
+    return slot && sval_point_tool(slot) == SVAL_TOOL_PROPORTIONAL;
 }
 static void reset_proportional(uint8_t side) {
     sval_proportional_reset(&proportional[side], timer_read32());
 }
 static uint8_t  allowed_axes = SVAL_AXIS_BOTH;
 static bool     tracing, policy_enabled;
-static uint8_t  distance_shift = 1; // distance multiplier: 1/2, 1, 2, 4
 static uint8_t  next_side, session_side, output_side, output_axis;
 static bool     output_owned;
 static uint8_t  swallowed_buttons;
@@ -73,26 +76,28 @@ static void clear_motion(uint8_t side) {
     clear_pending(side, 1);
     pointers[side].motion_count = 0;
 }
-static void resolve(uint8_t side) {
-    uint8_t control = toggled[side];
-    for (uint8_t i = 0; i < hold_count; ++i)
-        if (holds[i].side == side) control = holds[i].control;
-    if (control == pointers[side].control) return;
-    if (output_owned && output_side == side) {
-        sval_point_output_end(false);
-        output_owned = false;
+// The newest held key wins, then the toggle. A pointer whose control changes ends what it
+// was sending and starts the new tool from rest; one that keeps its control continues.
+static void resolve(void) {
+    uint8_t control = hold_count ? holds[hold_count - 1].control : toggled;
+    for (uint8_t side = 0; side < 2; ++side) {
+        if (control == pointers[side].control) continue;
+        if (output_owned && output_side == side) {
+            sval_point_output_end(false);
+            output_owned = false;
+        }
+        pointers[side].control = control;
+        reset_proportional(side);
+        pointers[side].emitted   = false;
+        pointers[side].inhibited = false;
+        clear_motion(side);
     }
-    pointers[side].control = control;
-    reset_proportional(side);
-    pointers[side].emitted   = false;
-    pointers[side].inhibited = false;
-    clear_motion(side);
 }
 static void stop_all(bool cancel) {
     sval_point_output_end(cancel);
     output_owned = false;
     hold_count   = 0;
-    toggled[0] = toggled[1] = NONE;
+    toggled      = NONE;
     for (uint8_t side = 0; side < 2; ++side) {
         pointers[side].control = NONE;
         reset_proportional(side);
@@ -102,15 +107,17 @@ static void stop_all(bool cancel) {
     }
     // consumed[] survives until physical key-up; never leak a remapped release.
 }
+// After a task switcher closes, a held Tasks key stays inhibited (on every pointer) until
+// it is released; a Tasks toggle turns off.
 static void deactivate_tasks(void) {
+    if (is_tasks(toggled)) toggled = NONE;
     for (uint8_t side = 0; side < 2; ++side) {
-        if (is_tasks(toggled[side])) toggled[side] = NONE;
         if (is_tasks(pointers[side].control)) {
             pointers[side].inhibited = true;
             clear_motion(side);
-            resolve(side);
         }
     }
+    resolve();
 }
 static void end_tasks(bool cancel) {
     sval_point_output_end(cancel);
@@ -134,10 +141,9 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
         consumed[pos] = false;
         for (uint8_t i = 0; i < hold_count; ++i) {
             if (holds[i].pos != pos) continue;
-            uint8_t side = holds[i].side;
             memmove(&holds[i], &holds[i + 1], (hold_count - i - 1) * sizeof(holds[0]));
             --hold_count;
-            resolve(side);
+            resolve();
             break;
         }
         return false;
@@ -145,19 +151,18 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
     if (point_key) {
         if (!record->event.pressed || consumed[pos]) return false;
         consumed[pos] = true;
-        if (keycode > SV_POINT_LAST) return false; // reserved for later keys: nothing yet
-        if (keycode < SV_POINT_STOP_ALL) {
-            uint8_t n    = keycode - SV_POINT_FIRST;
-            uint8_t side = n / 8, control = (n % 8) / 2 + 1;
+        if (keycode <= SV_POINT_TOOL4_TOGGLE) {
+            uint8_t n = keycode - SV_POINT_FIRST, control = n / 2 + 1;
             if (n & 1)
-                toggled[side] = toggled[side] == control ? NONE : control;
+                toggled = toggled == control ? NONE : control;
             else if (hold_count < HOLD_SLOTS) {
                 holds[hold_count].pos       = pos;
-                holds[hold_count].side      = side;
                 holds[hold_count++].control = control;
             }
-            resolve(side);
-            if (is_proportional(pointers[side].control)) {
+            resolve();
+            // A Proportional scroll press re-centers every pointer, even one that kept it.
+            for (uint8_t side = 0; side < 2; ++side) {
+                if (!is_proportional(pointers[side].control)) continue;
                 clear_motion(side);
                 reset_proportional(side);
             }
@@ -166,15 +171,8 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
         else if (keycode == SV_POINT_TRACE) {
             tracing = !tracing;
             uprintf("point trace=%u recognized=%lu admitted=%lu dropped=%lu axes=%u\n", tracing, (unsigned long)recognized, (unsigned long)admitted, (unsigned long)dropped, allowed_axes);
-        } else {
-            if (keycode == SV_POINT_FINER && distance_shift < 3) ++distance_shift;
-            if (keycode == SV_POINT_COARSER && distance_shift > 0) --distance_shift;
-            clear_motion(0);
-            clear_motion(1);
-            reset_proportional(0);
-            reset_proportional(1);
-            uprintf("point distance=%u/2 of preset\n", 1u << distance_shift);
         }
+        // Every other code in the block is reserved or retired: consumed, nothing else.
         return false;
     }
     if (record->event.pressed && sval_point_output_session()) {
@@ -254,10 +252,9 @@ static void recognize(uint8_t side, uint8_t axis, int32_t delta, uint32_t now) {
     const sval_point_profile_t *profile  = sval_point_profile(control);
     int32_t                     counts   = axis ? profile->vertical_distance : profile->distance;
     int32_t                     distance = counts * SVAL_POINT_ONE;
-    distance                             = (distance / 2) << distance_shift;
     // A new stroke after quantizer idle must not inherit the previous stroke's tail.
     if (pointers[side].turn[axis].moved && (uint32_t)(now - pointers[side].turn[axis].last_motion) >= 250) clear_pending(side, axis);
-    sval_point_steps_t steps = sval_point_turn(&pointers[side].turn[axis], delta, distance, ((profile->reversal < counts ? profile->reversal : counts) * SVAL_POINT_ONE / 2) << distance_shift, now);
+    sval_point_steps_t steps = sval_point_turn(&pointers[side].turn[axis], delta, distance, (profile->reversal < counts ? profile->reversal : counts) * SVAL_POINT_ONE, now);
     if (steps.reversed) {
         clear_pending(side, axis);
         if (output_owned && output_side == side && output_axis == axis) sval_point_output_drop_unaccepted();
@@ -414,12 +411,13 @@ void sval_point_stop(void) {
     stop_all(true);
 }
 void sval_point_tuning_changed(void) {
-    distance_shift = 1;
     clear_motion(0);
     clear_motion(1);
     reset_proportional(0);
     reset_proportional(1);
 }
+// STATUS format 1. Both pointers report the same tool; byte 8 is retired (the Finer /
+// Coarser distance shift) and always reads 1, the normal step travel.
 void sval_point_status(uint8_t *data) {
     data[2]             = 1;
     data[3]             = pointers[0].control;
@@ -427,7 +425,7 @@ void sval_point_status(uint8_t *data) {
     data[5]             = allowed_axes;
     data[6]             = policy_enabled;
     data[7]             = sval_point_output_session();
-    data[8]             = distance_shift;
+    data[8]             = 1;
     uint32_t counters[] = {recognized, admitted, dropped};
     for (uint8_t i = 0; i < 3; ++i)
         for (uint8_t b = 0; b < 4; ++b)
@@ -457,7 +455,7 @@ void sval_point_scroll(report_mouse_t *report, uint8_t axes, bool natural, uint8
 #else
         const uint16_t units = 1;
 #endif
-        sval_proportional_output(&proportional[side], p->distance, p->vertical_distance, p->reversal - 1, p->interval_ms, distance_shift, axes, invert, host_divisor, units, timer_read32(), out);
+        sval_proportional_output(&proportional[side], p->distance, p->vertical_distance, p->reversal - 1, p->interval_ms, axes, invert, host_divisor, units, timer_read32(), out);
         h += out[0];
         v += natural ? -out[1] : out[1];
     }

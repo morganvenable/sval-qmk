@@ -66,7 +66,7 @@ static void bits(uint8_t *p, int start, int n, int value) {
     }
 }
 int main(void) {
-    activate(SV_POINT_L_TOOL1_TOGGLE);
+    activate(SV_POINT_TOOL1_TOGGLE);
     motion(0, -20 * 64);
     assert(pending_count(0) >= 19); // No arbitrary eight-step burst cap.
     tick(8);
@@ -75,7 +75,7 @@ int main(void) {
     stopped();
     tick(500);
     assert(volume_up == before); // No catch-up after zero-motion report.
-    activate(SV_POINT_L_TOOL1_TOGGLE);
+    activate(SV_POINT_TOOL1_TOGGLE);
     before = volume_up;
     for (int i = 0; i < 100; ++i) {
         motion(0, -64);
@@ -86,11 +86,11 @@ int main(void) {
     before = volume_up;
     tick(500);
     assert(volume_up == before);
-    activate(SV_POINT_L_TOOL2_TOGGLE);
+    activate(SV_POINT_TOOL2_TOGGLE);
     motion(2 * 64, -2 * 64);
     tick(20);
     assert(right == 2 && up == 2);
-    activate(SV_POINT_L_TOOL1_TOGGLE);
+    activate(SV_POINT_TOOL1_TOGGLE);
     before = volume_up;
     motion(0, -20 * 64);
     tick(2);
@@ -113,7 +113,7 @@ int main(void) {
     bits(p + 5, 28, 8, 100);
     sval_point_command(p, 26);
     assert(p[2] == 0);
-    activate(SV_POINT_L_TOOL1_TOGGLE);
+    activate(SV_POINT_TOOL1_TOGGLE);
     before = volume_up;
     for (int i = 0; i < 100; ++i) {
         motion(0, -10 * 64);
@@ -124,7 +124,7 @@ int main(void) {
     before = volume_up;
     tick(1000);
     assert(volume_up == before);
-    activate(SV_POINT_L_TOOL1_TOGGLE);
+    activate(SV_POINT_TOOL1_TOGGLE);
     motion(0, -20 * 64);
     sval_point_stop();
     before = volume_up;
