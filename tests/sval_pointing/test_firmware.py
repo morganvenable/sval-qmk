@@ -57,6 +57,10 @@ class FirmwareTests(unittest.TestCase):
     def test_flicks(self):
         self.compile_run('test_flick', ['point_output.c', 'point_motion.c', 'point_proportional.c', 'point_config.c', str(HERE / 'storage_stub.c')])
 
+    def test_no_catch_up(self):
+        # Hard flicks through the frame pipeline: rate limits hold, nothing after the stop.
+        self.compile_run('test_catchup', ['point_output.c', 'point_motion.c', 'point_proportional.c', 'point_config.c', str(HERE / 'storage_stub.c')])
+
     def test_proportional(self):
         self.compile_run('test_proportional', ['point_proportional.c'])
 

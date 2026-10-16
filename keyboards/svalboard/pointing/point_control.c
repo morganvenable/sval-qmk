@@ -9,21 +9,24 @@
 #include "print.h"
 #include <string.h>
 
-// A control is a tool slot, 1-4 (0 none). The keys are shared: one set of holds and one
-// toggle for the whole board, and every pointer runs the control they resolve to. Each
-// pointer keeps its own motion, output and inhibit state.
+// A control is a tool slot, 1-4 (0 none). The keys are shared: one hold and one toggle for
+// the whole board, and every pointer runs the control they resolve to. Each pointer keeps
+// its own motion and inhibit state.
 enum { NONE };
 static bool is_tasks(uint8_t slot) {
     return slot && sval_point_tool(slot) == SVAL_TOOL_TASKS;
 }
-#define HOLD_SLOTS 12
 #define MOTION_SLOTS 24
+// Only the newest held key counts: pressing another hold replaces it, and an older key that
+// is still down never comes back.
 static struct {
     uint8_t pos, control;
-} holds[HOLD_SLOTS];
-static uint8_t hold_count;
+} hold;
 static bool    consumed[MATRIX_ROWS * MATRIX_COLS];
 static uint8_t toggled;
+// The rate limit is the board's: one clock for every pointer, since they share the tool.
+static uint32_t last_output;
+static bool     emitted;
 static struct {
     uint8_t control, prefer_axis, next_axis;
     bool    inhibited;
@@ -31,8 +34,6 @@ static struct {
         uint32_t count;
         int8_t   direction;
     } pending[2];
-    uint32_t          last_output;
-    bool              emitted;
     uint16_t          cpi;
     int64_t           fraction[2];
     sval_point_turn_t turn[2];
@@ -76,10 +77,10 @@ static void clear_motion(uint8_t side) {
     clear_pending(side, 1);
     pointers[side].motion_count = 0;
 }
-// The newest held key wins, then the toggle. A pointer whose control changes ends what it
-// was sending and starts the new tool from rest; one that keeps its control continues.
+// The held key wins over the toggle. A pointer whose control changes ends what it was
+// sending and starts the new tool from rest; one that keeps its control continues.
 static void resolve(void) {
-    uint8_t control = hold_count ? holds[hold_count - 1].control : toggled;
+    uint8_t control = hold.control ? hold.control : toggled;
     for (uint8_t side = 0; side < 2; ++side) {
         if (control == pointers[side].control) continue;
         if (output_owned && output_side == side) {
@@ -88,7 +89,7 @@ static void resolve(void) {
         }
         pointers[side].control = control;
         reset_proportional(side);
-        pointers[side].emitted   = false;
+        emitted                  = false;
         pointers[side].inhibited = false;
         clear_motion(side);
     }
@@ -96,12 +97,12 @@ static void resolve(void) {
 static void stop_all(bool cancel) {
     sval_point_output_end(cancel);
     output_owned = false;
-    hold_count   = 0;
+    hold.control = NONE;
     toggled      = NONE;
+    emitted      = false;
     for (uint8_t side = 0; side < 2; ++side) {
         pointers[side].control = NONE;
         reset_proportional(side);
-        pointers[side].emitted   = false;
         pointers[side].inhibited = false;
         clear_motion(side);
     }
@@ -139,12 +140,10 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
     uint8_t pos = record->event.key.row * MATRIX_COLS + record->event.key.col;
     if (!record->event.pressed && consumed[pos]) {
         consumed[pos] = false;
-        for (uint8_t i = 0; i < hold_count; ++i) {
-            if (holds[i].pos != pos) continue;
-            memmove(&holds[i], &holds[i + 1], (hold_count - i - 1) * sizeof(holds[0]));
-            --hold_count;
+        // Releasing the newest hold ends it; releasing a key it replaced changes nothing.
+        if (hold.control && hold.pos == pos) {
+            hold.control = NONE;
             resolve();
-            break;
         }
         return false;
     }
@@ -155,9 +154,9 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
             uint8_t n = keycode - SV_POINT_FIRST, control = n / 2 + 1;
             if (n & 1)
                 toggled = toggled == control ? NONE : control;
-            else if (hold_count < HOLD_SLOTS) {
-                holds[hold_count].pos       = pos;
-                holds[hold_count++].control = control;
+            else {
+                hold.pos     = pos;
+                hold.control = control;
             }
             resolve();
             // A Proportional scroll press re-centers every pointer, even one that kept it.
@@ -250,7 +249,7 @@ static void recognize(uint8_t side, uint8_t axis, int32_t delta, uint32_t now) {
     if ((axis == 0 && (tool == SVAL_TOOL_VOLUME || tool == SVAL_TOOL_ZOOM)) || (axis == 1 && tool != SVAL_TOOL_VOLUME && tool != SVAL_TOOL_ZOOM && tool != SVAL_TOOL_ARROWS)) return;
     if (sval_point_inverted(control, axis)) delta = -delta;
     const sval_point_profile_t *profile  = sval_point_profile(control);
-    int32_t                     counts   = axis ? profile->vertical_distance : profile->distance;
+    int32_t                     counts   = (int32_t)(axis ? profile->vertical_distance : profile->distance) * sval_point_step_scale(tool);
     int32_t                     distance = counts * SVAL_POINT_ONE;
     // A new stroke after quantizer idle must not inherit the previous stroke's tail.
     if (pointers[side].turn[axis].moved && (uint32_t)(now - pointers[side].turn[axis].last_motion) >= 250) clear_pending(side, axis);
@@ -346,8 +345,9 @@ void sval_point_task(void) {
         uint8_t axis = pointers[side].next_axis;
         if (!pointers[side].pending[axis].count) axis ^= 1;
         uint8_t  control  = pointers[side].control;
-        uint16_t interval = sval_point_profile(control)->interval_ms;
-        if (pointers[side].emitted && (uint32_t)(now - pointers[side].last_output) < interval) continue;
+        uint16_t interval = sval_point_interval(control);
+        // Over the rate limit: this interval's steps are dropped at its end, never queued.
+        if (emitted && (uint32_t)(now - last_output) < interval) continue;
         bool                     positive = pointers[side].pending[axis].direction > 0;
         uint16_t                 keycode;
         uint8_t                  mods = 0;
@@ -396,9 +396,9 @@ void sval_point_task(void) {
                 reset_proportional(side ^ 1);
             }
             --pointers[side].pending[axis].count;
-            pointers[side].next_axis   = axis ^ 1;
-            pointers[side].last_output = now;
-            pointers[side].emitted     = true;
+            pointers[side].next_axis = axis ^ 1;
+            last_output              = now;
+            emitted                  = true;
             sval_point_output_task(now);
             ++admitted;
             next_side = side ^ 1;

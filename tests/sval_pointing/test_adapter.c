@@ -132,8 +132,8 @@ int main(void) {
     input(160, 0, 0, 0, 1);
     r = input(0, 0, 0, 0, 11);
     assert(scroll_policy.mode == SV_AXIS_LOCKED_H && !pending_count(0));
-    // Breakaway batch was discarded, so fresh 96 counts are required.
-    input(96, 0, 0, 0, 1);
+    // Breakaway batch was discarded, so a fresh Tabs step (320 counts) is required.
+    input(320, 0, 0, 0, 1);
     r = input(0, 0, 0, 0, 11);
     assert(pending_count(0));
     // Timeout is delivered with stopped sensors and invalidates pending steps.
@@ -292,7 +292,7 @@ int main(void) {
     input(71, 0, 0, 0, 1);
     input(0, 0, 0, 0, 10);
     key(3, SV_POINT_TOOL4_HOLD, true); // newest wins on both pointers: Tasks
-    input(0, 0, 64, 0, 1);
+    input(0, 0, 320, 0, 1);
     sval_point_task();
     input(0, 0, 0, 0, 11);
     sval_point_task();

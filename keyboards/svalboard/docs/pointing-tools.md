@@ -28,7 +28,14 @@ Four tool slots. Each slot runs one of eight actions:
 
 The defaults are slot 1 Volume, 2 Arrows, 3 Tabs and 4 Tasks. Shortcuts assume a US layout. The board switches to the macOS column by itself when it detects a macOS or iOS host (the same detection that turns the axis lock off there); there is no setting. On macOS both Undo / Redo variants redo with Command+Shift+Z, the Mac standard, because many Mac apps ignore Command+Y.
 
-The slots are shared by every pointer. Each slot has a horizontal and a vertical speed (travel per step), an optional rate limit (uncapped by default), a reversal tolerance (for Proportional scroll, the center dead zone) and a reverse flag per axis. "Use shared speeds for every tool" is on by default; with it off, a slot can follow the shared speeds or set its own.
+The slots are shared by every pointer. Each slot has a horizontal and a vertical speed (travel per step), an optional rate limit, a reversal tolerance (for Proportional scroll, the center dead zone) and a reverse flag per axis. "Use shared speeds for every tool" is on by default; with it off, a slot can follow the shared speeds or set its own.
+
+### Tabs and Tasks take bigger, slower steps
+
+Switching tabs or windows is a jump of one whole item, and the host needs time to show each one, so these two actions step differently from the others whatever slot runs them:
+
+- **Five times the travel per step.** At the default speed a step is 320 counts at 800 CPI, about 10 mm of ball travel, against about 2 mm (64 counts) for Volume, Arrows, Zoom and Undo / Redo. A deliberate roll then moves one or two items, not a dozen. The Tool speeds still scale it: the speed sets the step for the slot, and Tabs or Tasks multiply it by five.
+- **About 7 steps a second by default.** With no rate limit set, Tabs and Tasks wait at least 140 ms between presses: about the time a browser takes to show a tab, or the switcher to move its highlight, and fast enough to sweep through a row of items. A rate limit set for the slot replaces it, faster or slower. The other actions stay uncapped unless a limit is set.
 
 ### Held modifiers
 
@@ -65,7 +72,8 @@ Retired codes are never reused, so a layout that still holds one gets a key that
 
 Earlier test builds had a set of slot keys per pointer (`SV_POINT_L_TOOL1_HOLD` at `0x7E00`, `SV_POINT_R_TOOL1_HOLD` at `0x7E08`, ...), named them after each slot's default action before that (`SV_POINT_L_VOLUME_HOLD`, then `ARROWS`, `TABS` and `TASKS`), and called `0x7E10` `SV_POINT_CANCEL`. Keybard reads all of those names from layout files as the matching `SV_POINT_TOOL<n>` key (and `SV_POINT_STOP_ALL`); Finer and Coarser load as no key, with a warning. The left-pointer codes `0x7E00`-`0x7E07` keep their meaning, now for every pointer.
 
-- The newest held key wins, then the toggle. There is one set of holds and one toggle for the whole board, and every pointer follows them: toggling another slot replaces the toggle, toggling the same slot clears it, and releasing an older hold doesn't disturb a newer one.
+- The newest held key wins. Holding a second tool key replaces the first; releasing the newest stops it, and the tools stay off until a tool key is pressed again: an older key still held doesn't come back. Tools don't stack.
+- A held key wins over the toggle, and releasing it returns to the toggle if one is on. There is one toggle for the whole board: toggling another slot replaces it, toggling the same slot clears it. Every pointer follows the same keys.
 - A release is matched by the key's position, so changing layers while a key is held still releases it.
 - Only physical keys activate tools. Codes from combos, macros, tap dances and other synthetic events are dropped; mod-tap and layer-tap wrapping are not supported.
 - No layer turns the pointers into a tool by itself; put a tool key on the layer instead.
@@ -79,7 +87,7 @@ Earlier test builds had a set of slot keys per pointer (`SV_POINT_L_TOOL1_HOLD` 
 - Every tool obeys the board's one free-scroll / axis-lock policy (`pointing/scroll_policy.c`), shared with wheel scrolling on both pointers. It applies while axis lock is on and the host isn't macOS.
 - While a tool is on, neither pointer moves the cursor, and the tool overrides drag-scroll; their motion still feeds the shared axis lock. Tool motion never turns on the auto-mouse layer.
 - Natural scroll flips Proportional scroll's vertical direction, like the wheel. The per-slot reverse flags are separate.
-- There is no burst cap and no catch-up: motion that can't be sent in the current report is dropped, never replayed later. A rate limit, when set, is the slot's visible minimum interval between presses.
+- There is no catch-up. Motion is turned into steps once per scroll batch (10 ms), and the steps one batch can't send, because of the rate limit or because USB hasn't taken the previous press, are dropped at the end of that batch, never queued. When the ball stops, the steps stop with the batch it stopped in; a hard flick gives only the presses the rate limit allows while the ball is moving. The rate limit is the board's: two pointers running the same tool share it.
 
 ## Output
 
@@ -102,7 +110,7 @@ A little-endian bit stream, least significant bit first:
 | 28 × 4 | per slot: horizontal index (6), vertical index (6), linked (1), use shared speeds (1), rate limit in ms (8: `0` none, else `4`-`250`), reversal tolerance − 1 (6) |
 | 2 | zero |
 
-A speed index `i` (`0`-`63`) is `round(1024 × 2^(−i/9))` counts at 800 CPI per step, from 1024 down to 8; the default is `36` (64 counts). For Proportional scroll the reversal field holds the dead zone + 1 (`0`-`63` counts, default 7). SET refuses linked speeds that differ, rate limits of `1`-`3` or over `250`, and nonzero padding.
+A speed index `i` (`0`-`63`) is `round(1024 × 2^(−i/9))` counts at 800 CPI per step, from 1024 down to 8; the default is `36` (64 counts). Tabs and Tasks multiply it by five (default 320 counts). A rate limit of `0` means none, except for Tabs and Tasks, which then use 140 ms. For Proportional scroll the reversal field holds the dead zone + 1 (`0`-`63` counts, default 7). SET refuses linked speeds that differ, rate limits of `1`-`3` or over `250`, and nonzero padding.
 
 ### `tools` (3 bytes)
 
