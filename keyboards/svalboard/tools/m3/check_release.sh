@@ -5,8 +5,9 @@
 #   bash keyboards/svalboard/tools/m3/check_release.sh TAG [OWNER/REPO]
 #
 # Downloads into ~/m3dry/TAG (kept: the hardware check uses these files).
-# A dry-run tag must be a prerelease; any release must not be a draft and
-# must hold exactly 4 .uf2 and 4 .svup files (D34, D40).
+# An x tag must be a published prerelease; a v tag must be a full release
+# (a draft until someone publishes it, D41). Any other tag is refused. Every
+# release must hold exactly 4 .uf2 and 4 .svup files (D34, D40).
 set -euo pipefail
 tag="${1:?usage: check_release.sh TAG [OWNER/REPO]}"
 R="${2:-morganvenable/sval-qmk}"
@@ -16,9 +17,15 @@ dir="$HOME/m3dry/$tag"
 state="$(gh release view "$tag" -R "$R" --json isDraft,isPrerelease \
   -q '"draft=" + (.isDraft|tostring) + " prerelease=" + (.isPrerelease|tostring)')"
 echo "$tag: $state"
-case "$state" in *draft=true*) echo "FAIL: still a draft"; exit 1 ;; esac
-if grep -qiE 'dry-?run' <<<"$tag" && [ "${state##*prerelease=}" != true ]; then
-  echo "FAIL: a dry-run tag must be a prerelease"
+pre="${state##*prerelease=}"
+if [[ "$tag" =~ ^x[0-9]+(\.[0-9]+)*$ ]]; then
+  case "$state" in *draft=true*) echo "FAIL: an x tag's release is still a draft"; exit 1 ;; esac
+  [ "$pre" = true ] || { echo "FAIL: an x tag must be a prerelease"; exit 1; }
+elif [[ "$tag" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
+  [ "$pre" = false ] || { echo "FAIL: a v tag must not be a prerelease"; exit 1; }
+  case "$state" in *draft=true*) echo "note: still a draft: publish it after this check" ;; esac
+else
+  echo "FAIL: $tag is not a release tag (v3, v3.1, x3, x3.1)"
   exit 1
 fi
 rm -rf "$dir"

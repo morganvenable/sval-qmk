@@ -51,66 +51,54 @@ def main():
     check(1 <= fw <= rv.MAX_FW, f"committed fw_version {fw}")
     check(not hasattr(rv, "mu"), "release_version.py has no key checks")
 
+    # vLaunch and vLaunch2 were published under the old names; their numbers still count
     history = [("vLaunch", False, False, "2026-10-07T04:37:07Z"), ("vLaunch2", False, False, "2026-10-08T20:20:35Z"), ("vRC2", False, True, "2026-10-09T00:00:00Z"), ("vDraft", True, False, "")]
 
-    # a dry run: a prerelease, compared with vLaunch2 (before the updater: 0)
-    rc, text, o = run(out, "vLaunch3-dryrun1", history, {})
-    check(rc == 0 and o == dict(version="vLaunch3-dryrun1", fw_version=str(fw), prerelease="true", previous="vLaunch2"), f"dry run passes as a prerelease: {rc} {o} {text}")
-    for tag in ("vM3-DryRun2", "vdry-run", "vLaunch3-dryrun"):
-        rc, _, o = run(out, tag, history, {})
-        check(rc == 0 and o.get("prerelease") == "true", f"{tag} is a dry run")
-
-    # a normal release
-    rc, text, o = run(out, "vLaunch3", history, {"vLaunch2": fw - 1})
-    check(rc == 0 and o.get("prerelease") == "false" and o.get("previous") == "vLaunch2", f"normal release: {rc} {o} {text}")
-    rc, text, o = run(out, "vLaunch3", history, {})
-    check(rc == 0 and o.get("prerelease") == "false", f"a normal tag needs nothing else: {rc} {o} {text}")
+    # a prerelease (x tag): published at once, compared with vLaunch2 (before the updater: 0)
+    rc, text, o = run(out, "x3", history, {})
+    check(rc == 0 and o == dict(version="x3", fw_version=str(fw), prerelease="true", draft="false", previous="vLaunch2"), f"x3 is a prerelease: {rc} {o} {text}")
+    # a full release (v tag): a draft, not a prerelease
+    rc, text, o = run(out, "v3", history, {"vLaunch2": fw - 1})
+    check(rc == 0 and o == dict(version="v3", fw_version=str(fw), prerelease="false", draft="true", previous="vLaunch2"), f"v3 is a full release: {rc} {o} {text}")
+    rc, text, o = run(out, "v3", history, {})
+    check(rc == 0 and o.get("prerelease") == "false", f"a v tag needs nothing else: {rc} {o} {text}")
     # the number must go up
-    rc, text, o = run(out, "vLaunch3", history, {"vLaunch2": fw})
+    rc, text, o = run(out, "v3", history, {"vLaunch2": fw})
     check(rc == 1 and "not greater" in text and not o, f"same number refused: {text}")
-    rc, text, _ = run(out, "vLaunch3", history, {"vLaunch2": fw + 5})
+    rc, text, _ = run(out, "x3", history, {"vLaunch2": fw + 5})
     check(rc == 1 and "not greater" in text, f"lower number refused: {text}")
-    # the newest published non-prerelease counts, not a prerelease or draft, and not this tag itself
-    rc, _, o = run(out, "vLaunch3", history + [("vLaunch3", False, False, "2026-12-01T00:00:00Z")], {"vLaunch2": fw - 1, "vLaunch3": fw})
+    # this tag's own release and drafts are not compared; prereleases are
+    rc, _, o = run(out, "v3", history + [("v3", False, False, "2026-12-01T00:00:00Z")], {"vLaunch2": fw - 1, "v3": fw})
     check(rc == 0 and o.get("previous") == "vLaunch2", f"this tag's own release is skipped: {o}")
-    rc, _, o = run(out, "vLaunch3", history + [("vLaunch3-dryrun1", False, True, "2026-11-01T00:00:00Z")], {"vLaunch3-dryrun1": fw + 9, "vLaunch2": fw - 1})
-    check(rc == 0 and o.get("previous") == "vLaunch2", f"a dry run's number is not compared: {o}")
-    rc, _, o = run(out, "vLaunch3", history, {"vDraft": fw + 9, "vLaunch2": fw - 1})
+    rc, _, o = run(out, "v3", history, {"vDraft": fw + 9, "vLaunch2": fw - 1})
     check(rc == 0, "a draft's number is not compared")
-    rc, text, _ = run(out, "vLaunch3", history, {"vRC2": fw, "vLaunch2": fw - 1})
+    rc, text, _ = run(out, "v3", history, {"vRC2": fw, "vLaunch2": fw - 1})
     check(rc == 1 and "vRC2" in text, f"another prerelease's number is compared: {text}")
 
-    # bleeding edge: vNext tags are prereleases whose numbers count
-    nxt = history + [("vNext1", False, True, "2026-10-20T00:00:00Z")]
-    rc, text, o = run(out, "vNext1", history, {"vLaunch2": fw - 1})
-    check(rc == 0 and o.get("prerelease") == "true" and o.get("previous") == "vLaunch2", f"vNext1 is a prerelease: {rc} {o} {text}")
-    rc, text, o = run(out, "vNext2", nxt, {"vLaunch2": fw - 2, "vNext1": fw - 1})
-    check(rc == 0 and o.get("prerelease") == "true" and o.get("previous") == "vNext1", f"vNext2 follows vNext1: {o} {text}")
-    rc, text, _ = run(out, "vNext2", nxt, {"vLaunch2": fw - 2, "vNext1": fw})
-    check(rc == 1 and "not greater" in text, f"vNext2 must raise the number: {text}")
-    rc, text, _ = run(out, "vLaunch3", nxt, {"vLaunch2": fw - 1, "vNext1": fw})
-    check(rc == 1 and "vNext1" in text, f"a stable release must come after the vNext before it: {text}")
-    rc, _, o = run(out, "vLaunch3", nxt, {"vLaunch2": fw - 2, "vNext1": fw - 1})
-    check(rc == 0 and o.get("prerelease") == "false" and o.get("previous") == "vNext1", f"stable after vNext: {o}")
-    rc, _, o = run(out, "vNext2-dryrun1", nxt, {})
-    check(rc == 0 and o.get("prerelease") == "true", f"a vNext dry run: {o}")
-    for tag in ("vNext", "vnext1", "vNext1a", "vNextLaunch"):
-        rc, text, o = run(out, tag, history, {})
-        check(rc == 1 and "bleeding-edge tags" in text and not o, f"near-miss tag {tag!r} refused: {text}")
-    rc, _, o = run(out, "vLaunch3-dryrun1", [], {})
+    # x tags count: v3 after x3 needs a higher number (graduating is a rebuild)
+    xs = history + [("x3", False, True, "2026-10-20T00:00:00Z")]
+    rc, text, o = run(out, "x3.1", xs, {"vLaunch2": fw - 2, "x3": fw - 1})
+    check(rc == 0 and o.get("prerelease") == "true" and o.get("previous") == "x3", f"x3.1 follows x3: {o} {text}")
+    rc, text, _ = run(out, "x3.1", xs, {"vLaunch2": fw - 2, "x3": fw})
+    check(rc == 1 and "not greater" in text, f"x3.1 must raise the number: {text}")
+    rc, text, _ = run(out, "v3", xs, {"vLaunch2": fw - 1, "x3": fw})
+    check(rc == 1 and "x3" in text, f"v3 must come after the x tags before it: {text}")
+    rc, _, o = run(out, "v3", xs, {"vLaunch2": fw - 2, "x3": fw - 1})
+    check(rc == 0 and o.get("draft") == "true" and o.get("previous") == "x3", f"v3 after x3: {o}")
+    rc, _, o = run(out, "x3", [], {})
     check(rc == 0 and o.get("previous") == "", "no previous release")
 
-    # stable tags are vLaunch<N> only; anything else would publish as the latest release
-    for tag in ("vLaunch10", "vLaunch3"):
+    # release tags: v or x, a number, optional point parts; nothing else releases
+    for tag, pre in (("v3", "false"), ("v3.1", "false"), ("v10.2.3", "false"), ("x3", "true"), ("x3.1", "true"), ("x10.0", "true")):
         rc, text, o = run(out, tag, history, {})
-        check(rc == 0 and o.get("prerelease") == "false", f"{tag} is a stable tag: {rc} {text}")
-    for tag in ("vLaunch2.3", "vLaunch3-rc1", "vLaunch", "vlaunch3", "vLaunch3a", "Launch3", "vtest", "v3", "vRC3"):
+        check(rc == 0 and o.get("prerelease") == pre and o.get("draft") != pre, f"{tag} is a release tag: {rc} {text}")
+    for tag in ("vLaunch2", "vLaunch3", "vNext1", "v3-rc1", "x3-rc1", "v3-dryrun1", "x", "v", "3", "V3", "X3", "v3.", "v.3", "v3..1", "x3a", "vx3", "xv3", "v03a", "v3\n", " v3", "keybard-host-v3"):
         rc, text, o = run(out, tag, history, {})
-        check(rc == 1 and "stable firmware tags" in text and not o, f"non-stable tag {tag!r} refused: {text}")
+        check(rc == 1 and "not a release tag" in text and not o, f"tag {tag!r} refused: {text}")
 
     # tag names that cannot be a version string
-    for tag in ("vLaunch2-with-a-long-name", "v Launch", "v/1"):
-        rc, text, _ = run(out, tag + "-dryrun", history, {})
+    for tag in ("v1.2.3.4.5.6.7.8.9", "x12345678901234567"):
+        rc, text, _ = run(out, tag, history, {})
         check(rc == 1 and "not a version string" in text, f"tag {tag!r} refused: {text}")
 
     # the version file
