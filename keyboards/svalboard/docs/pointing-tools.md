@@ -9,53 +9,77 @@ make svalboard/left:sval SVAL_POINT_CONTROLS=yes
 make svalboard/right:sval SVAL_POINT_CONTROLS=yes
 ```
 
-These are the normal auto-detecting images: one per side, with every pointing driver built in. The target architecture and its reasoning are in [docs/design/discrete-pointing.md](../../../docs/design/discrete-pointing.md); this page describes what is built (settings version 5).
+These are the normal auto-detecting images: one per side, with every pointing driver built in. This page describes what is built (settings version 5).
 
 ## Tools
 
 Four tool slots. Each slot runs one of eight actions:
 
-| ID | Action | Axis | Output |
-|---|---|---|---|
-| 0 | Volume | vertical | consumer Volume Up / Down |
-| 1 | Arrows | both | Right, Left, Up, Down |
-| 2 | Tabs | horizontal | Ctrl+Tab / Ctrl+Shift+Tab |
-| 3 | Tasks | horizontal | Alt+Tab / Alt+Shift+Tab, with Alt held until the session ends |
-| 4 | Zoom | vertical | Ctrl+= / Ctrl+- (US layout) |
-| 5 | Undo / Redo | horizontal | Ctrl+Z / Ctrl+Shift+Z |
-| 6 | Undo / Redo (Ctrl+Y) | horizontal | Ctrl+Z / Ctrl+Y |
-| 7 | Proportional scroll | both | wheel speed proportional to the displacement from where the tool started |
+| ID | Action | Axis | Windows | macOS |
+|---|---|---|---|---|
+| 0 | Volume | vertical | consumer Volume Up / Down | the same |
+| 1 | Arrows | both | Right, Left, Up, Down, with the held modifiers | the same |
+| 2 | Tabs | horizontal | Ctrl+Tab / Ctrl+Shift+Tab | Command+Shift+] / Command+Shift+[ |
+| 3 | Tasks | horizontal | Alt+Tab / Alt+Shift+Tab, Alt held until the session ends | Command+Tab / Command+Shift+Tab, Command held |
+| 4 | Zoom | vertical | Ctrl+= / Ctrl+- | Command+= / Command+- |
+| 5 | Undo / Redo | horizontal | Ctrl+Z / Ctrl+Shift+Z | Command+Z / Command+Shift+Z |
+| 6 | Undo / Redo (Ctrl+Y) | horizontal | Ctrl+Z / Ctrl+Y | Command+Z / Command+Y |
+| 7 | Proportional scroll | both | wheel speed proportional to the displacement from where the tool started | the same |
 
-The defaults are slot 1 Volume, 2 Arrows, 3 Tabs and 4 Tasks. The shortcuts are the Windows ones.
+The defaults are slot 1 Volume, 2 Arrows, 3 Tabs and 4 Tasks. Shortcuts assume a US layout. The board switches to the macOS column by itself when it detects a macOS or iOS host (the same detection that turns the axis lock off there); there is no setting.
 
 Each slot has a horizontal and a vertical speed (travel per step), an optional rate limit (uncapped by default), a reversal tolerance (for Proportional scroll, the center dead zone) and a reverse flag per axis. "Use shared speeds for every tool" is on by default; with it off, a slot can follow the shared speeds or set its own.
 
+### Held modifiers
+
+- **Arrows** goes out with the modifiers the user holds: Shift+arrow selects, Ctrl+arrow jumps by word, and so on. It waits while any other key is held.
+- **Tabs, Tasks, Zoom and both Undo / Redo** wait while any key or modifier is held, because an extra modifier changes what their shortcut means (Ctrl+Shift+Z is redo, not undo).
+- **Volume** also waits while any key or modifier is held, and while a consumer key is.
+- **Proportional scroll** is never held back.
+
 ## Keys
 
-The keys are in the `QK_KB` block. Each code is `0x7E00 + side * 8 + slot * 2 + mode`: side `0` left pointer, `1` right; slot `0`-`3`; mode `0` hold, `1` toggle.
+The whole `QK_KB` block, `0x7E00`-`0x7E3F` (64 codes), is reserved for the pointing tools. The codes are permanent because layouts store them: new keys go after the last one, and no code is renumbered or reused. A code in the block with no key yet does nothing.
+
+Each slot key is `0x7E00 + side * 8 + slot * 2 + mode`: side `0` left pointer, `1` right; slot `0`-`3`; mode `0` hold, `1` toggle. The name gives the slot, not its action, which is a setting of the slot.
 
 | Code | Name | Meaning |
 |---|---|---|
-| `0x7E00`-`0x7E07` | `SV_POINT_L_*_HOLD`, `SV_POINT_L_*_TOGGLE` | left pointer, slots 1-4 |
-| `0x7E08`-`0x7E0F` | `SV_POINT_R_*_HOLD`, `SV_POINT_R_*_TOGGLE` | right pointer, slots 1-4 |
-| `0x7E10` | `SV_POINT_CANCEL` | stop every tool; an open task switcher is canceled with Escape |
-| `0x7E11` | `SV_POINT_TRACE` | print counters to the console |
+| `0x7E00` | `SV_POINT_L_TOOL1_HOLD` | left pointer, slot 1, hold |
+| `0x7E01` | `SV_POINT_L_TOOL1_TOGGLE` | left pointer, slot 1, toggle |
+| `0x7E02` | `SV_POINT_L_TOOL2_HOLD` | left pointer, slot 2, hold |
+| `0x7E03` | `SV_POINT_L_TOOL2_TOGGLE` | left pointer, slot 2, toggle |
+| `0x7E04` | `SV_POINT_L_TOOL3_HOLD` | left pointer, slot 3, hold |
+| `0x7E05` | `SV_POINT_L_TOOL3_TOGGLE` | left pointer, slot 3, toggle |
+| `0x7E06` | `SV_POINT_L_TOOL4_HOLD` | left pointer, slot 4, hold |
+| `0x7E07` | `SV_POINT_L_TOOL4_TOGGLE` | left pointer, slot 4, toggle |
+| `0x7E08` | `SV_POINT_R_TOOL1_HOLD` | right pointer, slot 1, hold |
+| `0x7E09` | `SV_POINT_R_TOOL1_TOGGLE` | right pointer, slot 1, toggle |
+| `0x7E0A` | `SV_POINT_R_TOOL2_HOLD` | right pointer, slot 2, hold |
+| `0x7E0B` | `SV_POINT_R_TOOL2_TOGGLE` | right pointer, slot 2, toggle |
+| `0x7E0C` | `SV_POINT_R_TOOL3_HOLD` | right pointer, slot 3, hold |
+| `0x7E0D` | `SV_POINT_R_TOOL3_TOGGLE` | right pointer, slot 3, toggle |
+| `0x7E0E` | `SV_POINT_R_TOOL4_HOLD` | right pointer, slot 4, hold |
+| `0x7E0F` | `SV_POINT_R_TOOL4_TOGGLE` | right pointer, slot 4, toggle |
+| `0x7E10` | `SV_POINT_STOP_ALL` | stop every tool; an open task switcher is canceled with Escape |
+| `0x7E11` | `SV_POINT_TRACE` | print counters to the console (diagnostic; Keybard doesn't offer it) |
 | `0x7E12` | `SV_POINT_FINER` | halve the travel per step (until the next save) |
 | `0x7E13` | `SV_POINT_COARSER` | double the travel per step (until the next save) |
+| `0x7E14`-`0x7E3F` | | reserved for later pointing tools keys |
 
-The middle of each slot name (`VOLUME`, `ARROWS`, `TABS`, `TASKS`) is the slot's default action and stays the same when the slot runs another action.
+Earlier test builds named the slot keys after each slot's default action (`SV_POINT_L_VOLUME_HOLD` for `0x7E00`, then `ARROWS` for slot 2, `TABS` for slot 3 and `TASKS` for slot 4) and called `0x7E10` `SV_POINT_CANCEL`. The codes are unchanged; Keybard still reads the old names from layout files.
 
 - On each pointer the newest held key wins, then that pointer's toggle. One toggle per pointer: toggling another slot replaces it, toggling the same slot clears it. The two pointers are independent.
 - A release is matched by the key's position, so changing layers while a key is held still releases it.
 - Only physical keys activate tools. Codes from combos, macros, tap dances and other synthetic events are dropped; mod-tap and layer-tap wrapping are not supported.
+- No layer turns a pointer into a tool by itself; put a tool key on the layer instead.
 - Changing a pointer's tool ends what it was sending and starts the new tool from rest.
 - While a Tasks session is open: Enter or a left click accepts, Escape or another click cancels, any other key accepts and then goes through, and 10 s without a step cancels. The other pointer is ignored.
-- Held modifiers block the key-based tools, so Shift+Arrows doesn't select yet. Proportional scroll isn't blocked.
 
 ## Motion
 
 - Counts are normalized to 800 CPI before the speeds apply, so a step takes the same travel at any CPI. Trackballs and the trackpad use the CPI set for that hand (the trackpad caps it at its own resolution). A TrackPoint ignores CPI and reports force rather than distance, so its counts are used as they come, as a logical 800 CPI. Each hand's module comes from the same detection `POINTING_HARDWARE` reports; a hand with no module simply produces no steps.
-- Sniper raises the travel per step and slows Proportional scroll. Boost is ignored.
+- Sniper and boost don't touch a pointer running a tool: the same travel per step, the same Proportional scroll speed, and the same motion into the axis lock. A tool's feel comes only from its slot settings and Finer / Coarser. The other pointer keeps sniper and boost as usual.
 - Every tool obeys the board's one free-scroll / axis-lock policy (`pointing/scroll_policy.c`), shared with wheel scrolling on both pointers. It applies while axis lock is on and the host isn't macOS.
 - A pointer running a tool doesn't move the cursor and overrides drag-scroll on that pointer; its motion still feeds the shared axis lock. Its motion never turns on the auto-mouse layer.
 - Natural scroll flips Proportional scroll's vertical direction, like the wheel. The per-slot reverse flags are separate.
@@ -90,13 +114,22 @@ A speed index `i` (`0`-`63`) is `round(1024 × 2^(−i/9))` counts at 800 CPI pe
 
 ## Storage
 
-- The speeds live in bytes 80-99 of the 100-byte VIA custom config block: `0x50`, `3`, the 16 `speeds` bytes, then a CRC-16/CCITT (initial `0xFFFF`, polynomial `0x1021`) over the first 18 bytes, little-endian. Records from earlier test builds (record versions 1 and 2) still load.
+The VIA custom config block is 144 bytes, and each user has its own range ([via_custom_map.h](../via_custom_map.h)) whether or not it is built in:
+
+| Bytes | User |
+|---|---|
+| 0-99 | board settings (`saved_values_t`) and their magic |
+| 100-119 | pointing tools speed record |
+| 120-143 | touch gesture experiment (a 22-byte block, two bytes spare) |
+
+The header refuses to build if two ranges overlap, the firmware checks at build time that each record fits its range, and `tests/sval_pointing` checks the map and that a save writes only bytes 100-119.
+
+- The speed record, bytes 100-119: `0x50`, `3`, the 16 `speeds` bytes, then a CRC-16/CCITT (initial `0xFFFF`, polynomial `0x1021`) over the first 18 bytes, little-endian.
 - The tools live in QMK's 32-bit `eeconfig_user` word: the 20 `tools` bits, the tag `0xA` in bits 20-23, and a CRC-8 (polynomial `0x07`, initial `0`) of the low 24 bits in bits 24-31.
 - Each record is checked on its own; a bad one loads the defaults for that part only. A save reads both back and fails with status `4` if they differ. The two writes are not atomic, so a power cut during a save can mix old and new.
 - The settings live on the USB half and are not copied to the other half.
-- Installing a different firmware build resets every setting, these included ([settings-storage.md](settings-storage.md)).
-- The touch gesture experiment stores its block at bytes 78-99 of the same VIA area, so the two experiments can't share a build until one of them moves.
+- Installing a different firmware build resets every setting, these included ([settings-storage.md](settings-storage.md)). The block's size is part of the VIA layout stamp, so even a dev `keep` build resets the keymap and macros once when it first replaces a build with the old 100-byte block. Records the earliest test builds left at bytes 80-99 are not read.
 
 ## Not built yet
 
-Activation by layer, holding a modifier through a tool (Shift+Arrows), macOS shortcut presets, copying the settings to the other half, and atomic two-record saves.
+Activation by layer, combos as tool keys, copying the settings to the other half, and atomic two-record saves.

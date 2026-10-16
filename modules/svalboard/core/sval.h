@@ -93,11 +93,11 @@ enum sval_command_id {
     sval_cmd_pointing_motion      = 0x2D, // advertised by sval_flag2_pointing_motion
     // 0x2E is taken by the touch gesture experiment (experiment/cyrus-multitouch).
     // Pointing tools (SVAL_POINT_CONTROLS builds), advertised by sval_flag2_pointing_tools.
-    sval_cmd_point_tools_get      = 0x2F,
-    sval_cmd_point_tools_set      = 0x30,
-    sval_cmd_point_tools_status   = 0x31,
-    sval_cmd_point_tools_stop     = 0x32,
-    sval_cmd_error                = 0xFF,
+    sval_cmd_point_tools_get    = 0x2F,
+    sval_cmd_point_tools_set    = 0x30,
+    sval_cmd_point_tools_status = 0x31,
+    sval_cmd_point_tools_stop   = 0x32,
+    sval_cmd_error              = 0xFF,
 };
 
 // Feature capability flags (returned in protocol info)
@@ -119,7 +119,7 @@ enum sval_feature_flags2 {
     sval_flag2_modifier_state    = (1 << 2), // 0x16 appends the board's modifiers, Caps Word and Caps Lock
     sval_flag2_pointing_motion   = (1 << 3), // 0x2D reports pointing motion since the last read
     // Bit 4 is taken by the touch gesture experiment (experiment/cyrus-multitouch).
-    sval_flag2_pointing_tools    = (1 << 5), // 0x2F-0x32 read and set the pointing tools
+    sval_flag2_pointing_tools = (1 << 5), // 0x2F-0x32 read and set the pointing tools
 };
 
 // Status byte after the modifiers in the 0x16 reply (sval_flag2_modifier_state).

@@ -15,14 +15,14 @@ static uint16_t last_consumer;
 static int      configured = USB_DEVICE_STATE_CONFIGURED;
 static bool     connected;
 uint32_t        timer_read32(void) {
-           return clock_ms;
+    return clock_ms;
 }
 uint32_t timer_elapsed32(uint32_t t) {
     return clock_ms - t;
 }
 static uint8_t hand_sensor[2];
 uint8_t        sval_pointer_sensor_for_hand(bool left) {
-           return hand_sensor[left ? 0 : 1];
+    return hand_sensor[left ? 0 : 1];
 }
 uint16_t timer_read(void) {
     return clock_ms;
@@ -104,7 +104,7 @@ int main(void) {
     r = input(0, 0, 0, 0, 11);
     assert(r.h == 12 && r.v == 18);
     // Free diagonal control output consumes cursor and wheel exactly once.
-    key(0, SV_POINT_L_VOLUME_HOLD, true);
+    key(0, SV_POINT_L_TOOL1_HOLD, true);
     r = input(80, -64, 0, 0, 1);
     assert(!r.x && !r.y && !r.h && !r.v);
     r = input(0, 0, 0, 0, 11);
@@ -114,7 +114,7 @@ int main(void) {
     ++clock_ms;
     sval_point_task();
     assert(last_consumer == 0);
-    key(0, SV_POINT_L_VOLUME_HOLD, false);
+    key(0, SV_POINT_L_TOOL1_HOLD, false);
     // Natural scrolling changes only wheel sign.
     global_saved_values.natural_scroll = true;
     input(0, -20, 0, 0, 1);
@@ -125,7 +125,7 @@ int main(void) {
     input(0, -40, 0, 0, 1);
     r = input(0, 0, 0, 0, 11);
     assert(scroll_policy.mode == SV_AXIS_LOCKED_V && r.v == -40);
-    key(1, SV_POINT_L_TABS_HOLD, true);
+    key(1, SV_POINT_L_TOOL3_HOLD, true);
     input(20, 0, 0, 0, 1);
     r = input(0, 0, 0, 0, 11);
     assert(scroll_policy.mode == SV_AXIS_LOCKED_V && !pending_count(0));
@@ -141,7 +141,7 @@ int main(void) {
     assert(scroll_policy.mode == SV_AXIS_FREE);
     // Host bypass is shared by control and wheel output.
     process_detected_host_os_kb(OS_MACOS);
-    key(1, SV_POINT_L_TABS_HOLD, false);
+    key(1, SV_POINT_L_TOOL3_HOLD, false);
     input(120, -120, 0, 0, 1);
     r = input(0, 0, 0, 0, 11);
     assert(r.h == 10 && r.v == -10);
@@ -166,17 +166,17 @@ int main(void) {
     global_saved_values.natural_scroll   = false;
     global_saved_values.axis_scroll_lock = false;
     global_saved_values.left_scroll = global_saved_values.right_scroll = false;
-    key(2, SV_POINT_L_VOLUME_HOLD, true);
+    key(2, SV_POINT_L_TOOL1_HOLD, true);
     input(71, -71, 0, 0, 1);
     r = input(0, 0, 0, 0, 10);
     assert(r.h > 0 && r.v > 0 && !r.x && !r.y);
     r = input(0, 0, 3, 4, 10);
     assert(r.h > 0 && r.v > 0 && r.x == 3 && r.y == 4); // other pointer still cursors
-    key(2, SV_POINT_L_VOLUME_HOLD, false);
+    key(2, SV_POINT_L_TOOL1_HOLD, false);
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v);
-    key(2, SV_POINT_L_VOLUME_TOGGLE, true);
-    key(2, SV_POINT_L_VOLUME_TOGGLE, false);
+    key(2, SV_POINT_L_TOOL1_TOGGLE, true);
+    key(2, SV_POINT_L_TOOL1_TOGGLE, false);
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v); // new toggle starts centered
     input(71, 0, 0, 0, 1);
@@ -185,22 +185,22 @@ int main(void) {
     input(-71, 0, 0, 0, 1);
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v);
-    key(2, SV_POINT_L_VOLUME_TOGGLE, true);
-    key(2, SV_POINT_L_VOLUME_TOGGLE, false);
+    key(2, SV_POINT_L_TOOL1_TOGGLE, true);
+    key(2, SV_POINT_L_TOOL1_TOGGLE, false);
     // Keep the shared vertical lock across sensor-idle time, then break it using
     // ordinary policy motion. No second acquisition/breakaway implementation.
     scroll_policy                        = (sval_scroll_policy_t){0};
     global_saved_values.axis_scroll_lock = true;
-    key(2, SV_POINT_L_VOLUME_HOLD, true);
+    key(2, SV_POINT_L_TOOL1_HOLD, true);
     input(20, -71, 0, 0, 1);
     r = input(0, 0, 0, 0, 5);
     assert(!r.h && !r.v); // no initial H leakage before V acquisition
     input(0, 0, 0, 0, 6);
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && r.v > 0);
-    key(2, SV_POINT_L_VOLUME_HOLD, false);
+    key(2, SV_POINT_L_TOOL1_HOLD, false);
     scroll_policy = (sval_scroll_policy_t){0};
-    key(2, SV_POINT_L_VOLUME_HOLD, true);
+    key(2, SV_POINT_L_TOOL1_HOLD, true);
     input(0, -71, 0, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(scroll_policy.mode == SV_AXIS_LOCKED_V);
@@ -216,43 +216,43 @@ int main(void) {
     input(-200, 71, 0, 0, 1);
     r = input(0, 0, 0, 0, 11);
     assert(!r.h && !r.v); // full original center retained
-    key(2, SV_POINT_L_VOLUME_HOLD, false);
+    key(2, SV_POINT_L_TOOL1_HOLD, false);
     global_saved_values.axis_scroll_lock = false;
     global_saved_values.natural_scroll   = true;
-    key(3, SV_POINT_R_VOLUME_HOLD, true);
+    key(3, SV_POINT_R_TOOL1_HOLD, true);
     input(0, 0, 0, -71, 1);
     r = input(0, 0, 0, 0, 10);
     assert(r.v < 0 && !r.h);
-    key(4, SV_POINT_CANCEL, true);
-    key(4, SV_POINT_CANCEL, false);
+    key(4, SV_POINT_STOP_ALL, true);
+    key(4, SV_POINT_STOP_ALL, false);
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v);
-    key(3, SV_POINT_R_VOLUME_HOLD, false);
+    key(3, SV_POINT_R_TOOL1_HOLD, false);
     global_saved_values.natural_scroll = false;
-    key(2, SV_POINT_L_VOLUME_HOLD, true);
-    key(3, SV_POINT_R_VOLUME_HOLD, true);
+    key(2, SV_POINT_L_TOOL1_HOLD, true);
+    key(3, SV_POINT_R_TOOL1_HOLD, true);
     input(71, 0, 0, -71, 1);
     r = input(0, 0, 0, 0, 10);
     assert(r.h > 0 && r.v > 0);
-    key(2, SV_POINT_L_VOLUME_HOLD, false);
+    key(2, SV_POINT_L_TOOL1_HOLD, false);
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && r.v > 0);
-    key(3, SV_POINT_R_VOLUME_HOLD, false);
+    key(3, SV_POINT_R_TOOL1_HOLD, false);
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v);
-    key(2, SV_POINT_L_VOLUME_HOLD, true);
+    key(2, SV_POINT_L_TOOL1_HOLD, true);
     input(71, 0, 0, 0, 1);
     r = input(0, 0, 0, 0, 10);
     assert(r.h > 0);
-    key(3, SV_POINT_L_ARROWS_HOLD, true);
+    key(3, SV_POINT_L_TOOL2_HOLD, true);
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v);
-    key(3, SV_POINT_L_ARROWS_HOLD, false);
+    key(3, SV_POINT_L_TOOL2_HOLD, false);
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v); // restored tool starts centered
-    key(2, SV_POINT_L_VOLUME_HOLD, false);
-    key(2, SV_POINT_L_VOLUME_TOGGLE, true);
-    key(2, SV_POINT_L_VOLUME_TOGGLE, false);
+    key(2, SV_POINT_L_TOOL1_HOLD, false);
+    key(2, SV_POINT_L_TOOL1_TOGGLE, true);
+    key(2, SV_POINT_L_TOOL1_TOGGLE, false);
     input(71, 0, 0, 0, 1);
     r = input(0, 0, 0, 0, 10);
     assert(r.h > 0);
@@ -264,7 +264,7 @@ int main(void) {
     sval_point_task();
     connected = true;
     sval_point_task();
-    key(2, SV_POINT_L_VOLUME_HOLD, true);
+    key(2, SV_POINT_L_TOOL1_HOLD, true);
     input(71, 0, 0, 0, 1);
     r = input(0, 0, 0, 0, 10);
     assert(r.h > 0);
@@ -272,11 +272,11 @@ int main(void) {
     sval_point_task();
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v && !sval_point_active(0));
-    key(2, SV_POINT_L_VOLUME_HOLD, false);
-    key(2, SV_POINT_L_VOLUME_HOLD, true);
+    key(2, SV_POINT_L_TOOL1_HOLD, false);
+    key(2, SV_POINT_L_TOOL1_HOLD, true);
     input(71, 0, 0, 0, 1);
     input(0, 0, 0, 0, 10);
-    key(3, SV_POINT_R_TASKS_HOLD, true);
+    key(3, SV_POINT_R_TOOL4_HOLD, true);
     input(0, 0, 64, 0, 1);
     sval_point_task();
     input(0, 0, 0, 0, 11);
@@ -284,14 +284,14 @@ int main(void) {
     assert(sval_point_output_session());
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v);
-    key(3, SV_POINT_R_TASKS_HOLD, false);
+    key(3, SV_POINT_R_TOOL4_HOLD, false);
     for (int i = 0; i < 8; ++i) {
         ++clock_ms;
         sval_point_task();
     }
     r = input(0, 0, 0, 0, 10);
     assert(!r.h && !r.v); // no prior velocity resumes after task selection
-    key(2, SV_POINT_L_VOLUME_HOLD, false);
+    key(2, SV_POINT_L_TOOL1_HOLD, false);
     // Tools normalize a trackball by its CPI, but take a TrackPoint's counts as they come.
     sval_point_stop();
     for (int i = 0; i < 8; ++i) {
@@ -303,21 +303,94 @@ int main(void) {
     sensor_cpi                           = 1600;
     hand_sensor[0]                       = SVAL_SENSOR_PMW3389;
     clock_ms += 600;
-    key(5, SV_POINT_L_ARROWS_HOLD, true);
+    key(5, SV_POINT_L_TOOL2_HOLD, true);
     input(70, 0, 0, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(!pending_count(0));
-    key(5, SV_POINT_L_ARROWS_HOLD, false);
+    key(5, SV_POINT_L_TOOL2_HOLD, false);
     hand_sensor[0] = SVAL_SENSOR_TRACKPOINT;
     input(0, 0, 0, 0, 600); // the module is looked up every 500 ms
-    key(5, SV_POINT_L_ARROWS_HOLD, true);
+    key(5, SV_POINT_L_TOOL2_HOLD, true);
     input(70, 0, 0, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(pending_count(0));
-    key(5, SV_POINT_L_ARROWS_HOLD, false);
+    key(5, SV_POINT_L_TOOL2_HOLD, false);
     sval_point_stop();
     sensor_cpi     = 800;
     hand_sensor[0] = SVAL_SENSOR_NONE;
+    // Sniper and boost never change a tool's feel: same travel per step, same
+    // Proportional scroll speed. A pointer without a tool still gets both.
+    for (int i = 0; i < 8; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    global_saved_values.axis_scroll_lock = false;
+    global_saved_values.left_scroll = global_saved_values.right_scroll = false;
+    scroll_policy                                                      = (sval_scroll_policy_t){0};
+    clock_ms += 600;
+    key(5, SV_POINT_L_TOOL2_HOLD, true); // slot 2: Arrows
+    uint32_t steps = recognized;
+    input(70, 0, 0, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(recognized == steps + 1);
+    sniper_hold_5 = 1;
+    update_sniper_divisor();
+    steps = recognized;
+    input(70, 0, 0, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(recognized == steps + 1); // not 70 / 5 = 14 counts
+    r = input(0, 0, 50, 0, 1);
+    assert(r.x == 10); // the other pointer is still slowed
+    sniper_hold_5 = 0;
+    update_sniper_divisor();
+    boost_hold_5 = 1;
+    update_boost_multiplier();
+    steps = recognized;
+    input(70, 0, 0, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(recognized == steps + 1); // not 5 steps
+    r = input(0, 0, 10, 0, 1);
+    assert(r.x == 50); // the other pointer is still boosted
+    boost_hold_5 = 0;
+    update_boost_multiplier();
+    key(5, SV_POINT_L_TOOL2_HOLD, false);
+    // Slot 1 is Proportional scroll (set above): the speed for the same displacement.
+    int16_t speed[3];
+    for (int run = 0; run < 3; ++run) {
+        sniper_hold_5 = run == 1;
+        boost_hold_5  = run == 2;
+        update_sniper_divisor();
+        update_boost_multiplier();
+        key(6, SV_POINT_L_TOOL1_HOLD, true);
+        input(71, 0, 0, 0, 1);
+        r = input(0, 0, 0, 0, 10);
+        input(0, 0, 0, 0, 10);
+        r          = input(0, 0, 0, 0, 10);
+        speed[run] = r.h;
+        key(6, SV_POINT_L_TOOL1_HOLD, false);
+        input(0, 0, 0, 0, 10);
+    }
+    assert(speed[0] > 0 && speed[1] == speed[0] && speed[2] == speed[0]);
+    // The motion a tool pointer feeds the shared axis lock isn't slowed either.
+    sniper_hold_5 = 1;
+    boost_hold_5  = 0;
+    update_sniper_divisor();
+    update_boost_multiplier();
+    global_saved_values.axis_scroll_lock = true;
+    scroll_policy                        = (sval_scroll_policy_t){0};
+    key(7, SV_POINT_L_TOOL3_HOLD, true); // slot 3: Tabs
+    input(0, -40, 0, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(scroll_policy.mode == SV_AXIS_LOCKED_V);
+    input(160, 0, 0, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(scroll_policy.mode == SV_AXIS_LOCKED_H); // the same breakaway as without sniper
+    key(7, SV_POINT_L_TOOL3_HOLD, false);
+    global_saved_values.axis_scroll_lock = false;
+    sniper_hold_5 = boost_hold_5 = 0;
+    update_sniper_divisor();
+    update_boost_multiplier();
+    puts("combined adapter: sniper and boost leave tool steps and Proportional scroll alone, still scale the other pointer passed");
     puts("combined adapter: TrackPoint counts unscaled, trackball counts normalized by CPI passed");
     puts("combined adapter: proportional hold/toggle, center, independent pointers, natural direction, shared lock sustain/breakaway and stop passed");
     puts("combined adapter: idle flush, no cursor/wheel leakage, natural scroll, shared lock/breakaway, idle timeout, host bypass passed");

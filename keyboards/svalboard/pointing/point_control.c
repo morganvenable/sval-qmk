@@ -29,7 +29,7 @@ static struct {
     } pending[2];
     uint32_t          last_output;
     bool              emitted;
-    uint16_t          cpi, divisor;
+    uint16_t          cpi;
     int64_t           fraction[2];
     sval_point_turn_t turn[2];
     struct {
@@ -52,6 +52,11 @@ static uint8_t  next_side, session_side, output_side, output_axis;
 static bool     output_owned;
 static uint8_t  swallowed_buttons;
 static uint32_t recognized, admitted, dropped;
+static bool     host_mac;
+
+void sval_point_host_mac(bool mac) {
+    host_mac = mac;
+}
 
 static uint32_t pending_count(uint8_t side) {
     return pointers[side].pending[0].count + pointers[side].pending[1].count;
@@ -120,8 +125,9 @@ bool sval_point_blocked(uint8_t side) {
 }
 
 bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
+    bool point_key = keycode >= SV_POINT_FIRST && keycode <= SV_POINT_RESERVED_LAST;
     if (record->event.key.row >= MATRIX_ROWS || record->event.key.col >= MATRIX_COLS) {
-        return keycode < SV_POINT_L_VOLUME_HOLD || keycode > SV_POINT_COARSER;
+        return !point_key;
     }
     uint8_t pos = record->event.key.row * MATRIX_COLS + record->event.key.col;
     if (!record->event.pressed && consumed[pos]) {
@@ -136,11 +142,12 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
         }
         return false;
     }
-    if (keycode >= SV_POINT_L_VOLUME_HOLD && keycode <= SV_POINT_COARSER) {
+    if (point_key) {
         if (!record->event.pressed || consumed[pos]) return false;
         consumed[pos] = true;
-        if (keycode < SV_POINT_CANCEL) {
-            uint8_t n    = keycode - SV_POINT_L_VOLUME_HOLD;
+        if (keycode > SV_POINT_LAST) return false; // reserved for later keys: nothing yet
+        if (keycode < SV_POINT_STOP_ALL) {
+            uint8_t n    = keycode - SV_POINT_FIRST;
             uint8_t side = n / 8, control = (n % 8) / 2 + 1;
             if (n & 1)
                 toggled[side] = toggled[side] == control ? NONE : control;
@@ -154,7 +161,7 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
                 clear_motion(side);
                 reset_proportional(side);
             }
-        } else if (keycode == SV_POINT_CANCEL)
+        } else if (keycode == SV_POINT_STOP_ALL)
             stop_all(true);
         else if (keycode == SV_POINT_TRACE) {
             tracing = !tracing;
@@ -182,20 +189,19 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
     }
     return true;
 }
-void sval_point_buffer(uint8_t side, int16_t x, int16_t y, uint16_t cpi, uint16_t divisor) {
+void sval_point_buffer(uint8_t side, int16_t x, int16_t y, uint16_t cpi) {
     if (!sval_point_active(side) || pointers[side].inhibited) return;
     if (is_proportional(pointers[side].control)) {
         if (sval_point_output_session()) {
             reset_proportional(side);
             return;
         }
-        if (pointers[side].cpi != cpi || pointers[side].divisor != divisor) {
+        if (pointers[side].cpi != cpi) {
             clear_motion(side);
             reset_proportional(side);
-            pointers[side].cpi     = cpi;
-            pointers[side].divisor = divisor;
+            pointers[side].cpi = cpi;
         }
-        sval_proportional_move(&proportional[side], sval_point_normalize(x, cpi, divisor, &pointers[side].fraction[0]), -sval_point_normalize(y, cpi, divisor, &pointers[side].fraction[1]));
+        sval_proportional_move(&proportional[side], sval_point_normalize(x, cpi, &pointers[side].fraction[0]), -sval_point_normalize(y, cpi, &pointers[side].fraction[1]));
         return;
     }
     if (!x && !y) {
@@ -208,19 +214,18 @@ void sval_point_buffer(uint8_t side, int16_t x, int16_t y, uint16_t cpi, uint16_
         clear_motion(side);
         return;
     }
-    if (pointers[side].cpi != cpi || pointers[side].divisor != divisor) {
+    if (pointers[side].cpi != cpi) {
         clear_motion(side);
-        pointers[side].cpi     = cpi;
-        pointers[side].divisor = divisor;
+        pointers[side].cpi = cpi;
     }
     uint8_t n = pointers[side].motion_count;
     if (n == MOTION_SLOTS) {
         ++dropped;
         return;
     }
-    pointers[side].motion[n].h = sval_point_normalize(x, cpi, divisor, &pointers[side].fraction[0]);
+    pointers[side].motion[n].h = sval_point_normalize(x, cpi, &pointers[side].fraction[0]);
     // Widen before negating the most negative sensor report.
-    pointers[side].motion[n].v    = -sval_point_normalize(y, cpi, divisor, &pointers[side].fraction[1]);
+    pointers[side].motion[n].v    = -sval_point_normalize(y, cpi, &pointers[side].fraction[1]);
     pointers[side].motion[n].time = timer_read32();
     ++pointers[side].motion_count;
 }
@@ -355,20 +360,32 @@ void sval_point_task(void) {
             kind    = SVAL_POINT_CONSUMER;
             keycode = positive ? 0xE9 : 0xEA;
         } else if (tool == SVAL_TOOL_ARROWS) {
+            // Arrows go out with the user's held modifiers: Shift selects, Ctrl jumps words.
             keycode = axis ? (positive ? KC_UP : KC_DOWN) : (positive ? KC_RIGHT : KC_LEFT);
-        } else if (tool == SVAL_TOOL_ZOOM) {
-            // Ctrl+= / Ctrl+- is the standard browser zoom pair (US layout).
-            keycode = positive ? KC_EQUAL : KC_MINUS;
-            mods    = MOD_BIT(KC_LCTL);
-        } else if (tool == SVAL_TOOL_HISTORY || tool == SVAL_TOOL_HISTORY_Y) {
-            keycode = positive && tool == SVAL_TOOL_HISTORY_Y ? KC_Y : KC_Z;
-            mods    = MOD_BIT(KC_LCTL);
-            if (positive && tool == SVAL_TOOL_HISTORY) mods |= MOD_BIT(KC_LSFT);
+            kind    = SVAL_POINT_KEY_WITH_MODS;
         } else {
-            keycode = KC_TAB;
-            mods    = tool == SVAL_TOOL_TABS ? MOD_BIT(KC_LCTL) : MOD_BIT(KC_LALT);
-            if (!positive) mods |= MOD_BIT(KC_LSFT);
-            if (tool == SVAL_TOOL_TASKS) kind = SVAL_POINT_TASK;
+            // Windows shortcuts, or the Command ones when the host is macOS (US layout).
+            uint8_t command = host_mac ? MOD_BIT(KC_LGUI) : MOD_BIT(KC_LCTL);
+            if (tool == SVAL_TOOL_ZOOM) {
+                // Ctrl+= / Ctrl+-, Command+= / Command+-.
+                keycode = positive ? KC_EQUAL : KC_MINUS;
+                mods    = command;
+            } else if (tool == SVAL_TOOL_HISTORY || tool == SVAL_TOOL_HISTORY_Y) {
+                // Undo Ctrl+Z; redo Ctrl+Shift+Z or Ctrl+Y (Command on macOS).
+                keycode = positive && tool == SVAL_TOOL_HISTORY_Y ? KC_Y : KC_Z;
+                mods    = command;
+                if (positive && tool == SVAL_TOOL_HISTORY) mods |= MOD_BIT(KC_LSFT);
+            } else if (tool == SVAL_TOOL_TABS && host_mac) {
+                // Command+Shift+] / Command+Shift+[: next / previous tab.
+                keycode = positive ? KC_RBRC : KC_LBRC;
+                mods    = MOD_BIT(KC_LGUI) | MOD_BIT(KC_LSFT);
+            } else {
+                // Tabs Ctrl+Tab; Tasks Alt+Tab, or Command+Tab on macOS. Shift goes back.
+                keycode = KC_TAB;
+                mods    = tool == SVAL_TOOL_TABS ? MOD_BIT(KC_LCTL) : host_mac ? MOD_BIT(KC_LGUI) : MOD_BIT(KC_LALT);
+                if (!positive) mods |= MOD_BIT(KC_LSFT);
+                if (tool == SVAL_TOOL_TASKS) kind = SVAL_POINT_TASK;
+            }
         }
         if (sval_point_output_start(kind, keycode, mods, now)) {
             output_side  = side;
