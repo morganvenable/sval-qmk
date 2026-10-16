@@ -21,8 +21,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdint.h>
 #include "svalboard.h"
 
-// VIA's customKeycodes maps to QK_USER range (0x7E40+), not QK_KB (0x7E00+).
-// TODO: Investigate using QK_KB range for keyboard-level keycodes in the future.
+// customKeycodes in sval.json map to QK_USER (0x7E40 + position), and Keybard reads
+// them there. QK_KB (0x7E00-0x7E3F) belongs to the pointing tools (point_control.h):
+// never move these keys into QK_KB, and never reorder them (layouts store the codes).
 enum my_keycodes {
     SV_LEFT_DPI_INC = QK_USER_0,
     SV_LEFT_DPI_DEC,
