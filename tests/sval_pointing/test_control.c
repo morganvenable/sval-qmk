@@ -78,7 +78,7 @@ int main(void) {
     sval_point_buffer(0, 0, -500, 800);
     event(4, SV_POINT_TOOL4_HOLD, true);
     assert(pointers[0].motion_count == 0);
-    motion(96, 0, SVAL_AXIS_BOTH);
+    motion(320, 0, SVAL_AXIS_BOTH); // one Tasks step
     sval_point_task();
     ++clock_ms;
     sval_point_task();
@@ -127,20 +127,43 @@ int main(void) {
     assert(recognized == before + 2 && pointers[0].pending[0].count == 1 && pointers[1].pending[1].count == 1);
     event(8, 4, false);
     assert(!sval_point_active(0) && !sval_point_active(1) && !pending_count(0) && !pending_count(1));
-    // Precedence: the newest held key wins, then the toggle, on both pointers alike.
+    // Precedence: the newest held key wins over the toggle, on both pointers alike.
     event(9, SV_POINT_TOOL1_TOGGLE, true);
     event(9, SV_POINT_TOOL1_TOGGLE, false);
     event(10, SV_POINT_TOOL3_HOLD, true);
     event(11, SV_POINT_TOOL2_HOLD, true);
     assert(pointers[0].control == 2 && pointers[1].control == 2);
-    event(10, 4, false); // releasing an older hold doesn't disturb the newer one
+    event(10, 4, false); // releasing a replaced hold doesn't disturb the newer one
     assert(pointers[0].control == 2 && pointers[1].control == 2);
     event(10, SV_POINT_TOOL3_HOLD, true);
     assert(pointers[0].control == 3 && pointers[1].control == 3);
-    event(10, 4, false);
-    assert(pointers[0].control == 2 && pointers[1].control == 2);
+    event(10, 4, false); // the older key still held (11) doesn't come back: the toggle runs
+    assert(pointers[0].control == 1 && pointers[1].control == 1);
     event(11, 4, false);
     assert(pointers[0].control == 1 && pointers[1].control == 1);
+    event(9, SV_POINT_TOOL1_TOGGLE, true);
+    event(9, SV_POINT_TOOL1_TOGGLE, false);
+    assert(!sval_point_active(0) && !sval_point_active(1));
+    // Two holds, no toggle: the newest wins; releasing it runs nothing, though the older key
+    // is still down, until a tool key is pressed again.
+    event(10, SV_POINT_TOOL1_HOLD, true);
+    event(11, SV_POINT_TOOL2_HOLD, true);
+    assert(pointers[0].control == 2 && pointers[1].control == 2);
+    event(11, 4, false);
+    assert(!sval_point_active(0) && !sval_point_active(1));
+    before = recognized;
+    both(0, -640, 640, 0);
+    assert(recognized == before && !pending_count(0) && !pending_count(1));
+    event(10, 4, false); // the older key's release changes nothing
+    assert(!sval_point_active(0) && !sval_point_active(1));
+    event(10, SV_POINT_TOOL1_HOLD, true);
+    event(11, SV_POINT_TOOL2_HOLD, true);
+    event(11, 4, false);
+    event(12, SV_POINT_TOOL3_HOLD, true); // a new press starts its tool at once
+    assert(pointers[0].control == 3 && pointers[1].control == 3);
+    event(12, 4, false);
+    event(10, 4, false);
+    assert(!sval_point_active(0) && !sval_point_active(1));
     // One toggle: another slot replaces it, the same slot clears it.
     event(9, SV_POINT_TOOL2_TOGGLE, true);
     event(9, SV_POINT_TOOL2_TOGGLE, false);
@@ -173,19 +196,19 @@ int main(void) {
     event(14, 4, false);
     // A Tasks session belongs to the pointer that opened it; the other is ignored.
     event(15, SV_POINT_TOOL4_HOLD, true);
-    both(0, 0, 96, 0);
+    both(0, 0, 320, 0);
     sval_point_task();
     ++clock_ms;
     sval_point_task();
     assert(sval_point_output_session() && session_side == 1 && sval_point_blocked(0) && !sval_point_blocked(1));
     before = recognized;
-    both(96, 0, 0, 0);
+    both(320, 0, 0, 0);
     assert(recognized == before && !pending_count(0));
     event(16, KC_ESC, true);
     event(16, KC_ESC, false);
     assert(!sval_point_output_session() && pointers[0].inhibited && pointers[1].inhibited);
     event(15, 4, false);
     assert(!sval_point_active(0) && !pointers[0].inhibited && !pointers[1].inhibited);
-    puts("controller: one set of tool keys for both pointers, shared precedence, toggle and Stop all, retired codes, status, task session owner passed");
+    puts("controller: one set of tool keys for both pointers, newest hold wins with no resume, toggle and Stop all, retired codes, status, task session owner passed");
     puts("controller: holds, remapped releases, masks, free diagonals, generation, session, suspend passed");
 }

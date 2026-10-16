@@ -76,6 +76,12 @@ static void motion(int x, int y, uint8_t axes) {
     sval_point_finish_interval(axes);
     tick();
 }
+// Tabs and Tasks take five times the travel per step, and 140 ms between presses unless a
+// rate limit is set.
+#define SWITCH (64 * SVAL_POINT_SWITCH_STEP_SCALE)
+static void wait_rate(void) {
+    clock_ms += SVAL_POINT_SWITCH_INTERVAL_MS;
+}
 int main(void) {
     configure(SVAL_TOOL_ZOOM, 0);
     motion(0, -64, SVAL_AXIS_BOTH);
@@ -111,7 +117,9 @@ int main(void) {
     event(SV_POINT_TOOL1_HOLD, false);
     // Session lifecycle follows the selected tool, not the original slot label.
     configure(SVAL_TOOL_TASKS, 0);
-    motion(64, 0, SVAL_AXIS_H);
+    motion(SWITCH - 1, 0, SVAL_AXIS_H);
+    assert(!sval_point_output_session()); // a Tasks step is 320 counts, not 64
+    motion(1, 0, SVAL_AXIS_H);
     assert(sval_point_output_session());
     event(SV_POINT_TOOL1_HOLD, false);
     tick();
@@ -140,13 +148,14 @@ int main(void) {
     const uint8_t blocked[] = {SVAL_TOOL_TABS, SVAL_TOOL_TASKS, SVAL_TOOL_ZOOM, SVAL_TOOL_HISTORY, SVAL_TOOL_HISTORY_Y};
     for (unsigned i = 0; i < sizeof(blocked); ++i) {
         configure(blocked[i], 0);
-        const int dx = blocked[i] == SVAL_TOOL_ZOOM ? 0 : 64, dy = blocked[i] == SVAL_TOOL_ZOOM ? -64 : 0;
+        const int step = sval_point_step_scale(blocked[i]) * 64;
+        const int dx = blocked[i] == SVAL_TOOL_ZOOM ? 0 : step, dy = blocked[i] == SVAL_TOOL_ZOOM ? -step : 0;
         hold_base(MOD_BIT(KC_LSFT), 0);
         before = presses;
         motion(dx, dy, SVAL_AXIS_BOTH);
         assert(presses == before && !sval_point_output_session());
-        hold_base(0, 0);
         before = presses;
+        hold_base(0, 0);
         motion(dx, dy, SVAL_AXIS_BOTH);
         assert(presses > before); // goes out once the modifier is up
         event(SV_POINT_TOOL1_HOLD, false);
@@ -175,15 +184,17 @@ int main(void) {
     assert(last_down.keys[0] == KC_Z && last_down.mods == cmd);
     event(SV_POINT_TOOL1_HOLD, false);
     configure(SVAL_TOOL_TABS, 0);
-    motion(64, 0, SVAL_AXIS_BOTH);
+    motion(SWITCH, 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_RBRC && last_down.mods == (cmd | shift));
-    motion(-64, 0, SVAL_AXIS_BOTH);
+    wait_rate();
+    motion(-SWITCH, 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_LBRC && last_down.mods == (cmd | shift));
     event(SV_POINT_TOOL1_HOLD, false);
     configure(SVAL_TOOL_TASKS, 0);
-    motion(64, 0, SVAL_AXIS_BOTH);
+    motion(SWITCH, 0, SVAL_AXIS_BOTH);
     assert(sval_point_output_session() && last_down.keys[0] == KC_TAB && last_down.mods == cmd);
-    motion(-64, 0, SVAL_AXIS_BOTH);
+    wait_rate();
+    motion(-SWITCH, 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_TAB && last_down.mods == (cmd | shift));
     event(SV_POINT_TOOL1_HOLD, false);
     tick();
@@ -195,11 +206,11 @@ int main(void) {
     // Back on Windows: the Ctrl and Alt shortcuts again.
     sval_point_host_mac(false);
     configure(SVAL_TOOL_TABS, 0);
-    motion(64, 0, SVAL_AXIS_BOTH);
+    motion(SWITCH, 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_TAB && last_down.mods == MOD_BIT(KC_LCTL));
     event(SV_POINT_TOOL1_HOLD, false);
     configure(SVAL_TOOL_TASKS, 0);
-    motion(64, 0, SVAL_AXIS_BOTH);
+    motion(SWITCH, 0, SVAL_AXIS_BOTH);
     assert(last_down.keys[0] == KC_TAB && last_down.mods == MOD_BIT(KC_LALT));
     event(SV_POINT_TOOL1_HOLD, false);
     tick();
