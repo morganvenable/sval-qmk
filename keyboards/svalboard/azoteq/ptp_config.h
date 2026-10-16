@@ -14,6 +14,7 @@
 #    define SVAL_PTP_PAD_PERIOD_MS 8     // chip report period on both halves
 #    define SVAL_PTP_REMOTE_POLL_MS 5    // the other half has not yet said it sends hints
 #    define SVAL_PTP_STALE_MS 50         // a pad with contacts silent this long: lift them
+#    define SVAL_PTP_REMOTE_STALE_MS 150 // the same for the other half's pad: rides out failed split transactions
 #    define SVAL_PTP_REMOTE_BACKUP_MS 10 // the other pad has contacts: fetch at least this often
 #    define SVAL_PTP_REMOTE_IDLE_MS 250  // the other pad is quiet: heartbeat (news is fetched at once)
 #    define SVAL_PTP_MIN_FRAME_US 4000   // at most 250 frames a second

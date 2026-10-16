@@ -51,6 +51,12 @@ void last_pointing_device_activity_trigger(void);
 #define MT_HINTS_MS 1000
 // How often the USB half checks which hands have a pad.
 #define MT_PADS_CHECK_MS 100
+// Answers with no sample, in a row, before the USB half takes a half that has
+// been sending samples as having none. One such answer is far more likely a
+// reply garbled or left over on the split link (QMK's RPC response carries no
+// checksum) than a pad that went away, and taking it at its word lifts that
+// pad's fingers.
+#define MT_EMPTY_REPLIES 3
 
 static uint8_t  ids[5], next_id, last_mask;
 static uint16_t sequence;
@@ -78,6 +84,7 @@ static uint8_t  split_hint = 0x80; // bit 7 set; the low bits move only on news
 static uint8_t  remote_hint, fetched_hint, remote_seq, remote_epoch;
 static uint32_t poll_at, received_at;
 static bool     remote_seen, remote_lost, remote_hints, remote_empty, last_ok;
+static uint8_t  empty_replies; // answers with no sample in a row (MT_EMPTY_REPLIES)
 
 static void put16(uint8_t *p, uint16_t v) {
     p[0] = v;
@@ -306,7 +313,10 @@ static void remote_gone(uint8_t pad) {
 
 static void update_pads(void) {
     const uint8_t local = is_keyboard_left() ? 1 : 2;
-    uint8_t       mask  = pad_hands & (local | ((remote_seen && !remote_empty) ? 3 - local : 0));
+    // The other half's pad rides the split link: hold its contacts across
+    // failed transactions (ptp.h, SVAL_PTP_REMOTE_STALE_MS).
+    sval_ptp_set_stale_ms(local == 1 ? 1 : 0, SVAL_PTP_REMOTE_STALE_MS);
+    uint8_t mask = pad_hands & (local | ((remote_seen && !remote_empty) ? 3 - local : 0));
     if (mask != pad_mask) {
         pad_mask = mask;
         sval_ptp_set_pads(mask);
@@ -349,10 +359,11 @@ static void poll_remote(void) {
     bool fresh = false;
     last_ok    = ok;
     if (ok && reply[0] == SVAL_MT_RPC_SNAPSHOT && (reply[1] & 1) && reply[2] <= SVAL_PTP_STALE_MS) {
-        remote_hints = reply[1] & 2;
-        remote_empty = false;
-        fetched_hint = want;
-        received_at  = timer_read32();
+        empty_replies = 0;
+        remote_hints  = reply[1] & 2;
+        remote_empty  = false;
+        fetched_hint  = want;
+        received_at   = timer_read32();
         if (!remote_seen || remote_lost || reply[5] != remote_seq || reply[6] != remote_epoch) {
             uint8_t frame[FRAME_SIZE];
             unpack_snapshot(reply, pad, frame);
@@ -373,12 +384,18 @@ static void poll_remote(void) {
 #ifdef SVAL_PERF_STATS
     sval_perf_rpc(sval_perf_now_us() - rpc_started, ok, false);
 #endif
-    if (ok && (reply[0] != SVAL_MT_RPC_SNAPSHOT || !(reply[1] & 1))) {
+    bool empty = ok && (reply[0] != SVAL_MT_RPC_SNAPSHOT || !(reply[1] & 1));
+    if (empty && remote_seen && !remote_lost && !remote_empty && ++empty_replies < MT_EMPTY_REPLIES) {
+        empty = false; // a half that was sending samples: a failed fetch until it repeats
+        ok    = false;
+    }
+    if (empty) {
         // An answer with no sample: firmware without this op (all zero), or a
         // pad that has not been read yet. Treat it as no pad: heartbeat only.
-        remote_empty = true;
-        remote_hints = reply[0] == SVAL_MT_RPC_SNAPSHOT && (reply[1] & 2);
-        fetched_hint = want;
+        empty_replies = 0;
+        remote_empty  = true;
+        remote_hints  = reply[0] == SVAL_MT_RPC_SNAPSHOT && (reply[1] & 2);
+        fetched_hint  = want;
         remote_gone(pad);
         update_pads();
         return;
@@ -387,7 +404,7 @@ static void poll_remote(void) {
     // A failed fetch, or a snapshot too old to use (the other pad stopped
     // answering). A quiet pad's last good snapshot is legitimately a
     // heartbeat old, so it gets the heartbeat on top.
-    uint32_t stale = quiet ? SVAL_PTP_REMOTE_IDLE_MS + SVAL_PTP_STALE_MS : SVAL_PTP_STALE_MS;
+    uint32_t stale = quiet ? SVAL_PTP_REMOTE_IDLE_MS + SVAL_PTP_REMOTE_STALE_MS : SVAL_PTP_REMOTE_STALE_MS;
     if (remote_seen && timer_elapsed32(received_at) > stale) remote_gone(pad);
 }
 
@@ -414,7 +431,7 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
     data[6] = 0xC2;
     data[7] = status;
     data[8] = touch_owner;
-    data[9] = 1 | 2; // bit 0 native touchpad built, bit 1 status v2 (pads, link)
+    data[9] = 1 | 2 | 4; // bit 0 native touchpad built, bit 1 status v2 (pads, link), bit 2 v3 (lost fingers)
     sval_ptp_status(data + 10);
     uint8_t *o = data + 10 + SVAL_PTP_STATUS_SIZE;
     put32(o, samples);
@@ -424,6 +441,8 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
     put16(o + 14, retry_recovered > 0xFFFF ? 0xFFFF : retry_recovered);
     put16(o + 16, reinits > 0xFFFF ? 0xFFFF : reinits);
     o[18] = (remote_hints ? 1 : 0) | (remote_empty ? 2 : 0) | (remote_seen ? 4 : 0) | (remote_lost ? 8 : 0);
+    o[19] = sval_ptp_lost_down(0); // fingers lifted because their pad's samples stopped
+    o[20] = sval_ptp_lost_down(1);
 }
 #endif
 

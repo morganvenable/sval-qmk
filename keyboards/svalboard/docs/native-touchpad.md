@@ -76,6 +76,19 @@ sample for 50 ms is lifted; so is the other pad while an update runs. With
 contacts on both pads, a frame waits up to one period for the second pad's
 sample, and every frame is stamped with its newest sample's read time.
 
+**The other pad over a flaky link.** A failed split transaction blocks the
+USB half for QMK's split timeout (20 ms), and on the touchpad test board they
+come in bursts while both pads are touched. Windows ends a pinch as soon as
+either contact lifts, so the other half's contacts are held at their last
+position for up to 150 ms without a new sample (`SVAL_PTP_REMOTE_STALE_MS`)
+before they are lifted, and a reply with no sample from a half that has been
+sending them counts as a failed fetch until three come in a row (QMK's RPC
+reply carries no checksum). A pad lifted because its samples stopped arms
+again on its next valid sample, so a finger still down is reported again as a
+new contact instead of staying unseen until it lifts; a chip reset or palm
+still waits for an all-up sample. The dev command's status (v3) counts these
+lifts per pad.
+
 ## Builds
 
 | Flag | Where | Effect |

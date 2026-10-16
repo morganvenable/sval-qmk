@@ -43,9 +43,20 @@ static uint32_t mt_now_us(void) {
 }
 static void osalSysLock(void) {}
 static void osalSysUnlock(void) {}
+// Split transactions that fail: each one blocks the main loop for the split
+// timeout first, as QMK's serial transport does (SERIAL_USART_TIMEOUT, 20 ms).
+static unsigned rpc_fail_next, rpc_failed;
+static uint32_t rpc_fail_ms = 20;
+static void (*rpc_blocked)(uint32_t ms); // the test moves every clock on
 static bool transaction_rpc_exec(int id, uint8_t in_len, const void *in, uint8_t out_len, void *out) {
     assert(id == KEYBOARD_SYNC_B && out_len == 32 && in_len >= 2);
     rpc_calls++;
+    if (rpc_fail_next) {
+        rpc_fail_next--;
+        rpc_failed++;
+        if (rpc_blocked) rpc_blocked(rpc_fail_ms);
+        return false;
+    }
     if (!connected || !other_half) return false;
     other_half(in_len, (const uint8_t *)in, out_len, (uint8_t *)out);
     return true;

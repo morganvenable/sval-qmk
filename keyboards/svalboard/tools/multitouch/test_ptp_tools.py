@@ -36,6 +36,13 @@ class OwnerReply(unittest.TestCase):
     def test_one_pad(self):
         self.assertIn("pads: right;", describe(owner_reply(pads=2)))
 
+    def test_lost_fingers_status_v3(self):
+        r = bytearray(owner_reply())
+        r[9] = 7
+        r[34 + 19], r[34 + 20] = 4, 0
+        self.assertIn("fingers lifted because their pad's samples stopped: left 4, right 0", describe(bytes(r)))
+        self.assertNotIn("fingers lifted", describe(owner_reply()))
+
 
 class PerfReport(unittest.TestCase):
     def half(self, **kw):

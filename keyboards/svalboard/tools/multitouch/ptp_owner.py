@@ -57,6 +57,9 @@ def describe(reply):
         lines.append(f"this pad: {samples} reads, {errors} invalid, {read_fail} read failures, {retries} NACK retries "
                      f"({recovered} recovered), {reinits} re-setups after a chip reset")
         lines.append(f"other pad link: {', '.join(link_text) or 'idle'}")
+    if built & 4:  # status v3
+        o = reply[34:]
+        lines.append(f"fingers lifted because their pad's samples stopped: left {o[19]}, right {o[20]}")
     return "\n".join(lines)
 
 

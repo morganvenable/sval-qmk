@@ -25,6 +25,13 @@ enum sval_touch_owner {
 #ifndef SVAL_PTP_STALE_MS
 #    define SVAL_PTP_STALE_MS 50 // no valid sample from a pad with contacts this long: lift them
 #endif
+// The other half's pad comes over the split link, where one failed
+// transaction blocks for the split timeout (20 ms). Its contacts are held at
+// their last position this long before they are lifted, so a few failed
+// transactions in a row never end a pinch.
+#ifndef SVAL_PTP_REMOTE_STALE_MS
+#    define SVAL_PTP_REMOTE_STALE_MS 150
+#endif
 // The other half's pad is fetched on news (its split pointing report carries
 // a counter); these bound the gaps when there is none.
 #ifndef SVAL_PTP_REMOTE_BACKUP_MS
@@ -97,10 +104,12 @@ bool     sval_ptp_key_button(uint8_t button, bool pressed); // SVAL_PTP_KEY_BUTT
 // One version-1 56-byte pad frame: pad, flags, mask, seq, size, time, epoch,
 // five 8-byte slots (lifetime id, x, y, strength, area). sample_us is when the
 // pad was read, on this half's 1 MHz clock.
-void sval_ptp_feed(const uint8_t *frame, uint32_t sample_us);
-void sval_ptp_pad_lost(uint8_t pad);  // the pad stopped answering, or its half went away
-bool sval_ptp_pad_quiet(uint8_t pad); // all up, armed, nothing pending
-void sval_ptp_task(void);
+void    sval_ptp_feed(const uint8_t *frame, uint32_t sample_us);
+void    sval_ptp_pad_lost(uint8_t pad);                  // the pad stopped answering, or its half went away
+void    sval_ptp_set_stale_ms(uint8_t pad, uint16_t ms); // lift this pad's contacts after this long without a valid sample (0: SVAL_PTP_STALE_MS)
+uint8_t sval_ptp_lost_down(uint8_t pad);                 // times a finger on this pad was lifted because its samples stopped (saturates)
+bool    sval_ptp_pad_quiet(uint8_t pad);                 // all up, armed, nothing pending
+void    sval_ptp_task(void);
 
 // --- status for the dev command and the perf counters (SVAL_PTP_STATUS_SIZE bytes) ---
 void sval_ptp_status(uint8_t *out);

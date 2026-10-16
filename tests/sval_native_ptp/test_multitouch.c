@@ -194,6 +194,7 @@ static void usb_half(void) {
     pads_checked = 0;
     pad_mask = pad_hands = 0;
     remote_seen = remote_lost = remote_hints = remote_empty = last_ok = false;
+    empty_replies                                                     = 0;
     uint8_t raw[45];
     raw_sample(raw, false, 0, 0);
     run(1);
@@ -253,7 +254,7 @@ static void test_fetch_gating(void) {
     uint32_t died = clock_ms;
     while (left_down()) {
         tick();
-        assert(clock_ms - died <= SVAL_PTP_STALE_MS + SVAL_PTP_REMOTE_BACKUP_MS + 10);
+        assert(clock_ms - died <= SVAL_PTP_REMOTE_STALE_MS + SVAL_PTP_REMOTE_BACKUP_MS + 10);
     }
     connected = true;
     set_peer(false, 0, 0);
@@ -385,6 +386,176 @@ static void test_owner(void) {
     puts("  owner command: mouse and native only; status v2 reports both pads");
 }
 
+// ------------------------------------------------ a pinch over a flaky link
+//
+// One finger on each pad, both moving, as in a pinch across the hands. The
+// other half samples its pad every 8 ms on its own clock and every sample is
+// news. A failed split transaction blocks the USB half's main loop for the
+// split timeout (20 ms) before it returns. Windows ends a pinch when either
+// contact lifts, so the other pad's contact must stay down across short
+// failures, and come back if it was lifted while the finger stayed down.
+
+static uint32_t pinch_t0;
+static bool     pinch_peer_down;
+static unsigned pinch_zero_replies; // the next replies arrive as zeros (garbled or left over)
+
+static void pinch_clocks(uint32_t ms) {
+    clock_ms += ms;
+    mt_test_us += ms * 1000u;
+    ptp_test_us += ms * 1000u;
+}
+static uint32_t pinch_sample(void) {
+    return (clock_ms - pinch_t0) / 8;
+}
+static void pinch_peer(uint8_t in_len, const uint8_t *in, uint8_t out_len, uint8_t *out) {
+    if (pinch_zero_replies) {
+        pinch_zero_replies--;
+        memset(out, 0, out_len);
+        return;
+    }
+    uint32_t k  = pinch_sample();
+    peer_finger = pinch_peer_down;
+    peer_x      = 1500 - (k % 1000);
+    peer_y      = 900;
+    peer_seq    = (uint8_t)k;
+    peer_age    = (uint8_t)((clock_ms - pinch_t0) - k * 8);
+    peer(in_len, in, out_len, out);
+}
+
+typedef struct {
+    unsigned left_lifts; // left Tip = 0 (or gone) while the right stays down
+    unsigned left_ids;   // distinct left contacts seen
+    uint32_t blind_ms;   // longest time with the right down and no left contact
+} pinch_result_t;
+
+static void pinch_scan(unsigned from, pinch_result_t *res, bool *left_was, uint8_t *left_cid, uint32_t *blind_since) {
+    for (unsigned n = from; n < ptp_sent_count; n++) {
+        const uint8_t *r    = ptp_sent[n];
+        bool           left = false, right = false;
+        uint8_t        cid = 0xFF;
+        for (int i = 0; i < r[33] && i < 5; i++) {
+            if (!(r[1 + 6 * i] & 2)) continue;
+            if (ptp_get16(r + 3 + 6 * i) < SVAL_PTP_PAD_STRIDE) {
+                left = true;
+                cid  = r[2 + 6 * i];
+            } else {
+                right = true;
+            }
+        }
+        if (*left_was && !left && right) res->left_lifts++;
+        if (left && cid != *left_cid) {
+            res->left_ids++;
+            *left_cid = cid;
+        }
+        if (right && !left) {
+            if (*blind_since == 0) *blind_since = clock_ms + 1; // 0 means none
+            uint32_t b = clock_ms + 1 - *blind_since;
+            if (b > res->blind_ms) res->blind_ms = b;
+        } else {
+            *blind_since = 0;
+        }
+        *left_was = left;
+    }
+}
+
+// Pinch for `ms`; at `fail_at` ms in, the next `fails` split transactions
+// fail and then the next `zeros` replies come back as zeros.
+static pinch_result_t pinch_ex(uint32_t ms, uint32_t fail_at, unsigned fails, unsigned zeros) {
+    usb_half();
+    ptp_sent_count  = 0; // only this pinch's reports
+    rpc_blocked     = pinch_clocks;
+    other_half      = pinch_peer;
+    pinch_t0        = clock_ms;
+    pinch_peer_down = true;
+    uint8_t        raw[45];
+    uint32_t       start = clock_ms, next_local = clock_ms + 3;
+    unsigned       from = 0, k_right = 0;
+    bool           left_was = false, failed = false;
+    uint8_t        left_cid = 0xFF;
+    uint32_t       blind    = 0;
+    pinch_result_t res      = {0};
+    while (clock_ms - start < ms) {
+        if (!failed && clock_ms - start >= fail_at) {
+            rpc_fail_next      = fails;
+            pinch_zero_replies = zeros;
+            failed             = true;
+        }
+        uint32_t k = pinch_sample();
+        hint       = 0x80 | (k & 0x7F); // every sample of a finger down is news
+        if ((int32_t)(clock_ms - next_local) >= 0) {
+            raw_sample(raw, true, 500 + k_right++, 900); // the right pad, moving
+            sval_mt_sample(raw, true);
+            while ((int32_t)(clock_ms - next_local) >= 0)
+                next_local += 8;
+        }
+        tick();
+        pinch_scan(from, &res, &left_was, &left_cid, &blind);
+        from = ptp_sent_count;
+    }
+    rpc_fail_next      = 0;
+    pinch_zero_replies = 0;
+    rpc_blocked        = NULL;
+    other_half         = peer;
+    pinch_peer_down    = false;
+    set_peer(false, 0, 0);
+    raw_sample(raw, false, 0, 0);
+    sval_mt_sample(raw, true);
+    run(SVAL_PTP_REMOTE_BACKUP_MS * 3);
+    return res;
+}
+
+static pinch_result_t pinch(uint32_t ms, uint32_t fail_at, unsigned fails) {
+    return pinch_ex(ms, fail_at, fails, 0);
+}
+
+static void test_pinch_flaky_link(void) {
+    // A clean link: the left contact never lifts, one contact all along.
+    pinch_result_t r = pinch(2000, 0, 0);
+    assert(r.left_lifts == 0 && r.left_ids == 1 && r.blind_ms == 0);
+    // Failed split transactions, 20 ms each, at every phase of the 8 ms
+    // sample period.
+    for (unsigned fails = 1; fails <= 6; fails++) {
+        unsigned lifts = 0, worst_blind = 0;
+        for (uint32_t phase = 0; phase < 8; phase++) {
+            r = pinch(1500, 500 + phase, fails);
+            lifts += r.left_lifts;
+#ifndef PINCH_REPORT_ONLY
+            assert(sval_ptp_lost_down(0) == r.left_lifts);
+#endif
+            if (r.blind_ms > worst_blind) worst_blind = r.blind_ms;
+        }
+        printf("  pinch, %u failed split transaction%s in a row: left lifted in %u of 8 phases, longest without the left contact %u ms\n", fails, fails == 1 ? "" : "s", lifts, worst_blind);
+#ifndef PINCH_REPORT_ONLY
+        // Up to five failures (100 ms blocked) the contact holds.
+        if (fails <= 5) assert(lifts == 0 && worst_blind == 0);
+#endif
+    }
+    // A reply that comes back as zeros (no checksum on the split RPC reply):
+    // one or two in a row are failed fetches, not a pad that went away.
+    {
+        unsigned lifts = 0;
+        for (unsigned zeros = 1; zeros < MT_EMPTY_REPLIES; zeros++) {
+            r = pinch_ex(1500, 500, 0, zeros);
+            lifts += r.left_lifts;
+            printf("  pinch, %u zeroed split repl%s in a row: left lifted %u time%s\n", zeros, zeros == 1 ? "y" : "ies", r.left_lifts, r.left_lifts == 1 ? "" : "s");
+        }
+#ifndef PINCH_REPORT_ONLY
+        assert(lifts == 0);
+#endif
+    }
+#ifndef PINCH_REPORT_ONLY
+    // A link that stays down: the left contact lifts within the remote stale
+    // time, and when the link comes back with the finger still down it is
+    // reported again (a new contact) instead of staying lost until the
+    // finger lifts.
+    r = pinch(3000, 500, 40); // 800 ms of failures
+    assert(r.left_lifts == 1 && r.left_ids == 2);
+    assert(sval_ptp_lost_down(0) == 1 && sval_ptp_lost_down(1) == 0); // counted for the dev status
+    assert(r.blind_ms < 40 * 20 + 50);
+    puts("  pinch over a flaky link: the other pad's contact holds across failed split transactions, and returns after a lost link");
+#endif
+}
+
 int main(void) {
     puts("native PTP split and contact path tests:");
     test_other_half();
@@ -395,6 +566,7 @@ int main(void) {
     test_activity();
     test_reinit();
     test_owner();
+    test_pinch_flaky_link();
     puts("native PTP split and contact path: all passed");
     return 0;
 }
