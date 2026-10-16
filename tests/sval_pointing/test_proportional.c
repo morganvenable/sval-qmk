@@ -7,9 +7,9 @@ static int sum(sval_proportional_t *s, int h, int v, int dead, int interval, int
     int total = 0;
     *vertical = 0;
     int16_t out[2];
-    sval_proportional_output(s, h, v, dead, interval, 1, axes, inverted, divisor, 120, start, out);
+    sval_proportional_output(s, h, v, dead, interval, axes, inverted, divisor, 120, start, out);
     for (unsigned t = dt; t <= duration; t += dt) {
-        sval_proportional_output(s, h, v, dead, interval, 1, axes, inverted, divisor, 120, start + t, out);
+        sval_proportional_output(s, h, v, dead, interval, axes, inverted, divisor, 120, start + t, out);
         total += out[0];
         *vertical += out[1];
     }
@@ -59,13 +59,13 @@ int main(void) {
     for (int i = 0; i < 1000; ++i)
         sval_proportional_move(&s, INT32_MAX, INT32_MIN + 1);
     int16_t out[2];
-    sval_proportional_output(&s, 8, 8, 0, 0, 0, 3, 0, 1, 120, 0, out);
-    sval_proportional_output(&s, 8, 8, 0, 0, 0, 3, 0, 1, 120, UINT32_MAX, out);
+    sval_proportional_output(&s, 8, 8, 0, 0, 3, 0, 1, 120, 0, out);
+    sval_proportional_output(&s, 8, 8, 0, 0, 3, 0, 1, 120, UINT32_MAX, out);
     assert(out[0] == 32767 && out[1] == -32767 && s.remainder[0] == 0 && s.remainder[1] == 0);
     sval_proportional_reset(&s, UINT32_MAX - 10);
     sval_proportional_move(&s, 64 * Q, 0);
-    sval_proportional_output(&s, 64, 64, 0, 0, 1, 3, 0, 1, 120, UINT32_MAX - 10, out);
-    sval_proportional_output(&s, 64, 64, 0, 0, 1, 3, 0, 1, 120, 9, out);
+    sval_proportional_output(&s, 64, 64, 0, 0, 3, 0, 1, 120, UINT32_MAX - 10, out);
+    sval_proportional_output(&s, 64, 64, 0, 0, 3, 0, 1, 120, 9, out);
     assert(out[0] == 48); // clock wrap, 20ms
     puts("proportional: linearity, cadence, neutral, circular dead zone, 2D gains, locks, direction, explicit cap, report bounds and clock wrap passed");
 }
