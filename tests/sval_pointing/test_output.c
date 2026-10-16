@@ -11,7 +11,7 @@ static report_nkro_t     seen_nkro;
 static report_extra_t    seen_extra;
 static unsigned          accepted;
 uint32_t                 timer_read32(void) {
-                    return clock_ms;
+    return clock_ms;
 }
 bool sval_point_transport_keyboard(report_keyboard_t *r) {
     if (blocked) return false;

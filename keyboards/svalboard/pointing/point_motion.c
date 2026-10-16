@@ -3,9 +3,9 @@
 #include <string.h>
 #include <limits.h>
 
-int32_t sval_point_normalize(int16_t delta, uint16_t cpi, uint16_t divisor, int64_t *remainder) {
-    if (!cpi || !divisor) return 0;
-    int64_t denominator = (int64_t)cpi * divisor;
+int32_t sval_point_normalize(int16_t delta, uint16_t cpi, int64_t *remainder) {
+    if (!cpi) return 0;
+    int64_t denominator = cpi;
     int64_t numerator   = (int64_t)delta * 800 * SVAL_POINT_ONE + *remainder;
     *remainder          = numerator % denominator;
     int64_t result      = numerator / denominator;

@@ -36,9 +36,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define PFET_ROWS
 #define EE_HANDS
 //#define DEBUG_MATRIX_SCAN_RATE
-// Svalboard stores its config in VIA custom config area
-// saved_values_t (~54 bytes) + 3 bytes magic = ~60 bytes, round to 100
-#define VIA_EEPROM_CUSTOM_CONFIG_SIZE 100
+// Svalboard stores its config in VIA custom config area: board settings in bytes 0-99
+// (saved_values_t and its magic), then the pointing tools and the touch gesture experiment.
+// The map and its overlap checks are in via_custom_map.h.
+#include "via_custom_map.h"
+#define VIA_EEPROM_CUSTOM_CONFIG_SIZE SVAL_VIA_CUSTOM_SIZE
 
 // The raw HID interface (VIA, the Sval protocol and the client wrapper) uses
 // 64-byte reports, the full-speed interrupt maximum, both ways. Hosts size their

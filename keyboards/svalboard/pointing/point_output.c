@@ -14,17 +14,18 @@ static uint16_t          consumer;
 static enum { IDLE, DOWN, HELD, UP, GAP, CANCEL_DOWN, CANCEL_HELD } phase;
 static uint32_t phase_time, session_time;
 
-static bool base_busy(void) {
+static bool base_keys_held(void) {
     if (use_nkro) {
-        if (base_nkro.mods) return true;
         for (unsigned i = 0; i < sizeof(base_nkro.bits); ++i)
             if (base_nkro.bits[i]) return true;
     } else {
-        if (base_keyboard.mods) return true;
         for (unsigned i = 0; i < sizeof(base_keyboard.keys); ++i)
             if (base_keyboard.keys[i]) return true;
     }
     return false;
+}
+static bool base_busy(void) {
+    return (use_nkro ? base_nkro.mods : base_keyboard.mods) || base_keys_held();
 }
 static void flush(void) {
     // Format changes must not lose a failed release on the previous report ID.
@@ -129,7 +130,10 @@ void sval_point_output_observe_extra(const report_extra_t *report) {
     flush();
 }
 bool sval_point_output_start(sval_point_output_kind_t kind, uint16_t usage, uint8_t requested_mods, uint32_t now) {
-    if (phase != IDLE || keyboard_dirty || consumer_dirty || retired_keyboard || retired_nkro || base_busy() || base_consumer) return false;
+    if (phase != IDLE || keyboard_dirty || consumer_dirty || retired_keyboard || retired_nkro || base_consumer) return false;
+    // The base report's modifiers are composed into every press (flush()); only
+    // SVAL_POINT_KEY_WITH_MODS may go out on top of them.
+    if (kind == SVAL_POINT_KEY_WITH_MODS ? base_keys_held() : base_busy()) return false;
     if (session && kind != SVAL_POINT_TASK) return false;
     if (kind == SVAL_POINT_CONSUMER) {
         consumer       = usage;

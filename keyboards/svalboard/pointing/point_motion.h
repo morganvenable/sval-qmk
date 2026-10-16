@@ -15,4 +15,5 @@ typedef struct {
     bool    reversed;
 } sval_point_steps_t;
 sval_point_steps_t sval_point_turn(sval_point_turn_t *s, int32_t delta, int32_t distance, int32_t reversal, uint32_t now);
-int32_t            sval_point_normalize(int16_t delta, uint16_t cpi, uint16_t divisor, int64_t *remainder);
+// Counts at cpi to Q16.16 counts at 800 CPI, carrying the remainder between reports.
+int32_t sval_point_normalize(int16_t delta, uint16_t cpi, int64_t *remainder);
