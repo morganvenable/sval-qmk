@@ -42,7 +42,7 @@ bool sval_proportional_displaced(const sval_proportional_t *s, uint8_t dead_zone
     int64_t h = s->position[0] / 256, v = s->position[1] / 256, d = (int64_t)dead_zone * 256;
     return h * h + v * v > d * d;
 }
-void sval_proportional_output(sval_proportional_t *s, uint16_t horizontal, uint16_t vertical, uint8_t dead_zone, uint8_t interval, uint8_t distance_shift, uint8_t axes, uint8_t inverted, uint8_t host_divisor, uint16_t wheel_units_per_step, uint32_t now, int16_t out[2]) {
+void sval_proportional_output(sval_proportional_t *s, uint16_t horizontal, uint16_t vertical, uint8_t dead_zone, uint8_t interval, uint8_t axes, uint8_t inverted, uint8_t host_divisor, uint16_t wheel_units_per_step, uint32_t now, int16_t out[2]) {
     out[0] = out[1] = 0;
     if (s->axes != axes) {
         sval_proportional_discard_output(s, now);
@@ -60,13 +60,9 @@ void sval_proportional_output(sval_proportional_t *s, uint16_t horizontal, uint1
     const uint16_t distances[2] = {horizontal, vertical};
     for (uint8_t axis = 0; axis < 2; ++axis) {
         // Subtract the radial dead zone continuously; there is no speed jump at its edge.
-        int64_t  effective = position[axis] * (radius - dead) / radius;
-        uint32_t distance  = ((uint32_t)distances[axis] / 2) << distance_shift;
-        if (!distance) {
-            sval_proportional_discard_output(s, now);
-            return;
-        }
-        int64_t velocity = effective * 20 * wheel_units_per_step / distance;
+        int64_t effective = position[axis] * (radius - dead) / radius;
+        // Both distances are nonzero (checked above).
+        int64_t velocity = effective * 20 * wheel_units_per_step / distances[axis];
         if (interval) {
             int64_t maximum = (int64_t)1000 * wheel_units_per_step * 256 / interval;
             if (velocity > maximum) velocity = maximum;
