@@ -183,6 +183,9 @@ uint8_t sval_get_feature_flags2(void) {
 #ifdef POINTING_DEVICE_ENABLE
     flags |= sval_flag2_pointing_motion;
 #endif
+#ifdef SVAL_NATIVE_PTP
+    flags |= sval_flag2_pointing_contacts;
+#endif
     return flags;
 }
 
@@ -775,6 +778,18 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             break;
         }
 
+        case sval_cmd_pointing_contacts: {
+            // Request:  [0xDF] [0x2F]
+            // Response: [0xDF] [0x2F] [format] [report...]
+            // A snapshot, not read-and-clear: any number of apps can poll it.
+            // format 0: no data (keyboards/svalboard/docs/protocol.md).
+            if (length > 2) {
+                memset(&data[2], 0, length - 2);
+                sval_pointing_contacts_kb(&data[2], length - 2);
+            }
+            break;
+        }
+
         case sval_cmd_layer_state_set: {
             // Request: [0xDF] [0x17] [state0] [state1] [state2] [state3]
             // Response: [0xDF] [0x17]
@@ -1076,12 +1091,14 @@ __attribute__((weak)) void sval_pointing_hardware_kb(uint8_t *out, uint8_t lengt
 
 __attribute__((weak)) void sval_pointing_motion_kb(uint8_t *out, uint8_t length) {}
 
+__attribute__((weak)) void sval_pointing_contacts_kb(uint8_t *out, uint8_t length) {}
+
 // Override via_command_kb to intercept wrapper and Sval protocol
 bool via_command_kb(uint8_t *data, uint8_t length) {
     // Every host packet reaches this hook, including the ones VIA handles below. The live
-    // pointer poll (wrapped 0x2D) doesn't count: a host app showing the pointer polls for as
+    // pointer polls (wrapped 0x2D and 0x2F) don't count: a host app showing the pointer polls for as
     // long as it's open, which would keep the board out of deep idle the whole time.
-    bool live_poll = length > 6 && data[0] == WRAPPER_PREFIX && data[5] == SVAL_PREFIX && data[6] == sval_cmd_pointing_motion;
+    bool live_poll = length > 6 && data[0] == WRAPPER_PREFIX && data[5] == SVAL_PREFIX && (data[6] == sval_cmd_pointing_motion || data[6] == sval_cmd_pointing_contacts);
     if (!live_poll) sval_host_packet_kb();
     switch (data[0]) {
         case WRAPPER_PREFIX: // 0xDD - Client ID wrapper
