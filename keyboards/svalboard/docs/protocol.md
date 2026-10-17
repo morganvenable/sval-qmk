@@ -94,4 +94,31 @@ Each hand:
 - A hand that is not valid (no module, the driver didn't start, or the other half is disconnected) has an all-zero block.
 - Touch positions and finger counts are not reported yet: bit 4 and bits 5-6 read `0`.
 
+## Pointing contacts
+
+`POINTING_CONTACTS` (`0x2F`) returns every touch contact down now, each on its own pad, for a live picture of the touchpads. With the native touchpad the computer owns the pads and `POINTING_MOTION` carries no touch positions, so this is how a host app draws the fingers. It is a snapshot: reading clears nothing, so any number of apps can poll it.
+
+- Discovery: GET_INFO byte 19, bit 5 (`sval_flag2_pointing_contacts`, `0x20`). Firmware without the native touchpad leaves it zero.
+- Request: `DF 2F`
+- Response: `DF 2F` then 24 bytes (offsets from the first of them). `format` `0` means no data (the half without USB, or no native touchpad).
+
+| off | size | field |
+|---|---|---|
+| 0 | 1 | format = `1` |
+| 1 | 1 | bit 0 the touchpad is reporting to the computer (Input Mode 3 and the surface switch on), bit 1 the left pad is part of it, bit 2 the right pad is |
+| 2 | 1 | ms since the report these contacts come from, up to 255 |
+| 3 | 1 | contacts `n`, 0 to 5 |
+| 4 | 4 × n | the contacts, then zeros |
+
+Each contact:
+
+| off | size | field |
+|---|---|---|
+| 0 | 1 | bits 0-3 contact ID (the touchpad's own, stable while the finger is down), bit 4 tip (down), bit 5 confidence (clear: a palm), bit 6 right pad |
+| 1 | 3 | `x \| y << 12`, 24-bit little-endian: `x` 0-2047 across that pad, `y` 0-1791 down it |
+
+- The contacts are the last input report the computer took from the touchpad, so they are exactly what the operating system has. A contact with tip clear is lifting: that report is its last.
+- Coordinates are per pad, in the touchpad's own orientation (the one the operating system sees), not the merged surface: the right pad does not carry the 2048 + gap offset.
+- While the touchpad isn't reporting, or its last report is older than 150 ms (the computer stopped reading), `n` is `0`.
+
 Packet formats: [client-ID protocol](../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [layer state](../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), [command definitions](../../../modules/svalboard/core/sval.h).

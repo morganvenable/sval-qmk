@@ -111,6 +111,21 @@ uint8_t sval_ptp_lost_down(uint8_t pad);                 // times a finger on th
 bool    sval_ptp_pad_quiet(uint8_t pad);                 // all up, armed, nothing pending
 void    sval_ptp_task(void);
 
+// --- contacts for host apps (Sval POINTING_CONTACTS 0x2F, svalboard.c) ---
+// The contacts of the last report the computer took, each on its own pad:
+// [0] format 1, [1] bit 0 reporting, bit 1 left pad in the touchpad, bit 2
+// right pad, [2] the report's age in ms (saturating), [3] contacts n (0..5),
+// then n x 4 bytes: [0] bits 0-3 contact ID, bit 4 tip, bit 5 confidence,
+// bit 6 right pad; [1..3] x | y << 12, little-endian, x 0..2047 across the
+// pad and y 0..1791 down it, in the touchpad's own orientation. A stream that
+// stopped (no report for SVAL_PTP_CONTACTS_STALE_MS) reads as no contacts.
+#define SVAL_PTP_CONTACTS_LEN 24
+#ifndef SVAL_PTP_CONTACTS_STALE_MS
+#    define SVAL_PTP_CONTACTS_STALE_MS (3 * SVAL_PTP_KEEPALIVE_MS)
+#endif
+// Returns the bytes written (SVAL_PTP_CONTACTS_LEN), or 0 if length is short.
+uint8_t sval_ptp_contacts(uint8_t *out, uint8_t length);
+
 // --- status for the dev command and the perf counters (SVAL_PTP_STATUS_SIZE bytes) ---
 void sval_ptp_status(uint8_t *out);
 

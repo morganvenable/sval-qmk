@@ -21,6 +21,9 @@
 #ifdef SVAL_AZOTEQ_MULTITOUCH
 #    include "azoteq/multitouch.h"
 #endif
+#ifdef SVAL_NATIVE_PTP
+#    include "azoteq/ptp.h"
+#endif
 #ifdef SVAL_PERF_STATS
 #    include "perf.h"
 #endif
@@ -668,6 +671,15 @@ void sval_pointing_motion_kb(uint8_t *out, uint8_t length) {
     }
     out[SVAL_MOTION_AXIS_OFF] = modes.axis_state;
     memset(motion_acc, 0, sizeof(motion_acc));
+}
+#endif
+
+#ifdef SVAL_NATIVE_PTP
+// POINTING_CONTACTS (Sval 0x2F, docs/protocol.md): every touch contact on its
+// pad, from the native touchpad. Only the USB half has it.
+void sval_pointing_contacts_kb(uint8_t *out, uint8_t length) {
+    if (!is_keyboard_master()) return;
+    sval_ptp_contacts(out, length);
 }
 #endif
 
