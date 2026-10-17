@@ -764,6 +764,76 @@ static void test_paused(void) {
     puts("  paused (update running): contacts lift, no reports, back after all-up");
 }
 
+// Sval POINTING_CONTACTS (0x2F): every contact the computer has, back on its
+// own pad in that pad's counts.
+typedef struct {
+    uint8_t  id, right, tip, conf;
+    uint16_t x, y;
+} host_contact_t;
+static uint8_t read_contacts(uint8_t *flags, host_contact_t *c) {
+    uint8_t o[32];
+    memset(o, 0xAA, sizeof(o));
+    assert(sval_ptp_contacts(o, 10) == 0); // too short: nothing written
+    assert(sval_ptp_contacts(o, sizeof(o)) == SVAL_PTP_CONTACTS_LEN);
+    assert(o[0] == 1 && o[3] <= 5);
+    *flags = o[1];
+    for (uint8_t i = 0; i < o[3]; i++) {
+        const uint8_t *p = o + 4 + 4 * i;
+        uint32_t       w = p[1] | (uint32_t)p[2] << 8 | (uint32_t)p[3] << 16;
+        c[i]             = (host_contact_t){p[0] & 15, (p[0] >> 6) & 1, (p[0] >> 4) & 1, (p[0] >> 5) & 1, w & 0xFFF, (w >> 12) & 0xFFF};
+    }
+    for (uint8_t i = 4 + 4 * o[3]; i < SVAL_PTP_CONTACTS_LEN; i++)
+        assert(o[i] == 0);
+    return o[3];
+}
+static const host_contact_t *find_host(const host_contact_t *c, uint8_t n, uint8_t right, uint16_t x, uint16_t y) {
+    for (uint8_t i = 0; i < n; i++)
+        if (c[i].right == right && c[i].x == x && c[i].y == y) return &c[i];
+    return NULL;
+}
+
+static void test_host_contacts(void) {
+    host_contact_t c[5];
+    uint8_t        flags;
+    fresh("host-contacts-off");
+    assert(read_contacts(&flags, c) == 0 && flags == 6); // both pads, not reporting
+    start("host-contacts");
+    assert(read_contacts(&flags, c) == 0 && (flags & 1));
+    // Two fingers on the left pad, one in the right pad's top-right corner.
+    FEED(0, {0, 1, 100, 200}, {1, 2, 1900, 1700});
+    FEED(1, {3, 1, 2047, 0});
+    run(5000);
+    assert(new_reports() == 1 && count_of(last()) == 3);
+    assert(read_contacts(&flags, c) == 3 && flags == 7);
+    const host_contact_t *a = find_host(c, 3, 0, 100, 200), *b = find_host(c, 3, 0, 1900, 1700), *r = find_host(c, 3, 1, 2047, 0);
+    assert(a && b && r && a->tip && b->tip && r->tip && a->conf && r->conf);
+    assert(a->id != b->id && a->id != r->id && b->id != r->id);
+    // The far corners of each pad come back as the pad's own extremes.
+    FEED(0, {0, 1, 0, 1791}, {1, 2, 2047, 0});
+    run(SVAL_PTP_MERGE_US + 1000);
+    FEED(1, {3, 1, 0, 1791});
+    run(SVAL_PTP_MERGE_US + 1000);
+    assert(read_contacts(&flags, c) == 3);
+    assert(find_host(c, 3, 0, 0, 1791) && find_host(c, 3, 0, 2047, 0) && find_host(c, 3, 1, 0, 1791));
+    // One finger lifts: its last report carries it with tip off.
+    FEED(0, {0, 1, 0, 1791});
+    run(SVAL_PTP_MERGE_US + 1000);
+    uint8_t n = read_contacts(&flags, c), down = 0;
+    for (uint8_t i = 0; i < n; i++)
+        down += c[i].tip;
+    assert(down == 2);
+    // The host stops reading: no contacts once the stream is stale.
+    ptp_test_busy = true;
+    for (int i = 0; i < 40; i++) {
+        FEED(0, {0, 1, 10, 1791});
+        FEED(1, {3, 1, 10, 1791});
+        run(8000);
+    }
+    assert(read_contacts(&flags, c) == 0);
+    ptp_test_busy = false;
+    puts("  host contacts: each on its own pad in pad counts, lifts carry tip off, a stale stream reads as none");
+}
+
 int main(int argc, char **argv) {
     if (argc > 1) ptp_trace = fopen(argv[1], "w");
     puts("native PTP host tests:");
@@ -794,6 +864,7 @@ int main(int argc, char **argv) {
     test_sample_time();
     test_host_silent();
     test_paused();
+    test_host_contacts();
     fresh("end");
     if (ptp_trace) fclose(ptp_trace);
     printf("native PTP: %u reports checked, all passed\n", ptp_sent_count);

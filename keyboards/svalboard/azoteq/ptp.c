@@ -1012,6 +1012,48 @@ void sval_ptp_status(uint8_t *o) {
     ptp_put16(o + 22, pool_full);
 }
 
+// ------------------------------------------------- contacts for host apps
+// Sval POINTING_CONTACTS (ptp.h): read only, so it never changes what the
+// touchpad sends. It copies the last report the computer took, so a host
+// app draws exactly the contacts the operating system has.
+
+uint8_t sval_ptp_contacts(uint8_t *o, uint8_t length) {
+    if (length < SVAL_PTP_CONTACTS_LEN) return 0;
+    memset(o, 0, SVAL_PTP_CONTACTS_LEN);
+    uint8_t r[SVAL_PTP_INPUT_SIZE];
+    PTP_LOCK();
+    memcpy(r, last_report, sizeof(r));
+    PTP_UNLOCK();
+    uint32_t age_ms = ever_sent ? (ptp_now_us() - last_sent) / 1000u : 0;
+    o[0]            = 1;
+    o[1]            = (output ? 1 : 0) | (pad_mask & 3) << 1;
+    o[2]            = age_ms > 255 ? 255 : (uint8_t)age_ms;
+    if (!output || !ever_sent || age_ms > SVAL_PTP_CONTACTS_STALE_MS) return SVAL_PTP_CONTACTS_LEN;
+    uint8_t n     = r[33] > SVAL_PTP_MAX_CONTACTS ? SVAL_PTP_MAX_CONTACTS : r[33];
+    uint8_t taken = 0;
+    for (uint8_t i = 0; i < n; i++) {
+        const uint8_t *s = r + 1 + 6 * i;
+        uint16_t       x = ptp_get16(s + 2), y = ptp_get16(s + 4);
+        uint8_t        right = 0;
+        if (x >= SVAL_PTP_PAD_STRIDE) {
+            right = 1;
+            x -= SVAL_PTP_PAD_STRIDE;
+        } else if (x >= SVAL_PTP_PAD_X) {
+            continue; // in the gap: never sent
+        }
+        if (x > SVAL_PTP_PAD_X - 1) x = SVAL_PTP_PAD_X - 1;
+        if (y > SVAL_PTP_PAD_Y - 1) y = SVAL_PTP_PAD_Y - 1;
+        uint8_t *c = o + 4 + 4 * taken++;
+        c[0]       = (s[1] & 15) | ((s[0] & 2) ? 0x10 : 0) | ((s[0] & 1) ? 0x20 : 0) | (right ? 0x40 : 0);
+        uint32_t w = (uint32_t)x | (uint32_t)y << 12;
+        c[1]       = w;
+        c[2]       = w >> 8;
+        c[3]       = w >> 16;
+    }
+    o[3] = taken;
+    return SVAL_PTP_CONTACTS_LEN;
+}
+
 // --------------------------------------------------------- feature reports
 // These run in the USB ISR: they only read or store single bytes.
 
