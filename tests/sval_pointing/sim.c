@@ -223,6 +223,53 @@ static void skips_own_bus(void) {
     CHECK(cs_driven_low == 0);
 }
 
+// The runtime searches probe one bus per main loop pass (sval_probe_bus): what each costs
+// with nothing attached, in simulated microseconds of waiting (the real loops add a little).
+static long bus_cost(uint8_t bus, bool patient) {
+    reset();
+    long start = now_us;
+    CHECK(sval_probe_bus(bus, patient).detected == SVAL_SENSOR_NO_RESPONSE);
+    return now_us - start;
+}
+
+static void one_bus_costs(void) {
+    long ps2_boot = bus_cost(SVAL_BUS_PS2, true), ps2 = bus_cost(SVAL_BUS_PS2, false);
+    long i2c = bus_cost(SVAL_BUS_I2C, false), spi = bus_cost(SVAL_BUS_SPI, false);
+    printf("bare connector, us: PS/2 %ld (boot %ld), I2C %ld, SPI %ld\n", ps2, ps2_boot, i2c, spi);
+    CHECK(ps2 < 11000);  // one try: the device's 10 ms window to start clocking
+    CHECK(ps2_boot < 26000);
+    CHECK(i2c < 8000);
+    CHECK(spi < 1000);
+}
+
+static void one_bus_finds_its_module(void) {
+    reset(); ps2.on = true;
+    CHECK(sval_probe_bus(SVAL_BUS_PS2, false).detected == SVAL_SENSOR_TRACKPOINT);
+    CHECK(cs_driven_low == 0);
+    all_released();
+    reset(); azo.on = true; azo.product = 40;
+    CHECK(sval_probe_bus(SVAL_BUS_I2C, false).detected == SVAL_SENSOR_AZOTEQ);
+    all_released();
+    reset(); pmw.on = true; pmw.pid = 0x47; pmw.inv = 0xB8;
+    CHECK(sval_probe_bus(SVAL_BUS_SPI, false).detected == SVAL_SENSOR_PMW3389);
+    all_released();
+    // Each probes only its own bus.
+    reset(); pmw.on = true; pmw.pid = 0x47; pmw.inv = 0xB8;
+    CHECK(sval_probe_bus(SVAL_BUS_PS2, false).detected == SVAL_SENSOR_NO_RESPONSE);
+    CHECK(cs_driven_low == 0);
+}
+
+// A skipped I2C bus keeps its pins: the auto builds' trackpad driver owns them.
+static void skipped_i2c_pins_untouched(void) {
+    reset();
+    host[GP16] = H_HIGH; host[GP17] = H_HIGH; // stand-in for the I2C hardware's hold
+    sval_probe_pointers(SVAL_BUS_I2C);
+    CHECK(host[GP16] == H_HIGH && host[GP17] == H_HIGH);
+    sval_probe_bus(SVAL_BUS_PS2, false);
+    sval_probe_bus(SVAL_BUS_SPI, false);
+    CHECK(host[GP16] == H_HIGH && host[GP17] == H_HIGH);
+}
+
 static void classify(void) {
     CHECK(sval_pmw33xx_classify(0x42, 0xBD) == SVAL_SENSOR_PMW3360);
     CHECK(sval_pmw33xx_classify(0x47, 0xB8) == SVAL_SENSOR_PMW3389);
@@ -243,6 +290,9 @@ int main(void) {
     trackpoint();
     skips_own_bus();
     classify();
+    one_bus_costs();
+    one_bus_finds_its_module();
+    skipped_i2c_pins_untouched();
     printf(failures ? "%d FAILED\n" : "OK\n", failures);
     return failures != 0;
 }

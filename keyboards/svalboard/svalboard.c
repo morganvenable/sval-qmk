@@ -1,5 +1,6 @@
 #include "svalboard.h"
 #include "pointing_detect.h"
+#include "pointer_reprobe.h"
 #if VIA_ENABLE
 #    include "via.h"
 #endif
@@ -420,34 +421,25 @@ __attribute__((weak)) uint8_t sval_pointer_own_bus(void) {
 // Starts the driver for what the probe found; a build with every driver in uses it (pointing_auto).
 __attribute__((weak)) void sval_pointer_select(const sval_probe_result_t *found) {}
 
-// When this half's own pointing module didn't answer (or the build has none), what the
-// other buses found, probed once a moment after boot: late enough that a TrackPoint has
-// finished its power-on self-test, and outside the startup path.
-#define SVAL_POINTER_PROBE_AFTER_MS 1500
-static bool                pointer_probed = false;
-static sval_probe_result_t pointer_probe;
-
-static void sval_pointer_probe_task(void) {
-    if (pointer_probed || timer_read32() < SVAL_POINTER_PROBE_AFTER_MS) return;
-    pointer_probed              = true;
-    sval_pointer_identity_t own = {0};
-    sval_pointer_identity(&own);
-    if (own.built_for != SVAL_SENSOR_NONE && own.detected == own.built_for) return;       // its own module answered
-    if (own.built_for != SVAL_SENSOR_NONE && own.detected == SVAL_SENSOR_UNKNOWN) return; // the trackball bus answered
-    pointer_probe = sval_probe_pointers(sval_pointer_own_bus());
-    sval_pointer_select(&pointer_probe);
+__attribute__((weak)) uint8_t sval_pointer_retry_own(void) {
+    return SVAL_RETRY_NONE;
 }
+
+// While this half has no working pointing module, it keeps looking (pointer_reprobe.c).
+#define SVAL_POINTER_PROBE_AFTER_MS SVAL_REPROBE_FIRST_MS
 
 // This half's side and pointing module.
 static void sval_local_pointer_identity(sval_pointer_identity_t *id) {
     memset(id, 0, sizeof(*id));
     sval_pointer_identity(id);
-    // The other buses found something (or nothing) where the build's own module didn't answer.
+    // The other buses found something (or nothing) where the build's own module didn't answer;
+    // a later search's find replaces it.
     bool own_missing = id->built_for == SVAL_SENSOR_NONE || id->detected == SVAL_SENSOR_NO_RESPONSE;
-    if (pointer_probed && own_missing && (pointer_probe.detected != SVAL_SENSOR_NO_RESPONSE || id->built_for == SVAL_SENSOR_NONE)) {
-        id->detected           = pointer_probe.detected;
-        id->product_id         = pointer_probe.id0;
-        id->inverse_product_id = pointer_probe.id1;
+    const sval_probe_result_t *found = sval_pointer_found();
+    if (sval_pointer_searched() && own_missing && (found->detected != SVAL_SENSOR_NO_RESPONSE || id->built_for == SVAL_SENSOR_NONE)) {
+        id->detected           = found->detected;
+        id->product_id         = found->id0;
+        id->inverse_product_id = found->id1;
     }
     id->flags |= SVAL_POINTER_REPORTED | (is_keyboard_left() ? SVAL_POINTER_LEFT : 0);
 }
@@ -618,7 +610,7 @@ uint8_t sval_fragment_detect(uint8_t instance_idx) {
     sval_pointer_identity_t id;
     bool                    local;
     if (!sval_pointer_for_hand(left, &id, &local)) return SVAL_FRAGMENT_ID_NONE;
-    if (id.detected == SVAL_SENSOR_NO_RESPONSE && (local ? !pointer_probed : timer_read32() < SVAL_POINTER_SETTLED_MS)) return SVAL_FRAGMENT_ID_NONE;
+    if (id.detected == SVAL_SENSOR_NO_RESPONSE && (local ? !sval_pointer_searched() : timer_read32() < SVAL_POINTER_SETTLED_MS)) return SVAL_FRAGMENT_ID_NONE;
     return sval_pointing_fragment_for_detected(id.detected);
 }
 #endif

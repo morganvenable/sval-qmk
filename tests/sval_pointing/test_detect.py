@@ -23,6 +23,21 @@ class PointingDetectTests(unittest.TestCase):
             self.assertIn('OK', result.stdout)
 
 
+class PointerReprobeTests(unittest.TestCase):
+    """pointer_reprobe.c: the runtime search's schedule, stopping after a find, never probing a working half."""
+
+    def test_search_schedule_and_stopping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / 'reprobe'
+            subprocess.run(['gcc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-DSVAL_REPROBE_HOST_TEST',
+                            '-I', str(HERE), '-I', str(ROOT / 'keyboards/svalboard'),
+                            str(ROOT / 'keyboards/svalboard/pointer_reprobe.c'), str(HERE / 'reprobe_test.c'),
+                            '-o', str(binary)], check=True)
+            result = subprocess.run([str(binary)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('OK', result.stdout)
+
+
 class PointingMotionTests(unittest.TestCase):
     """pointing_motion.h: fragment ids for each detected module (0x18) and the 0x2D packing."""
 

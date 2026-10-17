@@ -38,14 +38,62 @@ static uint8_t sensor_product_id         = 0;
 static uint8_t sensor_inverse_product_id = 0;
 static bool    sensor_init_ok            = false;
 
+// The SPI pins back on the SPI hardware. spi_init() sets them once, and the module search
+// (pointing_detect.c) takes them as plain GPIO, so a start after a search sets them again.
+static void trackball_spi_pins(void) {
+    spi_init();
+    spi_stop(); // a failed transfer can leave the bus started, and the next start would refuse it
+#if defined(USE_GPIOV1) // as spi_init() sets them (platforms/chibios/drivers/spi_master.c)
+    palSetPadMode(PAL_PORT(SPI_SCK_PIN), PAL_PAD(SPI_SCK_PIN), SPI_SCK_PAL_MODE);
+    palSetPadMode(PAL_PORT(SPI_MOSI_PIN), PAL_PAD(SPI_MOSI_PIN), SPI_MOSI_PAL_MODE);
+    palSetPadMode(PAL_PORT(SPI_MISO_PIN), PAL_PAD(SPI_MISO_PIN), SPI_MISO_PAL_MODE);
+#else
+    palSetPadMode(PAL_PORT(SPI_SCK_PIN), PAL_PAD(SPI_SCK_PIN), SPI_SCK_FLAGS);
+    palSetPadMode(PAL_PORT(SPI_MOSI_PIN), PAL_PAD(SPI_MOSI_PIN), SPI_MOSI_FLAGS);
+    palSetPadMode(PAL_PORT(SPI_MISO_PIN), PAL_PAD(SPI_MISO_PIN), SPI_MISO_FLAGS);
+#endif
+}
+
+// Also starts it again after a failed start (svalboard.c's search, pointing_auto.c).
 bool pointing_device_driver_init(void) {
+    trackball_spi_pins();
     bool ok = pmw33xx_init(0);
     sensor_product_id         = pmw33xx_read(0, REG_Product_ID);
     sensor_inverse_product_id = pmw33xx_read(0, REG_Inverse_Product_ID);
     sensor_init_ok            = ok;
-    if (ok) sval_pointer_rest_apply();
+    if (ok) {
+        sval_pointer_rest_apply();
+        // The start puts the sensor at its default CPI; the one asked for before stays.
+        if (trackball_cached_cpi) pmw33xx_set_cpi_all_sensors(trackball_cached_cpi);
+    }
     return ok;
 }
+
+#ifndef SVAL_POINTING_AUTO
+// A search's second look at the sensor of a per-module trackball build: when it now answers
+// with its Product_ID (two register reads, ~0.4 ms), the driver starts again. The auto
+// builds find a trackball with the search's own SPI probe instead (pointing_auto.c).
+uint8_t sval_pointer_retry_own(void) {
+    if (sensor_init_ok) return SVAL_RETRY_OK;
+    trackball_spi_pins();
+    uint8_t product = pmw33xx_read(0, REG_Product_ID), inverse = pmw33xx_read(0, REG_Inverse_Product_ID);
+    uint8_t sensor  = sval_pmw33xx_classify(product, inverse);
+    if (sensor == SVAL_SENSOR_NO_RESPONSE) return SVAL_RETRY_NONE;
+#    if defined(POINTING_DEVICE_IS_PMW3389)
+    const uint8_t built_for = SVAL_SENSOR_PMW3389;
+#    else
+    const uint8_t built_for = SVAL_SENSOR_PMW3360;
+#    endif
+    if (sensor != built_for) { // the other sensor, which needs the other .uf2: report it
+        sensor_product_id         = product;
+        sensor_inverse_product_id = inverse;
+        return SVAL_RETRY_STOP;
+    }
+    if (!pointing_device_driver_init()) return SVAL_RETRY_FAILED;
+    pointing_device_set_status(POINTING_DEVICE_STATUS_SUCCESS); // QMK polls it from now on
+    return SVAL_RETRY_OK;
+}
+#endif
 
 void sval_pointer_identity(sval_pointer_identity_t *id) {
 #if defined(POINTING_DEVICE_IS_PMW3389)

@@ -107,6 +107,31 @@ uint8_t sval_pointer_own_bus(void) {
     return SVAL_BUS_I2C;
 }
 
+#ifndef SVAL_POINTING_AUTO
+// A search's second look at the pad of a trackpad build: one addressing, and the full start
+// only when it answers (the auto builds have their own, pointing_auto.c).
+uint8_t sval_pointer_retry_own(void) {
+    if (azo_product != AZOTEQ_IQS5XX_UNKNOWN) return SVAL_RETRY_OK;
+    if (!gpio_read_pin(I2C1_SDA_PIN) || !gpio_read_pin(I2C1_SCL_PIN)) return SVAL_RETRY_NONE; // no pull-ups: nothing there
+    i2c_init();
+    i2c_status_t st = i2c_ping_address(AZO_I2C_ADDRESS, 5);
+    if (st != I2C_STATUS_SUCCESS) {
+        wait_us(200);
+        st = i2c_ping_address(AZO_I2C_ADDRESS, 5);
+    }
+    if (st == I2C_STATUS_ERROR) return SVAL_RETRY_NONE;
+    pointing_device_driver_init();
+    if (azo_product == AZOTEQ_IQS5XX_UNKNOWN) return SVAL_RETRY_FAILED;
+    pointing_device_set_status(POINTING_DEVICE_STATUS_SUCCESS);
+    if (azo_cached_cpi) { // the start reset the chip's resolution
+        uint16_t cpi   = azo_cached_cpi;
+        azo_cached_cpi = 0;
+        pointing_device_driver_set_cpi(cpi);
+    }
+    return SVAL_RETRY_OK;
+}
+#endif
+
 report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
 #ifdef SVAL_AZOTEQ_MULTITOUCH
     if (!azo_sched_ready) {

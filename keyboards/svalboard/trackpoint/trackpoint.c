@@ -23,6 +23,14 @@ uint8_t sval_pointer_own_bus(void) {
     return SVAL_BUS_PS2;
 }
 
+#ifndef SVAL_POINTING_AUTO
+// The PS/2 driver claims a PIO state machine and program each time it starts, so a
+// TrackPoint build doesn't start it again: after the boot search, it stops looking.
+uint8_t sval_pointer_retry_own(void) {
+    return tp_found ? SVAL_RETRY_OK : SVAL_RETRY_STOP;
+}
+#endif
+
 // Override get_report to apply axis rotation for svalboard orientation
 report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
     mouse_report = ps2_mouse_get_report(mouse_report);
