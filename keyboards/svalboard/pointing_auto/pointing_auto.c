@@ -1,7 +1,7 @@
 // One firmware for every pointing module. The trackpad is looked for at boot with its own
 // driver over the I2C hardware, as the trackpad-only build does; the bit-banged I2C probe
 // missed it. Otherwise nothing runs until svalboard.c's search (pointing_detect.h, first
-// ~1.5 s after boot, then again while nothing is found: pointer_reprobe.h) says what's
+// ~1.5 s after boot, then up to 30 s while nothing is found: pointer_reprobe.h) says what's
 // attached on the other buses; then that module's driver starts and handles everything.
 // Changing modules takes a reset.
 #include "quantum.h"

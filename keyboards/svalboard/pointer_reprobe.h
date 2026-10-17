@@ -1,17 +1,17 @@
-// When a half keeps looking for its pointing module (pointer_reprobe.c).
+// When a half looks for its pointing module (pointer_reprobe.c).
 //
-// A half whose module didn't answer at boot looks again at runtime: a module that powered up
-// late, or a cable plugged in after boot, starts without a replug. The first search runs
-// 1.5 s after boot, late enough for a TrackPoint's power-on self-test. Then the searches back
-// off: 3 s, 6 s and 12 s after boot catch a module that was slow to come up or a cable seated
-// during the first seconds; after that, every 30 s, for as long as nothing is found. One
+// A half whose module didn't answer at boot looks again in the first half minute: a module
+// that powered up late, or a cable seated just after power-on, starts without a replug. The
+// first search runs 1.5 s after boot, late enough for a TrackPoint's power-on self-test; the
+// others at 3, 6, 12 and 30 s after boot. Then the half stops looking for good: a board
+// with no pointing module is never probed after 30 s, so no probe can disturb its scan
+// timing later. A module plugged in after that starts at the next reset or replug. One
 // search of an auto build with nothing attached busy-waits about 11 ms, one bus per main
 // loop pass: PS/2 ~10.1 ms (the device's 10 ms window to start clocking), SPI ~0.5 ms, the
-// trackpad's I2C check well under 1 ms (tests/sval_pointing/sim.c). So the steady rate
-// spends under 0.04% of the time, the longest stall is the one PS/2 pass, and a module
-// plugged in later waits half a minute at most.
+// trackpad's I2C check well under 1 ms (tests/sval_pointing/sim.c), so the longest stall is
+// the one PS/2 pass.
 //
-// A half stops looking for good once its module works, once its own bus answers with a
+// A half also stops looking once its module works, once its own bus answers with a
 // module this firmware can't drive (a per-module build: the host names the right .uf2 from
 // Sval 0x2C), or once a module answered and failed to start SVAL_REPROBE_INIT_TRIES times
 // (a trackball's start uploads its firmware, ~150 ms each time). Plain C with no QMK
@@ -23,14 +23,15 @@
 #include <stdint.h>
 
 #define SVAL_REPROBE_FIRST_MS 1500u
-#define SVAL_REPROBE_STEADY_MS 30000u
+#define SVAL_REPROBE_LAST_MS 30000u
+#define SVAL_REPROBE_SEARCHES 5u
 #define SVAL_REPROBE_INIT_TRIES 4u
 
-// The wait before search number attempt (0 is the first): from boot for the first, from the
-// start of the previous search for the rest.
-static inline uint32_t sval_reprobe_delay_ms(uint16_t attempt) {
-    static const uint16_t early[] = {1500, 1500, 3000, 6000}; // 1.5, 3, 6 and 12 s after boot
-    return attempt < sizeof(early) / sizeof(early[0]) ? early[attempt] : SVAL_REPROBE_STEADY_MS;
+// When search number attempt (0 is the first) is due, in ms after boot; 0 once there are no
+// more searches.
+static inline uint32_t sval_reprobe_due_ms(uint16_t attempt) {
+    static const uint16_t due[SVAL_REPROBE_SEARCHES] = {SVAL_REPROBE_FIRST_MS, 3000, 6000, 12000, SVAL_REPROBE_LAST_MS};
+    return attempt < SVAL_REPROBE_SEARCHES ? due[attempt] : 0;
 }
 
 // Whether a half still looks for its module, from its own identity (sval_pointer_identity:

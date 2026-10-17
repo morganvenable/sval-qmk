@@ -425,7 +425,7 @@ __attribute__((weak)) uint8_t sval_pointer_retry_own(void) {
     return SVAL_RETRY_NONE;
 }
 
-// While this half has no working pointing module, it keeps looking (pointer_reprobe.c).
+// While this half has no working pointing module, it looks again for 30 s (pointer_reprobe.c).
 #define SVAL_POINTER_PROBE_AFTER_MS SVAL_REPROBE_FIRST_MS
 
 // This half's side and pointing module.

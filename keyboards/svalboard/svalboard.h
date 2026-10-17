@@ -93,8 +93,8 @@ typedef struct __attribute__((__packed__)) {
 // Each pointing build fills built_for, detected (its own module, or
 // SVAL_SENSOR_NO_RESPONSE), the raw IDs and SVAL_POINTER_INIT_OK; the weak default
 // leaves it zeroed (no module). When the build's own module didn't answer,
-// the search (pointer_reprobe.c) probes the other buses, at boot and again while nothing
-// works, and reports what it found.
+// the search (pointer_reprobe.c) probes the other buses, at boot and up to 30 s after while
+// nothing works, and reports what it found.
 void sval_pointer_identity(sval_pointer_identity_t *id);
 // The bus the build's own driver uses (SVAL_BUS_*), which the probes skip; 0 for no module.
 uint8_t sval_pointer_own_bus(void);

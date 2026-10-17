@@ -1,6 +1,6 @@
 // Host test for the pointing module search (keyboards/svalboard/pointer_reprobe.c): the
-// backoff schedule, one bus per main loop pass, starting what's found, stopping after a find,
-// and never probing a half whose module works. The clock, the half's identity, the buses
+// schedule (1.5, 3, 6, 12 and 30 s, then never again), one bus per main loop pass, starting
+// what's found, stopping after a find, and never probing a half whose module works. The clock, the half's identity, the buses
 // and the drivers are mocks; each test runs in its own process (main forks per test).
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +26,8 @@ static uint8_t                 retry_own_result = SVAL_RETRY_NONE;
 static int                     probe_calls, probe_calls_by_bus[8], retry_calls, select_calls, inits;
 static uint32_t                search_times[64];
 static int                     searches;
+static uint32_t                last_activity_ms; // the last retry_own or bus probe
+static bool                    any_activity;
 static uint8_t                 last_bus_in_pass; // a pass probes at most one bus
 static int                     buses_this_pass;
 
@@ -36,6 +38,7 @@ uint8_t  sval_pointer_own_bus(void) { return own_bus; }
 
 uint8_t sval_pointer_retry_own(void) {
     retry_calls++;
+    last_activity_ms = now_ms; any_activity = true;
     if (searches < 64) search_times[searches] = now_ms;
     searches++;
     if (retry_own_result == SVAL_RETRY_OK) own.flags |= SVAL_POINTER_INIT_OK; // its driver started
@@ -47,6 +50,7 @@ static int bus_index(uint8_t bus) { return bus == SVAL_BUS_PS2 ? 0 : bus == SVAL
 sval_probe_result_t sval_probe_bus(uint8_t bus, bool patient) {
     (void)patient;
     probe_calls++;
+    last_activity_ms = now_ms; any_activity = true;
     probe_calls_by_bus[bus_index(bus)]++;
     buses_this_pass++;
     last_bus_in_pass = bus;
@@ -70,6 +74,7 @@ static void reset(void) {
     own_bus = 0; attached = SVAL_SENSOR_NO_RESPONSE; attached_bus = 0; auto_build = false;
     init_works = true; retry_own_result = SVAL_RETRY_NONE;
     probe_calls = retry_calls = select_calls = inits = searches = 0;
+    last_activity_ms = 0; any_activity = false;
     memset(probe_calls_by_bus, 0, sizeof(probe_calls_by_bus));
 }
 
@@ -94,18 +99,19 @@ static void run_until(uint32_t t_ms) {
 /* ---- tests ---- */
 
 static void schedule(void) {
-    CHECK(sval_reprobe_delay_ms(0) == 1500);
-    CHECK(sval_reprobe_delay_ms(1) == 1500);
-    CHECK(sval_reprobe_delay_ms(2) == 3000);
-    CHECK(sval_reprobe_delay_ms(3) == 6000);
-    CHECK(sval_reprobe_delay_ms(4) == 30000);
-    CHECK(sval_reprobe_delay_ms(1000) == 30000);
-    CHECK(sval_reprobe_delay_ms(UINT16_MAX) == 30000);
+    CHECK(sval_reprobe_due_ms(0) == 1500);
+    CHECK(sval_reprobe_due_ms(1) == 3000);
+    CHECK(sval_reprobe_due_ms(2) == 6000);
+    CHECK(sval_reprobe_due_ms(3) == 12000);
+    CHECK(sval_reprobe_due_ms(4) == 30000);
+    CHECK(sval_reprobe_due_ms(5) == 0); // no more
+    CHECK(sval_reprobe_due_ms(1000) == 0);
+    CHECK(sval_reprobe_due_ms(UINT16_MAX) == 0);
 }
 
-// Nothing attached: searches at 1.5, 3, 6, 12 s, then every 30 s, each probing PS/2 then SPI
-// (I2C is the trackpad's, checked by retry_own), one bus per pass, never stopping.
-static void nothing_attached_backs_off(void) {
+// Nothing attached: searches at exactly 1.5, 3, 6, 12 and 30 s, each probing PS/2 then SPI
+// (I2C is the trackpad's, checked by retry_own), one bus per pass; nothing after 30 s.
+static void nothing_attached_stops_at_30_s(void) {
     auto_half();
     run_until(1499);
     CHECK(probe_calls == 0);
@@ -116,29 +122,50 @@ static void nothing_attached_backs_off(void) {
     CHECK(sval_pointer_found()->detected == SVAL_SENSOR_NO_RESPONSE);
     run_until(10UL * 60 * 1000); // ten minutes
     // retry_own runs at the start of every search after the first.
-    CHECK(searches >= 4);
-    CHECK(search_times[0] == 3000 && search_times[1] == 6000 && search_times[2] == 12000);
-    CHECK(search_times[3] == 42000 && search_times[4] == 72000);
-    for (int i = 4; i < searches && i < 64; i++) CHECK(search_times[i] - search_times[i - 1] == 30000);
-    CHECK(searches == 1 + (600000 - 1 - 12000) / 30000 + 2); // 3, 6, 12 s, then every 30 s
-    CHECK(probe_calls == 2 * (searches + 1));
+    CHECK(searches == 4);
+    CHECK(search_times[0] == 3000 && search_times[1] == 6000 && search_times[2] == 12000 && search_times[3] == 30000);
+    CHECK(probe_calls == 2 * 5);
+    CHECK(last_activity_ms < 30010);
     CHECK(select_calls == 0);
 }
 
-// The trackball is plugged in at 10 s: the 12 s search finds it on SPI, starts it once and
-// stops; nothing is probed afterwards.
-static void late_trackball_starts_then_stops(void) {
+// No probe after 30 s, ever: ten minutes, then across the 49.7-day clock wrap.
+static void never_probes_after_30_s(void) {
     auto_half();
-    run_until(10000);
-    attached = SVAL_SENSOR_PMW3389; attached_bus = SVAL_BUS_SPI;
-    run_until(12000 + 10);
-    CHECK(select_calls == 1 && inits == 1);
-    CHECK(own.flags & SVAL_POINTER_INIT_OK);
-    CHECK(sval_pointer_found()->detected == SVAL_SENSOR_PMW3389);
+    run_until(30010);
     int probes = probe_calls, retries = retry_calls;
-    run_until(30UL * 60 * 1000);
-    CHECK(probe_calls == probes && retry_calls == retries && select_calls == 1);
+    run_until(10UL * 60 * 1000);
+    now_ms = UINT32_MAX - 60000; // just before the wrap, then a minute past it
+    for (uint32_t i = 0; i < 120000; i++) { sval_pointer_probe_task(); now_ms++; }
+    CHECK(probe_calls == probes && retry_calls == retries);
+    CHECK(last_activity_ms < 30010);
 }
+
+// A module the search finds, plugged in at plug_ms: started at start_ms, or never (0).
+static void plugged_in_at(uint32_t plug_ms, uint32_t start_ms) {
+    auto_half();
+    run_until(plug_ms);
+    attached = SVAL_SENSOR_PMW3389; attached_bus = SVAL_BUS_SPI;
+    if (start_ms) {
+        run_until(start_ms);
+        CHECK(select_calls == 0);
+        run_until(start_ms + 10);
+        CHECK(select_calls == 1 && inits == 1);
+        CHECK(own.flags & SVAL_POINTER_INIT_OK);
+        CHECK(sval_pointer_found()->detected == SVAL_SENSOR_PMW3389);
+        int probes = probe_calls, retries = retry_calls;
+        run_until(30UL * 60 * 1000); // started once; nothing probed afterwards
+        CHECK(probe_calls == probes && retry_calls == retries && select_calls == 1);
+    } else {
+        run_until(30UL * 60 * 1000);
+        CHECK(select_calls == 0 && !(own.flags & SVAL_POINTER_INIT_OK));
+        CHECK(sval_pointer_found()->detected == SVAL_SENSOR_NO_RESPONSE);
+        CHECK(last_activity_ms < 30010);
+    }
+}
+static void plugged_in_at_10_s_starts_at_12_s(void) { plugged_in_at(10000, 12000); }
+static void plugged_in_at_20_s_starts_at_30_s(void) { plugged_in_at(20000, 30000); }
+static void plugged_in_at_40_s_never_found(void) { plugged_in_at(40000, 0); }
 
 // The trackpad answers its own bus at 7 s: the 12 s search's retry_own starts it; the other
 // buses aren't probed in that search, nor ever again.
@@ -235,22 +262,13 @@ static void found_only_changes_at_search_end(void) {
     CHECK(sval_pointer_found()->detected == SVAL_SENSOR_NO_RESPONSE);
 }
 
-// The clock wraps after 49.7 days; the searches keep their 30 s spacing across it.
-static void survives_clock_wrap(void) {
-    auto_half();
-    run_until(13000);
-    int before = searches;
-    now_ms = UINT32_MAX - 40000; // jump: the next search is due right away, then every 30 s
-    for (uint32_t i = 0; i < 100000; i++) { sval_pointer_probe_task(); now_ms++; }
-    CHECK(searches - before >= 3 && searches - before <= 5);
-}
-
 typedef void (*test_fn)(void);
 int main(void) {
-    static const test_fn tests[] = {schedule, nothing_attached_backs_off, late_trackball_starts_then_stops, own_module_retry_starts_it,
+    static const test_fn tests[] = {schedule, nothing_attached_stops_at_30_s, never_probes_after_30_s, plugged_in_at_10_s_starts_at_12_s,
+                                    plugged_in_at_20_s_starts_at_30_s, plugged_in_at_40_s_never_found, own_module_retry_starts_it,
                                     working_module_never_probed, working_auto_trackpad_never_probed, failing_start_gives_up,
                                     failing_own_start_gives_up, per_module_build_stops_on_other_module, per_module_build_stops_on_wrong_sensor,
-                                    retry_own_stop_ends_it, found_only_changes_at_search_end, survives_clock_wrap};
+                                    retry_own_stop_ends_it, found_only_changes_at_search_end};
     int failed = 0;
     for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
         fflush(stdout);

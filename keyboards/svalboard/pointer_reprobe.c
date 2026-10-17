@@ -1,6 +1,6 @@
-// A half's search for its pointing module, at boot and again while nothing works
-// (pointer_reprobe.h: when, and when it stops). Each search first asks the build's own
-// module again (sval_pointer_retry_own), then probes the other buses one per main loop pass,
+// A half's search for its pointing module: at boot, and a few more times in the first 30 s
+// while nothing works (pointer_reprobe.h: when, and when it stops). Each search first asks
+// the build's own module again (sval_pointer_retry_own), then probes the other buses one per main loop pass,
 // so no pass waits on more than one bus; whatever answers is started with
 // sval_pointer_select. Never runs while the half's module works.
 #ifdef SVAL_REPROBE_HOST_TEST
@@ -15,7 +15,6 @@
 static bool                pointer_probed       = false; // the first search has finished
 static bool                pointer_search_done  = false; // never search again
 static uint16_t            pointer_searches     = 0;
-static uint32_t            pointer_search_ms    = 0;     // when the last search started
 static uint8_t             pointer_search_step  = 0;     // 0 between searches, else the next bus (1-3)
 static uint8_t             pointer_search_skip  = 0;     // buses this search leaves out
 static uint8_t             pointer_init_fails   = 0;     // modules found that didn't start
@@ -30,17 +29,20 @@ static bool sval_pointer_search_wanted(void) {
 static void sval_pointer_search_end(void) {
     pointer_search_step = 0;
     pointer_probed      = true;
-    if (pointer_searches < UINT16_MAX) pointer_searches++;
-    if (!sval_pointer_search_wanted()) pointer_search_done = true;
+    pointer_searches++;
+    if (!sval_pointer_search_wanted() || pointer_searches >= SVAL_REPROBE_SEARCHES) pointer_search_done = true;
 }
 
 void sval_pointer_probe_task(void) {
     static const uint8_t buses[] = {SVAL_BUS_PS2, SVAL_BUS_I2C, SVAL_BUS_SPI}; // the TrackPoint's reset (GP25) is driven last
     if (pointer_search_done) return;
     if (pointer_search_step == 0) {
-        uint32_t wait = sval_reprobe_delay_ms(pointer_searches);
-        if (pointer_searches == 0 ? timer_read32() < wait : timer_elapsed32(pointer_search_ms) < wait) return;
-        pointer_search_ms = timer_read32();
+        uint32_t due = sval_reprobe_due_ms(pointer_searches);
+        if (!due) { // the last search has run: never again
+            pointer_search_done = true;
+            return;
+        }
+        if (timer_read32() < due) return; // only within the first 30 s, so the clock can't have wrapped
         if (!sval_pointer_search_wanted()) { // its own module answered at boot, or is running
             pointer_probed      = true;
             pointer_search_done = true;
