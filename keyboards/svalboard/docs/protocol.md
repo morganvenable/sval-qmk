@@ -108,7 +108,7 @@ Each hand:
 | 1 | 1 | bit 0 the touchpad is reporting to the computer (Input Mode 3 and the surface switch on), bit 1 the left pad is part of it, bit 2 the right pad is |
 | 2 | 1 | ms since the report these contacts come from, up to 255 |
 | 3 | 1 | contacts `n`, 0 to 5 |
-| 4 | 4 × n | the contacts, then zeros |
+| 4 | 4 Ã— n | the contacts, then zeros |
 
 Each contact:
 
