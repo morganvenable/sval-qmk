@@ -12,16 +12,22 @@
 #include "pointer_reprobe.h"
 
 static int failures = 0;
-#define CHECK(cond) do { if (!(cond)) { printf("FAIL %s:%d %s\n", __func__, __LINE__, #cond); failures++; } } while (0)
+#define CHECK(cond)                                               \
+    do {                                                          \
+        if (!(cond)) {                                            \
+            printf("FAIL %s:%d %s\n", __func__, __LINE__, #cond); \
+            failures++;                                           \
+        }                                                         \
+    } while (0)
 
 /* ---- mocks ---- */
 static uint32_t                now_ms;
-static sval_pointer_identity_t own;          // what sval_pointer_identity reports
+static sval_pointer_identity_t own; // what sval_pointer_identity reports
 static uint8_t                 own_bus;
 static uint8_t                 attached;     // module on the connector (a sensor code), or NO_RESPONSE
 static uint8_t                 attached_bus; // the bus it answers on
 static bool                    auto_build;   // sval_pointer_select starts it (pointing_auto.c)
-static bool                    init_works = true;
+static bool                    init_works       = true;
 static uint8_t                 retry_own_result = SVAL_RETRY_NONE;
 static int                     probe_calls, probe_calls_by_bus[8], retry_calls, select_calls, inits;
 static uint32_t                search_times[64];
@@ -31,31 +37,47 @@ static bool                    any_activity;
 static uint8_t                 last_bus_in_pass; // a pass probes at most one bus
 static int                     buses_this_pass;
 
-uint32_t timer_read32(void) { return now_ms; }
-uint32_t timer_elapsed32(uint32_t last) { return now_ms - last; }
-void     sval_pointer_identity(sval_pointer_identity_t *id) { *id = own; }
-uint8_t  sval_pointer_own_bus(void) { return own_bus; }
+uint32_t timer_read32(void) {
+    return now_ms;
+}
+uint32_t timer_elapsed32(uint32_t last) {
+    return now_ms - last;
+}
+void sval_pointer_identity(sval_pointer_identity_t *id) {
+    *id = own;
+}
+uint8_t sval_pointer_own_bus(void) {
+    return own_bus;
+}
 
 uint8_t sval_pointer_retry_own(void) {
     retry_calls++;
-    last_activity_ms = now_ms; any_activity = true;
+    last_activity_ms = now_ms;
+    any_activity     = true;
     if (searches < 64) search_times[searches] = now_ms;
     searches++;
     if (retry_own_result == SVAL_RETRY_OK) own.flags |= SVAL_POINTER_INIT_OK; // its driver started
     return retry_own_result;
 }
 
-static int bus_index(uint8_t bus) { return bus == SVAL_BUS_PS2 ? 0 : bus == SVAL_BUS_I2C ? 1 : 2; }
+static int bus_index(uint8_t bus) {
+    return bus == SVAL_BUS_PS2 ? 0 : bus == SVAL_BUS_I2C ? 1 : 2;
+}
 
 sval_probe_result_t sval_probe_bus(uint8_t bus, bool patient) {
     (void)patient;
     probe_calls++;
-    last_activity_ms = now_ms; any_activity = true;
+    last_activity_ms = now_ms;
+    any_activity     = true;
     probe_calls_by_bus[bus_index(bus)]++;
     buses_this_pass++;
-    last_bus_in_pass = bus;
+    last_bus_in_pass      = bus;
     sval_probe_result_t r = {.detected = SVAL_SENSOR_NO_RESPONSE};
-    if (attached != SVAL_SENSOR_NO_RESPONSE && attached_bus == bus) { r.detected = attached; r.id0 = 0x47; r.id1 = 0xB8; }
+    if (attached != SVAL_SENSOR_NO_RESPONSE && attached_bus == bus) {
+        r.detected = attached;
+        r.id0      = 0x47;
+        r.id1      = 0xB8;
+    }
     return r;
 }
 
@@ -71,19 +93,24 @@ void sval_pointer_select(const sval_probe_result_t *found) {
 static void reset(void) {
     now_ms = 0;
     memset(&own, 0, sizeof(own));
-    own_bus = 0; attached = SVAL_SENSOR_NO_RESPONSE; attached_bus = 0; auto_build = false;
-    init_works = true; retry_own_result = SVAL_RETRY_NONE;
+    own_bus          = 0;
+    attached         = SVAL_SENSOR_NO_RESPONSE;
+    attached_bus     = 0;
+    auto_build       = false;
+    init_works       = true;
+    retry_own_result = SVAL_RETRY_NONE;
     probe_calls = retry_calls = select_calls = inits = searches = 0;
-    last_activity_ms = 0; any_activity = false;
+    last_activity_ms                                            = 0;
+    any_activity                                                = false;
     memset(probe_calls_by_bus, 0, sizeof(probe_calls_by_bus));
 }
 
 // An auto build (pointing_auto.c) with nothing found yet: the trackpad's I2C is its own bus.
 static void auto_half(void) {
     reset();
-    auto_build   = true;
-    own.flags    = SVAL_POINTER_AUTO;
-    own_bus      = SVAL_BUS_I2C;
+    auto_build = true;
+    own.flags  = SVAL_POINTER_AUTO;
+    own_bus    = SVAL_BUS_I2C;
 }
 
 // Runs the main loop (one task call per ms) until t_ms.
@@ -136,7 +163,10 @@ static void never_probes_after_30_s(void) {
     int probes = probe_calls, retries = retry_calls;
     run_until(10UL * 60 * 1000);
     now_ms = UINT32_MAX - 60000; // just before the wrap, then a minute past it
-    for (uint32_t i = 0; i < 120000; i++) { sval_pointer_probe_task(); now_ms++; }
+    for (uint32_t i = 0; i < 120000; i++) {
+        sval_pointer_probe_task();
+        now_ms++;
+    }
     CHECK(probe_calls == probes && retry_calls == retries);
     CHECK(last_activity_ms < 30010);
 }
@@ -145,7 +175,8 @@ static void never_probes_after_30_s(void) {
 static void plugged_in_at(uint32_t plug_ms, uint32_t start_ms) {
     auto_half();
     run_until(plug_ms);
-    attached = SVAL_SENSOR_PMW3389; attached_bus = SVAL_BUS_SPI;
+    attached     = SVAL_SENSOR_PMW3389;
+    attached_bus = SVAL_BUS_SPI;
     if (start_ms) {
         run_until(start_ms);
         CHECK(select_calls == 0);
@@ -163,16 +194,22 @@ static void plugged_in_at(uint32_t plug_ms, uint32_t start_ms) {
         CHECK(last_activity_ms < 30010);
     }
 }
-static void plugged_in_at_10_s_starts_at_12_s(void) { plugged_in_at(10000, 12000); }
-static void plugged_in_at_20_s_starts_at_30_s(void) { plugged_in_at(20000, 30000); }
-static void plugged_in_at_40_s_never_found(void) { plugged_in_at(40000, 0); }
+static void plugged_in_at_10_s_starts_at_12_s(void) {
+    plugged_in_at(10000, 12000);
+}
+static void plugged_in_at_20_s_starts_at_30_s(void) {
+    plugged_in_at(20000, 30000);
+}
+static void plugged_in_at_40_s_never_found(void) {
+    plugged_in_at(40000, 0);
+}
 
 // The trackpad answers its own bus at 7 s: the 12 s search's retry_own starts it; the other
 // buses aren't probed in that search, nor ever again.
 static void own_module_retry_starts_it(void) {
     auto_half();
     run_until(7000);
-    int probes = probe_calls;
+    int probes       = probe_calls;
     retry_own_result = SVAL_RETRY_OK;
     run_until(12000 + 10);
     CHECK(retry_calls == 3);
@@ -184,8 +221,10 @@ static void own_module_retry_starts_it(void) {
 // A half whose module works at boot is never searched: no retry_own, no probe, ever.
 static void working_module_never_probed(void) {
     reset();
-    own.built_for = SVAL_SENSOR_PMW3389; own.detected = SVAL_SENSOR_PMW3389; own.flags = SVAL_POINTER_INIT_OK;
-    own_bus = SVAL_BUS_SPI;
+    own.built_for = SVAL_SENSOR_PMW3389;
+    own.detected  = SVAL_SENSOR_PMW3389;
+    own.flags     = SVAL_POINTER_INIT_OK;
+    own_bus       = SVAL_BUS_SPI;
     run_until(60UL * 60 * 1000);
     CHECK(probe_calls == 0 && retry_calls == 0 && select_calls == 0);
     CHECK(sval_pointer_searched());
@@ -194,8 +233,10 @@ static void working_module_never_probed(void) {
 // Same for an auto build whose trackpad answered at boot.
 static void working_auto_trackpad_never_probed(void) {
     reset();
-    own.built_for = SVAL_SENSOR_AZOTEQ; own.detected = SVAL_SENSOR_AZOTEQ; own.flags = SVAL_POINTER_INIT_OK | SVAL_POINTER_AUTO;
-    own_bus = SVAL_BUS_PS2 | SVAL_BUS_I2C | SVAL_BUS_SPI;
+    own.built_for = SVAL_SENSOR_AZOTEQ;
+    own.detected  = SVAL_SENSOR_AZOTEQ;
+    own.flags     = SVAL_POINTER_INIT_OK | SVAL_POINTER_AUTO;
+    own_bus       = SVAL_BUS_PS2 | SVAL_BUS_I2C | SVAL_BUS_SPI;
     run_until(60UL * 60 * 1000);
     CHECK(probe_calls == 0 && retry_calls == 0);
 }
@@ -203,8 +244,9 @@ static void working_auto_trackpad_never_probed(void) {
 // A module that answers but won't start is tried SVAL_REPROBE_INIT_TRIES times, then left.
 static void failing_start_gives_up(void) {
     auto_half();
-    init_works = false;
-    attached = SVAL_SENSOR_PMW3389; attached_bus = SVAL_BUS_SPI;
+    init_works   = false;
+    attached     = SVAL_SENSOR_PMW3389;
+    attached_bus = SVAL_BUS_SPI;
     run_until(60UL * 60 * 1000);
     CHECK(inits == SVAL_REPROBE_INIT_TRIES);
 }
@@ -212,7 +254,9 @@ static void failing_start_gives_up(void) {
 // The same through retry_own (a per-module trackball build whose sensor answers).
 static void failing_own_start_gives_up(void) {
     reset();
-    own.built_for = SVAL_SENSOR_PMW3389; own.detected = SVAL_SENSOR_NO_RESPONSE; own_bus = SVAL_BUS_SPI;
+    own.built_for    = SVAL_SENSOR_PMW3389;
+    own.detected     = SVAL_SENSOR_NO_RESPONSE;
+    own_bus          = SVAL_BUS_SPI;
     retry_own_result = SVAL_RETRY_FAILED;
     run_until(60UL * 60 * 1000);
     CHECK(retry_calls == SVAL_REPROBE_INIT_TRIES);
@@ -223,8 +267,11 @@ static void failing_own_start_gives_up(void) {
 // 0x2C names it for the host. One that its own bus answers with the wrong sensor, too.
 static void per_module_build_stops_on_other_module(void) {
     reset();
-    own.built_for = SVAL_SENSOR_PMW3389; own.detected = SVAL_SENSOR_NO_RESPONSE; own_bus = SVAL_BUS_SPI;
-    attached = SVAL_SENSOR_TRACKPOINT; attached_bus = SVAL_BUS_PS2;
+    own.built_for = SVAL_SENSOR_PMW3389;
+    own.detected  = SVAL_SENSOR_NO_RESPONSE;
+    own_bus       = SVAL_BUS_SPI;
+    attached      = SVAL_SENSOR_TRACKPOINT;
+    attached_bus  = SVAL_BUS_PS2;
     run_until(60UL * 60 * 1000);
     CHECK(probe_calls == 1 && select_calls == 1 && retry_calls == 0);
     CHECK(sval_pointer_found()->detected == SVAL_SENSOR_TRACKPOINT);
@@ -232,7 +279,9 @@ static void per_module_build_stops_on_other_module(void) {
 
 static void per_module_build_stops_on_wrong_sensor(void) {
     reset();
-    own.built_for = SVAL_SENSOR_PMW3360; own.detected = SVAL_SENSOR_PMW3389; own_bus = SVAL_BUS_SPI;
+    own.built_for = SVAL_SENSOR_PMW3360;
+    own.detected  = SVAL_SENSOR_PMW3389;
+    own_bus       = SVAL_BUS_SPI;
     run_until(60UL * 60 * 1000);
     CHECK(probe_calls == 0 && retry_calls == 0);
 }
@@ -240,7 +289,9 @@ static void per_module_build_stops_on_wrong_sensor(void) {
 // retry_own STOP (a TrackPoint build: its PS/2 driver can't start twice) ends the search.
 static void retry_own_stop_ends_it(void) {
     reset();
-    own.built_for = SVAL_SENSOR_TRACKPOINT; own.detected = SVAL_SENSOR_NO_RESPONSE; own_bus = SVAL_BUS_PS2;
+    own.built_for    = SVAL_SENSOR_TRACKPOINT;
+    own.detected     = SVAL_SENSOR_NO_RESPONSE;
+    own_bus          = SVAL_BUS_PS2;
     retry_own_result = SVAL_RETRY_STOP;
     run_until(60UL * 60 * 1000);
     CHECK(retry_calls == 1);
@@ -251,8 +302,9 @@ static void retry_own_stop_ends_it(void) {
 // ends: the report changes only when a search has finished.
 static void found_only_changes_at_search_end(void) {
     auto_half();
-    init_works = false;
-    attached = SVAL_SENSOR_PMW3389; attached_bus = SVAL_BUS_SPI;
+    init_works   = false;
+    attached     = SVAL_SENSOR_PMW3389;
+    attached_bus = SVAL_BUS_SPI;
     run_until(1510);
     CHECK(sval_pointer_found()->detected == SVAL_SENSOR_PMW3389);
     attached = SVAL_SENSOR_NO_RESPONSE;
@@ -264,16 +316,16 @@ static void found_only_changes_at_search_end(void) {
 
 typedef void (*test_fn)(void);
 int main(void) {
-    static const test_fn tests[] = {schedule, nothing_attached_stops_at_30_s, never_probes_after_30_s, plugged_in_at_10_s_starts_at_12_s,
-                                    plugged_in_at_20_s_starts_at_30_s, plugged_in_at_40_s_never_found, own_module_retry_starts_it,
-                                    working_module_never_probed, working_auto_trackpad_never_probed, failing_start_gives_up,
-                                    failing_own_start_gives_up, per_module_build_stops_on_other_module, per_module_build_stops_on_wrong_sensor,
-                                    retry_own_stop_ends_it, found_only_changes_at_search_end};
-    int failed = 0;
+    static const test_fn tests[] = {schedule, nothing_attached_stops_at_30_s, never_probes_after_30_s, plugged_in_at_10_s_starts_at_12_s, plugged_in_at_20_s_starts_at_30_s, plugged_in_at_40_s_never_found, own_module_retry_starts_it, working_module_never_probed, working_auto_trackpad_never_probed, failing_start_gives_up, failing_own_start_gives_up, per_module_build_stops_on_other_module, per_module_build_stops_on_wrong_sensor, retry_own_stop_ends_it, found_only_changes_at_search_end};
+    int                  failed  = 0;
     for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
         fflush(stdout);
         pid_t pid = fork(); // pointer_reprobe.c keeps its state in statics: a fresh process each
-        if (pid == 0) { tests[i](); fflush(stdout); _exit(failures != 0); }
+        if (pid == 0) {
+            tests[i]();
+            fflush(stdout);
+            _exit(failures != 0);
+        }
         int status = 0;
         waitpid(pid, &status, 0);
         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) failed++;
