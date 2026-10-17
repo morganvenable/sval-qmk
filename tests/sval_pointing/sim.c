@@ -78,14 +78,13 @@ static void azo_update(void) {
     if (!azo.on) return;
     bool sda = line(GP16), scl = line(GP17);
     if (scl && azo.scl == scl && sda != azo.sda) {
-        if (!sda) {
+        if (!sda) { // START
             azo.state     = I_ADDR;
             azo.bits      = 0;
             azo.byte      = 0;
             azo.ack_slot  = false;
             dev_low[GP16] = false;
-        }      // START
-        else { // STOP
+        } else { // STOP
             if (azo.wlen >= 2 && azo.wbuf[0] == 0xEE && azo.wbuf[1] == 0xEE) {
                 azo.ended  = true;
                 azo.window = false;
