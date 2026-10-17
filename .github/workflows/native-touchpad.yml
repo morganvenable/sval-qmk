@@ -4,7 +4,9 @@ name: Svalboard native touchpad
 # host tests with hid-tools, the Azoteq driver gtests, the four release images
 # built as release builds with the touchpad descriptor, release lint and split
 # table checked, and (on pull requests) the builds without an Azoteq path
-# compared byte for byte with the base.
+# compared byte for byte with the base. A pull request that changes those builds on
+# purpose (shared pointing code) carries the label "changes-pointing-builds", which
+# skips only that comparison.
 
 permissions:
   contents: read
@@ -26,6 +28,7 @@ on:
     - 'util/test_native_ptp.sh'
     - '.github/workflows/native-touchpad.yml'
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
     - 'keyboards/svalboard/**'
     - 'drivers/sensors/azoteq_iqs5xx.*'
@@ -127,7 +130,7 @@ jobs:
         make svalboard/azoteq/right:sval SVAL_NATIVE_PTP=yes SVAL_PTP_KEY_BUTTONS=yes
 
     - name: Builds without the touchpad are unchanged (pull requests)
-      if: ${{ github.event_name == 'pull_request' }}
+      if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'changes-pointing-builds') }}
       shell: bash
       env:
         BASE: ${{ github.event.pull_request.base.sha }}
