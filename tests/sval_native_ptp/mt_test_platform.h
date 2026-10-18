@@ -73,7 +73,6 @@ uint8_t sval_pad_hands(void) {
 static void last_pointing_device_activity_trigger(void) {
     activity_calls++;
 }
-static bool azoteq_iqs5xx_init(void) {
+static void sval_azoteq_restart(void) {
     reinit_calls++;
-    return true;
 }

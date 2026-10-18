@@ -35,6 +35,8 @@ static inline uint32_t mt_now_us(void) {
 }
 // quantum/keyboard.c; not in its header.
 void last_pointing_device_activity_trigger(void);
+// azoteq.c: the chip's full start, with the settings written after it.
+void sval_azoteq_restart(void);
 #endif
 #include "multitouch.h"
 #include "ptp.h"
@@ -467,7 +469,7 @@ void sval_mt_task(void) {
         reinit_done    = true;
         reinit_at      = timer_read32();
         reinits++;
-        azoteq_iqs5xx_init();
+        sval_azoteq_restart();
     }
     if (!is_keyboard_master()) return;
     check_pads();

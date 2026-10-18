@@ -81,14 +81,122 @@ static void azo_wake(void) {
     }
 }
 
+// ------------------------------------------------------------------------
+// TPS43 on 0.7 mm glass (docs/tps43-glass.md).
+//
+// The module's stored settings assume a 1 mm plastic overlay. The thinner
+// glass gives about twice the touch deltas, so the stock touch thresholds
+// fire on noise and drift. Azoteq applications engineering's settings for
+// 0.7 mm glass (2026-04-24) double the touch multipliers and let the part
+// fall into its low-power, environment-tracking mode sooner. They are written
+// at run time after every start of the chip, because the start resets the
+// chip (its runtime registers return to the stored settings) and the driver
+// then sets the idle timeout to 255 s. Nothing here writes the chip's stored
+// settings image.
+#define SVAL_IQS_REG_LP1_REPORT_RATE 0x0580   // 2 bytes, ms
+#define SVAL_IQS_REG_IDLE_MODE_TIMEOUT 0x0586 // 1 byte, s
+#define SVAL_IQS_REG_TOUCH_MULT_SET 0x0596    // set + clear, 1 byte each
+#define SVAL_IQS_REG_EXPORT_VERSION 0x0677    // 2 bytes: the stored settings' export version
+#define SVAL_IQS_REG_IDENTITY 0x0000          // product(2) project(2) major(1) minor(1)
+
+// Azoteq-recommended values; override in config.h to experiment.
+#ifndef SVAL_IQS_TOUCH_MULT_SET
+#    define SVAL_IQS_TOUCH_MULT_SET 32 // stock ~16
+#endif
+#ifndef SVAL_IQS_TOUCH_MULT_CLEAR
+#    define SVAL_IQS_TOUCH_MULT_CLEAR 24 // stock ~12
+#endif
+#ifndef SVAL_IQS_LP1_REPORT_RATE_MS
+#    define SVAL_IQS_LP1_REPORT_RATE_MS 50 // stock 80
+#endif
+// Seconds of no touch before the part drops from Idle into LP1 (ALP mode).
+// Azoteq: 2 s. The stock QMK driver sets 255 (never) to avoid the LP1 report
+// rate adding up to SVAL_IQS_LP1_REPORT_RATE_MS of first-touch latency; set
+// this to 255 to get that behavior back if the wake-up feels laggy.
+#ifndef SVAL_IQS_IDLE_MODE_TIMEOUT_S
+#    define SVAL_IQS_IDLE_MODE_TIMEOUT_S 2
+#endif
+
+static i2c_status_t sval_iqs_write(uint16_t reg, const uint8_t *data, uint16_t len) {
+    return i2c_write_register16(AZO_I2C_ADDRESS, reg, data, len, AZOTEQ_IQS5XX_TIMEOUT_MS);
+}
+
+// Inside an open communication window; ends it.
+static i2c_status_t sval_iqs_apply_tuning(void) {
+    i2c_status_t status = I2C_STATUS_SUCCESS;
+
+    const uint8_t mult[2] = {SVAL_IQS_TOUCH_MULT_SET, SVAL_IQS_TOUCH_MULT_CLEAR};
+    status |= sval_iqs_write(SVAL_IQS_REG_TOUCH_MULT_SET, mult, sizeof(mult));
+
+    const uint8_t lp1[2] = {(SVAL_IQS_LP1_REPORT_RATE_MS >> 8) & 0xFF, SVAL_IQS_LP1_REPORT_RATE_MS & 0xFF};
+    status |= sval_iqs_write(SVAL_IQS_REG_LP1_REPORT_RATE, lp1, sizeof(lp1));
+
+    const uint8_t idle_tmo = SVAL_IQS_IDLE_MODE_TIMEOUT_S;
+    status |= sval_iqs_write(SVAL_IQS_REG_IDLE_MODE_TIMEOUT, &idle_tmo, 1);
+
+    azoteq_iqs5xx_end_session();
+    return status;
+}
+
+static void sval_iqs_tune(void) {
+    i2c_status_t status = sval_iqs_apply_tuning();
+    if (status != I2C_STATUS_SUCCESS) {
+        azo_wake();
+        status = sval_iqs_apply_tuning();
+    }
+    dprintf("IQS5XX: glass tuning %s (i2c status %d)\n", status == I2C_STATUS_SUCCESS ? "applied" : "FAILED", status);
+}
+
+// The pad's identity, read once and logged once on the console (a few
+// seconds after boot, so a console opened at plug-in sees it). The settings
+// export version tells whether a pad's stored settings were ever rewritten.
+static struct {
+    uint16_t product, project, export_version;
+    uint8_t  major, minor;
+    bool     read, logged;
+} azo_id;
+
+#define AZO_ID_LOG_AFTER_MS 5000
+
+// Inside an open communication window; leaves it open.
+static void azo_read_identity(void) {
+    if (azo_id.read) return;
+    uint8_t buf[6] = {0}, ver[2] = {0};
+    if (i2c_read_register16(AZO_I2C_ADDRESS, SVAL_IQS_REG_IDENTITY, buf, sizeof(buf), AZOTEQ_IQS5XX_TIMEOUT_MS) != I2C_STATUS_SUCCESS) return;
+    if (i2c_read_register16(AZO_I2C_ADDRESS, SVAL_IQS_REG_EXPORT_VERSION, ver, sizeof(ver), AZOTEQ_IQS5XX_TIMEOUT_MS) != I2C_STATUS_SUCCESS) return;
+    azo_id.product        = ((uint16_t)buf[0] << 8) | buf[1];
+    azo_id.project        = ((uint16_t)buf[2] << 8) | buf[3];
+    azo_id.major          = buf[4];
+    azo_id.minor          = buf[5];
+    azo_id.export_version = ((uint16_t)ver[0] << 8) | ver[1];
+    azo_id.read           = true;
+}
+
+static void azo_log_identity(void) {
+    if (!azo_id.read || azo_id.logged || timer_read32() < AZO_ID_LOG_AFTER_MS) return;
+    azo_id.logged = true;
+    uprintf("IQS5XX %s pad: product %u project %u version %u.%u settings export version %u\n", is_keyboard_left() ? "left" : "right", azo_id.product, azo_id.project, azo_id.major, azo_id.minor, azo_id.export_version);
+}
+
 bool pointing_device_driver_init(void) {
     azo_wake();
     azoteq_iqs5xx_init();
     // The product number, read again here because init's result doesn't say whether one answered.
     azo_wake();
     azo_product = azoteq_iqs5xx_get_product();
-    if (azo_product != AZOTEQ_IQS5XX_UNKNOWN) azoteq_iqs5xx_end_session();
+    if (azo_product != AZOTEQ_IQS5XX_UNKNOWN) {
+        azo_read_identity();
+        sval_iqs_tune(); // ends the session
+    }
     return true;
+}
+
+// The chip's full start again (azoteq/multitouch.c, after the chip reported a
+// reset), with the glass tuning after it.
+void sval_azoteq_restart(void) {
+    azoteq_iqs5xx_init();
+    azo_wake();
+    if (azoteq_iqs5xx_get_product() != AZOTEQ_IQS5XX_UNKNOWN) sval_iqs_tune();
 }
 
 void sval_pointer_identity(sval_pointer_identity_t *id) {
@@ -133,6 +241,7 @@ uint8_t sval_pointer_retry_own(void) {
 #endif
 
 report_mouse_t pointing_device_driver_get_report(report_mouse_t mouse_report) {
+    azo_log_identity();
 #ifdef SVAL_AZOTEQ_MULTITOUCH
     if (!azo_sched_ready) {
         pad_sched_init(&azo_sched);
