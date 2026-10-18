@@ -62,7 +62,7 @@ enum my_keycodes {
 
 #define MH_AUTO_BUTTONS_LAYER (DYNAMIC_KEYMAP_LAYER_COUNT - 1)
 
-_Static_assert(SV_VELOCITY_SCROLL == QK_USER_30, "sval.json customKeycodes position 30");
+_Static_assert((int)SV_VELOCITY_SCROLL == (int)QK_USER_30, "sval.json customKeycodes position 30");
 
 // Velocity Scroll is held (by its key or the touchpad dev command).
 bool velocity_scroll_active(void);
