@@ -107,15 +107,15 @@ fail:
 }
 
 // Get Device ID (0xF2): any PS/2 pointing device ACKs (0xFA) and sends its ID (0x00 for a TrackPoint).
-static bool probe_ps2(sval_probe_result_t *found) {
-    for (uint8_t attempt = 0; attempt < 2; attempt++) {
+static bool probe_ps2(sval_probe_result_t *found, uint8_t attempts) {
+    for (uint8_t attempt = 0; attempt < attempts; attempt++) {
         uint8_t ack = 0, id = 0;
+        if (attempt) det_wait_us(5000);
         if (ps2_send(0xF2) && ps2_recv(&ack, 25000) && ack == 0xFA && ps2_recv(&id, 25000)) {
             found->detected = SVAL_SENSOR_TRACKPOINT;
             found->id0      = id;
             return true;
         }
-        det_wait_us(5000);
     }
     return false;
 }
@@ -256,11 +256,15 @@ static bool probe_spi(sval_probe_result_t *found) {
     return true;
 }
 
-static void release_all(void) {
+// The PS/2 and SPI pins overlap (GP24, GP25), so they're always released together; the I2C
+// pins only when the I2C probe runs.
+static void release_all(bool i2c) {
     pin_release(SVAL_DETECT_PS2_CLOCK);
     pin_release(SVAL_DETECT_PS2_DATA);
-    pin_release(SVAL_DETECT_I2C_SDA);
-    pin_release(SVAL_DETECT_I2C_SCL);
+    if (i2c) {
+        pin_release(SVAL_DETECT_I2C_SDA);
+        pin_release(SVAL_DETECT_I2C_SCL);
+    }
     pin_release(SVAL_DETECT_SPI_SCK);
     pin_release(SVAL_DETECT_SPI_MOSI);
     pin_release(SVAL_DETECT_SPI_CS);
@@ -268,11 +272,23 @@ static void release_all(void) {
 
 sval_probe_result_t sval_probe_pointers(uint8_t skip_buses) {
     sval_probe_result_t found = {.detected = SVAL_SENSOR_NO_RESPONSE};
-    release_all(); // GP25 pulled up: trackball deselected, TrackPoint reset left as its module sets it
-    if (!(skip_buses & SVAL_BUS_PS2) && probe_ps2(&found)) goto done;
-    if (!(skip_buses & SVAL_BUS_I2C) && probe_i2c(&found)) goto done;
+    bool                i2c   = !(skip_buses & SVAL_BUS_I2C);
+    release_all(i2c); // GP25 pulled up: trackball deselected, TrackPoint reset left as its module sets it
+    if (!(skip_buses & SVAL_BUS_PS2) && probe_ps2(&found, 2)) goto done;
+    if (i2c && probe_i2c(&found)) goto done;
     if (!(skip_buses & SVAL_BUS_SPI)) probe_spi(&found);
 done:
-    release_all();
+    release_all(i2c);
+    return found;
+}
+
+sval_probe_result_t sval_probe_bus(uint8_t bus, bool patient) {
+    sval_probe_result_t found = {.detected = SVAL_SENSOR_NO_RESPONSE};
+    bool                i2c   = bus == SVAL_BUS_I2C;
+    release_all(i2c);
+    if (bus == SVAL_BUS_PS2) probe_ps2(&found, patient ? 2 : 1);
+    else if (i2c) probe_i2c(&found);
+    else if (bus == SVAL_BUS_SPI) probe_spi(&found);
+    release_all(i2c);
     return found;
 }

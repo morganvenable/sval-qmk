@@ -103,7 +103,8 @@ class FirmwareTests(unittest.TestCase):
             str(SOURCE / 'point_config.c'),
             str(HERE / 'storage_stub.c'),
             str(SOURCE / 'scroll_policy.c'),
-            str(SOURCE.parent / 'axis_scale.c'), '-o',
+            str(SOURCE.parent / 'axis_scale.c'),
+            str(SOURCE.parent / 'velocity_scroll.c'), '-lm', '-o',
             str(exe)
         ],
                        check=True)

@@ -1,0 +1,171 @@
+name: Svalboard native touchpad
+
+# The native Precision Touchpad (keyboards/svalboard/docs/native-touchpad.md):
+# host tests with hid-tools, the Azoteq driver gtests, the four release images
+# built as release builds with the touchpad descriptor, release lint and split
+# table checked, and (on pull requests) the builds without an Azoteq path
+# compared byte for byte with the base. A pull request that changes those builds on
+# purpose (shared pointing code) carries the label "changes-pointing-builds", which
+# skips only that comparison.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+    - '**'
+    paths:
+    - 'keyboards/svalboard/**'
+    - 'drivers/sensors/azoteq_iqs5xx.*'
+    - 'modules/svalboard/**'
+    - 'tmk_core/protocol/usb_ptp.h'
+    - 'tmk_core/protocol/usb_descriptor.*'
+    - 'tmk_core/protocol/chibios/usb_main.c'
+    - 'tmk_core/protocol/chibios/usb_endpoints.*'
+    - 'tests/sval_native_ptp/**'
+    - 'tests/pointing/azoteq_multitouch/**'
+    - 'util/test_native_ptp.sh'
+    - '.github/workflows/native-touchpad.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+    - 'keyboards/svalboard/**'
+    - 'drivers/sensors/azoteq_iqs5xx.*'
+    - 'modules/svalboard/**'
+    - 'tmk_core/protocol/usb_ptp.h'
+    - 'tmk_core/protocol/usb_descriptor.*'
+    - 'tmk_core/protocol/chibios/usb_main.c'
+    - 'tmk_core/protocol/chibios/usb_endpoints.*'
+    - 'tests/sval_native_ptp/**'
+    - 'tests/pointing/azoteq_multitouch/**'
+    - 'util/test_native_ptp.sh'
+    - '.github/workflows/native-touchpad.yml'
+  workflow_dispatch:
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: hid-tools (descriptor cross-check)
+      run: python3 -m pip install --user hid-tools
+
+    - name: Host tests (ASan, UBSan)
+      run: bash util/test_native_ptp.sh
+
+  gtests:
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Azoteq driver gtests (contact read and the stock driver)
+      run: make test:pointing/azoteq_multitouch test:pointing/azoteq_iqs5xx
+
+  release-images:
+    runs-on: ubuntu-latest
+    # The image and toolchain release CI uses (build-firmware.yml).
+    container: ghcr.io/qmk/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Pinned Arm toolchain
+      shell: bash
+      run: |
+        T=arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi
+        U=https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel
+        curl -fsSL --retry 3 -o "/tmp/$T.tar.xz" "$U/$T.tar.xz"
+        echo "6cd1bbc1d9ae57312bcd169ae283153a9572bd6a8e4eeae2fedfbc33b115fdbb  /tmp/$T.tar.xz" | sha256sum -c -
+        mkdir -p /opt/arm
+        tar -xJf "/tmp/$T.tar.xz" -C /opt/arm
+        echo "/opt/arm/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin" >> "$GITHUB_PATH"
+
+    - name: Release images with the native touchpad
+      shell: bash
+      run: |
+        git config --global --add safe.directory '*'
+        pip3 install --break-system-packages -r requirements.txt
+        qmk setup -y
+        test "$(arm-none-eabi-gcc -dumpversion)" = 13.2.1
+        mkdir -p release
+        for side in left right; do
+          for keymap in sval blank; do
+            make -j$(nproc) svalboard/$side:$keymap SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes SVAL_FW_VERSION_STRING=ci
+            elf=.build/svalboard_${side}_${keymap}.elf
+            python3 -I keyboards/svalboard/tools/multitouch/ptp_desc_check.py $elf
+            python3 -I keyboards/svalboard/tools/check_ram_funcs.py $elf
+            cp $elf release/
+          done
+        done
+        python3 -I keyboards/svalboard/tools/check_release_elf.py release/*.elf
+        python3 -I keyboards/svalboard/tools/check_split_tables.py --dir release \
+          --golden keyboards/svalboard/tools/split_table_golden.json
+
+    - name: Release builds refuse the dev flags
+      shell: bash
+      run: |
+        for flag in SVAL_TOUCH_DEV=yes SVAL_PERF_STATS=yes; do
+          if make svalboard/right:sval SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes $flag > /tmp/out.txt 2>&1; then
+            echo "::error::a release build accepted $flag"; exit 1
+          fi
+          grep -q "cannot be part of a release build" /tmp/out.txt
+        done
+
+    - name: Dev builds (counters, dev command, no touchpad)
+      shell: bash
+      run: |
+        make svalboard/right:blank SVAL_UPDATER=yes SVAL_TOUCH_DEV=yes SVAL_PERF_STATS=yes
+        make svalboard/left:blank SVAL_UPDATER=yes SVAL_NATIVE_PTP=no SVAL_PERF_STATS=yes
+        make svalboard/azoteq/right:sval SVAL_NATIVE_PTP=yes SVAL_PTP_KEY_BUTTONS=yes
+
+    - name: Builds without the touchpad are unchanged (pull requests)
+      if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'changes-pointing-builds') }}
+      shell: bash
+      env:
+        BASE: ${{ github.event.pull_request.base.sha }}
+      run: |
+        targets="svalboard/trackball/pmw3389/left:sval svalboard/trackball/pmw3389/right:blank svalboard/trackpoint/left:sval svalboard/trackpoint/right:blank svalboard/azoteq/left:sval svalboard/azoteq/right:blank"
+        build() { # dir
+          mkdir -p "$1"
+          for t in $targets; do
+            for mode in plain updater; do
+              flags=""
+              [ $mode = updater ] && flags="SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes SVAL_FW_VERSION_STRING=cmp"
+              make -j$(nproc) $t SKIP_VERSION=yes $flags > /dev/null
+              n=$(echo ${t%%:*} | tr / _)_${t##*:}
+              cp $n.uf2 "$1/$n-$mode.uf2"
+            done
+          done
+        }
+        rm -rf .build
+        build /tmp/head
+        rm -rf .build
+        git checkout -q "$BASE"
+        git submodule update --init --recursive -q
+        build /tmp/base
+        cd /tmp/head && for f in *.uf2; do cmp "$f" "/tmp/base/$f" || { echo "::error::$f differs from the base"; exit 1; }; echo "identical: $f"; done
+        # The auto images with the touchpad turned off are the base auto images.
+        cd "$GITHUB_WORKSPACE" && git checkout -q "$GITHUB_SHA" && git submodule update --init --recursive -q && rm -rf .build
+        for t in svalboard/left:sval svalboard/right:blank; do
+          n=$(echo ${t%%:*} | tr / _)_${t##*:}
+          make -j$(nproc) $t SKIP_VERSION=yes SVAL_NATIVE_PTP=no SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes SVAL_FW_VERSION_STRING=cmp > /dev/null
+          cp $n.uf2 /tmp/head-off-$n.uf2
+        done
+        git checkout -q "$BASE" && git submodule update --init --recursive -q && rm -rf .build
+        for t in svalboard/left:sval svalboard/right:blank; do
+          n=$(echo ${t%%:*} | tr / _)_${t##*:}
+          make -j$(nproc) $t SKIP_VERSION=yes SVAL_UPDATER=yes SVAL_UPDATE_RELEASE=yes SVAL_FW_VERSION_STRING=cmp > /dev/null
+          cmp $n.uf2 /tmp/head-off-$n.uf2 || { echo "::error::$n with SVAL_NATIVE_PTP=no differs from the base"; exit 1; }
+          echo "identical with SVAL_NATIVE_PTP=no: $n"
+        done

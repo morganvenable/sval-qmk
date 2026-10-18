@@ -27,6 +27,9 @@
 #    endif
 #endif
 #include "split_pause.h"
+#ifdef SVAL_PERF_STATS
+#    include "perf.h" // the split exchange's share of a scan gap
+#endif
 
 // core: quantum/matrix_common.c defines these (not static).
 extern matrix_row_t raw_matrix[MATRIX_ROWS];
@@ -70,7 +73,14 @@ uint8_t matrix_scan(void) {
 
     if (!paused) {
         // core: matrix_scan(), SPLIT_KEYBOARD
-        changed = debounce(raw_matrix, matrix + thisHand, changed) | matrix_post_scan();
+        changed = debounce(raw_matrix, matrix + thisHand, changed);
+#ifdef SVAL_PERF_STATS
+        uint8_t perf_prev = sval_perf_enter(SVAL_PERF_GAP_SYNC);
+#endif
+        changed |= matrix_post_scan();
+#ifdef SVAL_PERF_STATS
+        sval_perf_leave(perf_prev);
+#endif
         return changed;
     }
 

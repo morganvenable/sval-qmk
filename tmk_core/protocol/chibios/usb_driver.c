@@ -12,6 +12,10 @@
 #include "usb_driver.h"
 #include "usb_packet.h"
 #include "util.h"
+#ifdef SVAL_PERF_STATS
+// Svalboard dev builds (keyboards/svalboard/perf.c): USB sends' share of a scan gap.
+#    include "perf.h"
+#endif
 
 /*===========================================================================*/
 /* Driver local functions.                                                   */
@@ -251,7 +255,20 @@ void usb_endpoint_out_rx_complete_cb(USBDriver *usbp, usbep_t ep) {
     osalSysUnlockFromISR();
 }
 
+#ifdef SVAL_PERF_STATS
+static bool usb_endpoint_in_send_timed(usb_endpoint_in_t *endpoint, const uint8_t *data, size_t size, sysinterval_t timeout, bool buffered);
+
 bool usb_endpoint_in_send(usb_endpoint_in_t *endpoint, const uint8_t *data, size_t size, sysinterval_t timeout, bool buffered) {
+    uint8_t prev = sval_perf_enter(SVAL_PERF_GAP_USB);
+    bool    ok   = usb_endpoint_in_send_timed(endpoint, data, size, timeout, buffered);
+    sval_perf_leave(prev);
+    return ok;
+}
+
+static bool usb_endpoint_in_send_timed(usb_endpoint_in_t *endpoint, const uint8_t *data, size_t size, sysinterval_t timeout, bool buffered) {
+#else
+bool usb_endpoint_in_send(usb_endpoint_in_t *endpoint, const uint8_t *data, size_t size, sysinterval_t timeout, bool buffered) {
+#endif
     osalDbgCheck((endpoint != NULL) && (data != NULL) && (size > 0U) && (size <= endpoint->config.buffer_size));
 
     osalSysLock();

@@ -28,10 +28,33 @@ typedef struct {
 } sval_probe_result_t;
 
 // Probes the buses not in skip_buses, PS/2 then I2C then SPI, stopping at the first module.
+// The I2C pins are left alone when I2C is skipped, so a hardware I2C driver keeps them.
 sval_probe_result_t sval_probe_pointers(uint8_t skip_buses);
+
+// Probes one bus (SVAL_BUS_*), for the runtime searches that go one bus per main loop pass.
+// The boot search is patient (two PS/2 tries, for a TrackPoint still finishing its self-test);
+// later ones try PS/2 once, which caps the pass at the device's 10 ms window to answer.
+sval_probe_result_t sval_probe_bus(uint8_t bus, bool patient);
 
 // Which trackball sensor a PMW Product_ID / Inverse_Product_ID pair names.
 uint8_t sval_pmw33xx_classify(uint8_t product_id, uint8_t inverse_product_id);
+
+// A runtime search's second look at the build's own module (svalboard.c), before the other
+// buses: restarts its driver when it now answers. The default does nothing (NONE).
+enum sval_retry_own {
+    SVAL_RETRY_NONE,   // nothing answered on its own bus: search the other buses
+    SVAL_RETRY_OK,     // its module answered and its driver is running
+    SVAL_RETRY_FAILED, // its module answered, and its driver didn't start
+    SVAL_RETRY_STOP,   // the build can't restart its module: stop searching
+};
+uint8_t sval_pointer_retry_own(void);
+
+// The search (pointer_reprobe.c): run from the main loop; whether the first search has
+// finished, and what the last search of the other buses found (SVAL_SENSOR_NO_RESPONSE:
+// nothing).
+void                       sval_pointer_probe_task(void);
+bool                       sval_pointer_searched(void);
+const sval_probe_result_t *sval_pointer_found(void);
 
 // Called with the probe's result; a build with every driver in starts that module's driver
 // (pointing_auto/pointing_auto.c). The default does nothing.

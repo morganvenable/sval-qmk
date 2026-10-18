@@ -314,6 +314,10 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         sval_clock_full();
     }
     if (frame_start_us) ema32(&stat_frame_us, now - frame_start_us);
+#ifdef SVAL_PERF_STATS
+    extern void sval_perf_scan(uint32_t now_us);
+    sval_perf_scan(now);
+#endif
     frame_start_us = now;
     led_on_acc_us  = 0;
 
@@ -329,6 +333,11 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
         matrix_read_cols_on_row(curr_matrix, current_row);
     }
     ema16(&stat_led_us, led_on_acc_us);
+#ifdef SVAL_PERF_STATS
+    // Raw frames with a key down, and raw changes (keyboards/svalboard/perf.c).
+    extern void sval_perf_matrix(const matrix_row_t *rows, uint8_t count);
+    sval_perf_matrix(curr_matrix, ROWS_PER_HAND);
+#endif
 #ifdef SVAL_UPDATER
     // The updater's confirmation chord is read here, and its keys removed,
     // before debounce and key processing see this frame.

@@ -41,7 +41,7 @@ Check feature flags before using an extension, send one request at a time per co
 
 ## Pointing hardware
 
-`POINTING_HARDWARE` (`0x2C`) tells a host which side each half thinks it is, which pointing module its firmware drives, and which module actually answered. Released firmware drives whichever module is attached: one image per side, which probes for the module at startup (flags bit 3). The per-module builds (`svalboard/trackball/pmw3360`, `pmw3389`, `trackpoint`, `azoteq`) still build but are not released; on one of those the wrong module stays dead with no other sign, so a host can use this report to tell the user. On an auto build, `built_for` `0` with a module attached means the probe missed it: replugging the half probes again.
+`POINTING_HARDWARE` (`0x2C`) tells a host which side each half thinks it is, which pointing module its firmware drives, and which module actually answered. Released firmware drives whichever module is attached: one image per side, which probes for the module at startup (flags bit 3). The per-module builds (`svalboard/trackball/pmw3360`, `pmw3389`, `trackpoint`, `azoteq`) still build but are not released; on one of those the wrong module stays dead with no other sign, so a host can use this report to tell the user. On an auto build, `built_for` `0` means no module has answered yet. The half looks again during its first 30 s (below), so a module that comes up or is plugged in by then starts on its own and the report changes; one plugged in later starts after a replug.
 
 - Discovery: GET_INFO byte 19 (the second feature byte), bit 1 (`sval_flag2_pointing_hardware`). Older firmware leaves it zero.
 - Request: `DF 2C`
@@ -50,14 +50,14 @@ Check feature flags before using an extension, send one request at a time per co
   - `flags`: bit 0 the block holds a report, bit 1 the half is the left half, bit 2 the sensor driver initialized, bit 3 the firmware drives whichever module is attached (the plain `left`/`right` builds), so `built_for` is the module it chose after the probe, or `0` when none answered.
   - `built_for`: `0` no pointing module, `1` PMW3360 trackball, `2` PMW3389 trackball, `5` Azoteq trackpad, `6` TrackPoint.
   - `detected`: `0` not checked yet, `1` PMW3360 (`42 BD`), `2` PMW3389 (`47 B8`), `3` no module answered, `4` the trackball bus answered with some other ID, `5` Azoteq (IDs: product number, high byte first), `6` TrackPoint (first ID byte: its PS/2 device ID).
-  - Each build checks its own module at startup. When that module doesn't answer, or the build has none, the half checks the other modules' buses once, about 1.5 s after boot (PS/2, then I2C, then SPI), so `detected` names whatever is attached. Until then it reads `0` (no module build) or `3` (its own module missing).
+  - Each build checks its own module at startup. When that module doesn't answer, or the build has none, the half checks the other modules' buses about 1.5 s after boot (PS/2, then I2C, then SPI), so `detected` names whatever is attached. Until then it reads `0` (no module build) or `3` (its own module missing). While nothing works, the half looks again, its own module first, then the other buses: 3, 6, 12 and 30 s after boot, and never after that, so a board with no pointing module isn't probed again. It stops sooner once a module works, once a per-module build finds a module it can't drive, or once a module that answers has failed to start four times. A half whose module works is never probed. So `detected`, `built_for` and bit 2 can change during a half's first 30 s, after a host has connected (the other half's block follows within a presence ping, 0.5 s); a host that shows `3` or `0` should read again until then.
 - The other half reports through the split link's half-second presence ping, so its block is zero while it is disconnected, for up to half a second after it connects, and when it runs firmware without this command.
 
 ## Pointing fragments
 
 The keyboard definition (`sval.json`, keymaps `sval` and `blank`) describes each hand's pointing module as a zero-key fragment, so a host can draw it in the layout. Fragments `pointing_none` (4), `pointing_trackball_pmw3360` (5), `pointing_trackball_pmw3389` (6), `pointing_touchpad_azoteq` (7), `pointing_trackpoint` (8) and `pointing_unknown` (9) have `"kle": []` and a `widget` object (`kind`, `module`, `sensor`, `w`, `h` in key units). Instances `left_pointing` (10) and `right_pointing` (11) have `hardware_detect: true`; their selection bytes are not used.
 
-`FRAGMENT_GET_HARDWARE` (`0x18`) reports them from the same identity `POINTING_HARDWARE` returns, for whichever half is on that hand (the other half's only while it is connected): `detected` 1 → 5, 2 → 6, 3 → 4, 4 → 9, 5 → 7, 6 → 8. It reads `0xFF` while that hand isn't known yet: no half on that side, `detected` still `0`, or `3` before the boot probe of the other buses has run (for the other half, until 2.5 s after the USB half booted). A host can re-read `0x18` until both bytes settle.
+`FRAGMENT_GET_HARDWARE` (`0x18`) reports them from the same identity `POINTING_HARDWARE` returns, for whichever half is on that hand (the other half's only while it is connected): `detected` 1 → 5, 2 → 6, 3 → 4, 4 → 9, 5 → 7, 6 → 8. It reads `0xFF` while that hand isn't known yet: no half on that side, `detected` still `0`, or `3` before the boot probe of the other buses has run (for the other half, until 2.5 s after the USB half booted). A host can re-read `0x18` until both bytes settle. A hand that reads `4` (no module) can still change until that half has run for 30 s, if its search finds one.
 
 ## Pointing motion
 
@@ -122,5 +122,33 @@ Builds made with `SVAL_POINT_CONTROLS=yes` turn pointer motion into discrete out
 | `0x32` STOP | nothing | `0` `1`; ends every tool and cancels an open task switcher |
 
 `version` is `5`. Status: `0` ok, `1` refused because a tool is active, `2` the generation changed since the host read it (another app saved), `3` invalid, `4` the save didn't read back. Every value is little-endian. A slot is `0` none or `1`-`4`; `axes` is bit 0 horizontal, bit 1 vertical; tools aren't per side, so `left slot` and `right slot` always match; `distance shift` is retired (there are no Finer and Coarser keys) and always reads `1`. The `speeds` and `tools` layouts and the tool keycodes are in [pointing-tools.md](pointing-tools.md).
+
+## Pointing contacts
+
+`POINTING_CONTACTS` (`0x2F`) returns every touch contact down now, each on its own pad, for a live picture of the touchpads. With the native touchpad the computer owns the pads and `POINTING_MOTION` carries no touch positions, so this is how a host app draws the fingers. It is a snapshot: reading clears nothing, so any number of apps can poll it.
+
+- Discovery: GET_INFO byte 19, bit 5 (`sval_flag2_pointing_contacts`, `0x20`). Firmware without the native touchpad leaves it zero.
+- Builds with the pointing tools (`SVAL_POINT_CONTROLS`) don't have it: there `0x2F` is the tools' GET and bit 5 means the pointing tools (above).
+- Request: `DF 2F`
+- Response: `DF 2F` then 24 bytes (offsets from the first of them). `format` `0` means no data (the half without USB, or no native touchpad).
+
+| off | size | field |
+|---|---|---|
+| 0 | 1 | format = `1` |
+| 1 | 1 | bit 0 the touchpad is reporting to the computer (Input Mode 3 and the surface switch on), bit 1 the left pad is part of it, bit 2 the right pad is |
+| 2 | 1 | ms since the report these contacts come from, up to 255 |
+| 3 | 1 | contacts `n`, 0 to 5 |
+| 4 | 4 × n | the contacts, then zeros |
+
+Each contact:
+
+| off | size | field |
+|---|---|---|
+| 0 | 1 | bits 0-3 contact ID (the touchpad's own, stable while the finger is down), bit 4 tip (down), bit 5 confidence (clear: a palm), bit 6 right pad |
+| 1 | 3 | `x \| y << 12`, 24-bit little-endian: `x` 0-2047 across that pad, `y` 0-1791 down it |
+
+- The contacts are the last input report the computer took from the touchpad, so they are exactly what the operating system has. A contact with tip clear is lifting: that report is its last.
+- Coordinates are per pad, in the touchpad's own orientation (the one the operating system sees), not the merged surface: the right pad does not carry the 2048 + gap offset.
+- While the touchpad isn't reporting, or its last report is older than 150 ms (the computer stopped reading), `n` is `0`.
 
 Packet formats: [client-ID protocol](../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [layer state](../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), [command definitions](../../../modules/svalboard/core/sval.h).

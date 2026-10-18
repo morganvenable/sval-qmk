@@ -9,3 +9,7 @@ QUANTUM_LIB_SRC += i2c_master.c
 EXTRA_SRC = azoteq/azoteq.c
 
 MH_AUTO_BUTTONS = yes
+
+# Native Precision Touchpad: opt-in here (SVAL_NATIVE_PTP=yes); the auto builds ship it.
+SVAL_NATIVE_PTP ?= no
+include keyboards/svalboard/azoteq/multitouch.mk

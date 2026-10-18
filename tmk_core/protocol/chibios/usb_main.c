@@ -27,6 +27,9 @@
 #include "usb_descriptor.h"
 #include "usb_driver.h"
 #include "usb_types.h"
+#ifdef SVAL_NATIVE_PTP
+#    include "usb_ptp.h"
+#endif
 
 #ifdef RAW_ENABLE
 #    include "raw_hid.h"
@@ -172,6 +175,9 @@ static void usb_event_cb(USBDriver *usbp, usbevent_t event) {
             return;
 
         case USB_EVENT_CONFIGURED:
+#ifdef SVAL_NATIVE_PTP
+            sval_ptp_usb_reset(); // in the ISR, before any SET_REPORT can follow
+#endif
             osalSysLockFromISR();
             for (int i = 0; i < USB_ENDPOINT_IN_COUNT; i++) {
                 usb_endpoint_in_configure_cb(&usb_endpoints_in[i]);
@@ -190,6 +196,9 @@ static void usb_event_cb(USBDriver *usbp, usbevent_t event) {
         case USB_EVENT_UNCONFIGURED:
             /* Falls into.*/
         case USB_EVENT_RESET:
+#ifdef SVAL_NATIVE_PTP
+            if (event == USB_EVENT_RESET) sval_ptp_usb_reset();
+#endif
             usb_event_queue_enqueue(event);
             chSysLockFromISR();
             for (int i = 0; i < USB_ENDPOINT_IN_COUNT; i++) {
@@ -246,8 +255,59 @@ static void set_led_transfer_cb(USBDriver *usbp) {
     }
 }
 
+#ifdef SVAL_NATIVE_PTP
+// Class requests for the native Precision Touchpad interface. Its feature
+// reports (up to 257 bytes) don't fit QMK's report storage, so they go to the
+// keyboard's handlers in keyboards/svalboard/azoteq/ptp.c.
+static uint8_t _Alignas(4) ptp_set_buf[2];
+static uint8_t ptp_idle_rate = 0; // stored for GET_IDLE; reports are never repeated by it
+
+// After the data stage: too late to stall, so a value ptp.c refuses is only
+// ignored (and counted there).
+static void ptp_set_done(USBDriver *usbp) {
+    usb_control_request_t *setup = (usb_control_request_t *)usbp->setup;
+    (void)sval_ptp_set_report(setup->wValue.hbyte, setup->wValue.lbyte, ptp_set_buf, setup->wLength);
+}
+
+static bool ptp_class_request(USBDriver *usbp, usb_control_request_t *setup) {
+    uint8_t type = setup->wValue.hbyte, id = setup->wValue.lbyte;
+    if ((setup->bmRequestType & USB_RTYPE_DIR_MASK) == USB_RTYPE_DIR_DEV2HOST) {
+        switch (setup->bRequest) {
+            case HID_REQ_GetReport: {
+                const uint8_t *data = NULL;
+                uint16_t       size = sval_ptp_get_report(type, id, &data);
+                if (!size) return false;
+                usbSetupTransfer(usbp, (uint8_t *)data, size, NULL); // truncated to wLength
+                return true;
+            }
+            case HID_REQ_GetIdle:
+                usbSetupTransfer(usbp, &ptp_idle_rate, 1, NULL);
+                return true;
+        }
+        return false;
+    }
+    switch (setup->bRequest) {
+        case HID_REQ_SetReport:
+            if (!sval_ptp_set_report_allowed(type, id, setup->wLength)) return false;
+            usbSetupTransfer(usbp, ptp_set_buf, sizeof(ptp_set_buf), ptp_set_done);
+            return true;
+        case HID_REQ_SetIdle:
+            ptp_idle_rate = setup->wValue.hbyte;
+            usbSetupTransfer(usbp, NULL, 0, NULL);
+            return true;
+    }
+    return false;
+}
+#endif
+
 static bool usb_requests_hook_cb(USBDriver *usbp) {
     usb_control_request_t *setup = (usb_control_request_t *)usbp->setup;
+
+#ifdef SVAL_NATIVE_PTP
+    if ((setup->bmRequestType & (USB_RTYPE_TYPE_MASK | USB_RTYPE_RECIPIENT_MASK)) == (USB_RTYPE_TYPE_CLASS | USB_RTYPE_RECIPIENT_INTERFACE) && setup->wIndex == PTP_INTERFACE) {
+        return ptp_class_request(usbp, setup);
+    }
+#endif
 
     /* Handle HID class specific requests */
     if ((setup->bmRequestType & (USB_RTYPE_TYPE_MASK | USB_RTYPE_RECIPIENT_MASK)) == (USB_RTYPE_TYPE_CLASS | USB_RTYPE_RECIPIENT_INTERFACE)) {

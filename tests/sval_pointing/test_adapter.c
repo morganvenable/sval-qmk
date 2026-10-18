@@ -8,6 +8,7 @@
 #include "point_control.h"
 #include "point_output.h"
 #include "axis_scale.h"
+#include "velocity_scroll.h"
 #include "point_control.c"
 static uint32_t clock_ms;
 static uint16_t sensor_cpi = 800;
@@ -418,6 +419,50 @@ int main(void) {
     sniper_hold_5 = boost_hold_5 = 0;
     update_sniper_divisor();
     update_boost_multiplier();
+    // Velocity Scroll held with a tool on: Velocity Scroll owns every pointer. The tool
+    // stays on but gets no motion and sends nothing; it takes over again on release.
+    for (int i = 0; i < 8; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    scroll_policy = (sval_scroll_policy_t){0};
+    clock_ms += 600;
+    key(5, SV_POINT_TOOL2_HOLD, true); // slot 2: Arrows, 160 counts a step
+    vs_keys = 1;
+    velocity_scroll_update();
+    assert(velocity_scroll_active() && sval_point_active(0));
+    steps = recognized;
+    int vs_scrolled = 0;
+    r = input(0, 480, 0, 480, 1); // 15 mm on each ball at 800 CPI
+    assert(!r.x && !r.y);
+    for (int i = 0; i < 40; ++i) {
+        r = input(0, 0, 0, 0, 10);
+        assert(!r.x && !r.y && !r.h);
+        vs_scrolled |= r.v != 0;
+        sval_point_task();
+    }
+    assert(vs_scrolled && recognized == steps && !pending_count(0) && !pending_count(1) && !last_consumer);
+    vs_keys = 0;
+    velocity_scroll_update();
+    r = input(0, 0, 0, 0, 10);
+    assert(!velocity_scroll_active() && !r.h && !r.v);
+    input(170, 0, 0, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(recognized == steps + 1); // the tool runs again
+    key(5, SV_POINT_TOOL2_HOLD, false);
+    // With no tool on, Velocity Scroll freezes the cursor and scrolls; release restores the cursor.
+    vs_keys = 1;
+    velocity_scroll_update();
+    vs_scrolled = 0;
+    r = input(0, 480, 0, 0, 1);
+    assert(!r.x && !r.y);
+    for (int i = 0; i < 40; ++i) vs_scrolled |= input(0, 0, 0, 0, 10).v != 0;
+    assert(vs_scrolled);
+    vs_keys = 0;
+    velocity_scroll_update();
+    r = input(10, 0, 0, 0, 1);
+    assert(r.x == 10 && !r.h && !r.v);
+    puts("combined adapter: Velocity Scroll owns every pointer while held, a tool resumes after it passed");
     puts("combined adapter: sniper and boost leave tool steps and Proportional scroll alone, still scale the other pointer passed");
     puts("combined adapter: TrackPoint counts unscaled, trackball counts normalized by CPI passed");
     puts("combined adapter: proportional hold/toggle, center, independent pointers, natural direction, shared lock sustain/breakaway and stop passed");

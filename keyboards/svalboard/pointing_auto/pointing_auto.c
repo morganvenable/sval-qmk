@@ -1,14 +1,17 @@
 // One firmware for every pointing module. The trackpad is looked for at boot with its own
 // driver over the I2C hardware, as the trackpad-only build does; the bit-banged I2C probe
-// missed it. Otherwise nothing runs until svalboard.c's boot probe (pointing_detect.h,
-// ~1.5 s after boot) says what's attached on the other buses; then that module's driver
-// starts and handles everything. Changing modules takes a reset.
+// missed it. Otherwise nothing runs until svalboard.c's search (pointing_detect.h, first
+// ~1.5 s after boot, then up to 30 s while nothing is found: pointer_reprobe.h) says what's
+// attached on the other buses; then that module's driver starts and handles everything.
+// Changing modules takes a reset.
 #include "quantum.h"
 #include "pointing_device.h"
 #include "pointing_detect.h"
 #include "pointing_auto.h"
+#include "drivers/sensors/azoteq_iqs5xx.h"
 
-static const sval_pointer_driver_t *driver      = NULL;
+static const sval_pointer_driver_t *driver      = NULL; // running
+static const sval_pointer_driver_t *failed      = NULL; // answered the search, didn't start; its identity is reported
 static uint16_t                     pending_cpi = 0;
 
 void sval_pointer_select(const sval_probe_result_t *found) {
@@ -16,11 +19,44 @@ void sval_pointer_select(const sval_probe_result_t *found) {
     if (driver) return;
     for (uint8_t i = 0; i < ARRAY_SIZE(drivers); i++) {
         if (drivers[i]->sensor != found->detected) continue;
-        drivers[i]->init();
-        driver = drivers[i];
-        if (pending_cpi) driver->set_cpi(pending_cpi);
+        // The PS/2 driver claims a PIO state machine and program each time it starts, so a
+        // TrackPoint is started once, whatever its start returned.
+        if (drivers[i]->init() || drivers[i]->sensor == SVAL_SENSOR_TRACKPOINT) {
+            driver = drivers[i];
+            failed = NULL;
+            if (pending_cpi) driver->set_cpi(pending_cpi);
+        } else {
+            failed = drivers[i]; // a later search that finds it again starts it again
+        }
         return;
     }
+}
+
+// A search's second look at the trackpad, the one module this build checks on its own bus
+// (the I2C hardware), before the other buses. A bare connector costs a line check and two
+// addressings; only a chip that answers gets the full start (~110 ms, as at boot).
+#define AUTO_AZO_ADDRESS (0x74 << 1)
+#define AUTO_AZO_PING_MS 5
+uint8_t sval_pointer_retry_own(void) {
+    if (driver) return driver->sensor == SVAL_SENSOR_TRACKPOINT ? SVAL_RETRY_STOP : SVAL_RETRY_OK;
+    // An I2C bus with nothing on it may have no pull-ups; a low line would hold the
+    // hardware to its timeout, so there's nothing to address.
+    if (!gpio_read_pin(I2C1_SDA_PIN) || !gpio_read_pin(I2C1_SCL_PIN)) return SVAL_RETRY_NONE;
+    // A chip in a low-power mode NACKs the first addressing and wakes (azoteq/azoteq.c).
+    i2c_status_t st = i2c_ping_address(AUTO_AZO_ADDRESS, AUTO_AZO_PING_MS);
+    if (st != I2C_STATUS_SUCCESS) {
+        wait_us(200);
+        st = i2c_ping_address(AUTO_AZO_ADDRESS, AUTO_AZO_PING_MS);
+    }
+    if (st == I2C_STATUS_ERROR) return SVAL_RETRY_NONE; // no ACK: no trackpad
+    sval_pointer_identity_t id = {0};
+    sval_driver_azoteq.init();
+    sval_driver_azoteq.identity(&id);
+    if (id.detected != SVAL_SENSOR_AZOTEQ) return SVAL_RETRY_FAILED;
+    driver = &sval_driver_azoteq;
+    failed = NULL;
+    if (pending_cpi) driver->set_cpi(pending_cpi);
+    return SVAL_RETRY_OK;
 }
 
 bool pointing_device_driver_init(void) {
@@ -51,6 +87,7 @@ void pointing_device_driver_set_cpi(uint16_t cpi) {
 
 void sval_pointer_identity(sval_pointer_identity_t *id) {
     if (driver) driver->identity(id);
+    else if (failed) failed->identity(id);
     id->flags |= SVAL_POINTER_AUTO;
 }
 

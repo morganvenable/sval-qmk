@@ -151,6 +151,13 @@ typedef struct {
     USB_HID_Descriptor_HID_t   Digitizer_HID;
     USB_Descriptor_Endpoint_t  Digitizer_INEndpoint;
 #endif
+
+#ifdef SVAL_NATIVE_PTP
+    // Svalboard native Precision Touchpad interface (last, see usb_ptp.h)
+    USB_Descriptor_Interface_t Ptp_Interface;
+    USB_HID_Descriptor_HID_t   Ptp_HID;
+    USB_Descriptor_Endpoint_t  Ptp_INEndpoint;
+#endif
 } USB_Descriptor_Configuration_t;
 
 /*
@@ -203,6 +210,10 @@ enum usb_interfaces {
 
 #if defined(DIGITIZER_ENABLE) && !defined(DIGITIZER_SHARED_EP)
     DIGITIZER_INTERFACE,
+#endif
+
+#ifdef SVAL_NATIVE_PTP
+    PTP_INTERFACE, // last, so every other interface keeps its number
 #endif
     TOTAL_INTERFACES
 };
@@ -284,6 +295,10 @@ enum usb_endpoints {
 #        define DIGITIZER_IN_EPNUM SHARED_IN_EPNUM
 #    endif
 #endif
+
+#ifdef SVAL_NATIVE_PTP
+    PTP_IN_EPNUM = NEXT_EPNUM,
+#endif
 };
 
 #ifdef PROTOCOL_LUFA
@@ -316,5 +331,8 @@ enum usb_endpoints {
 #define CDC_EPSIZE 16
 #define JOYSTICK_EPSIZE 8
 #define DIGITIZER_EPSIZE 8
+#ifdef SVAL_NATIVE_PTP
+#    define PTP_EPSIZE 64
+#endif
 
 uint16_t get_usb_descriptor(const uint16_t wValue, const uint16_t wIndex, const uint16_t wLength, const void** const DescriptorAddress);

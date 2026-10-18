@@ -92,6 +92,10 @@ enum sval_command_id {
     sval_cmd_pointing_hardware    = 0x2C, // advertised by sval_flag2_pointing_hardware
     sval_cmd_pointing_motion      = 0x2D, // advertised by sval_flag2_pointing_motion
     // 0x2E is taken by the touch gesture experiment (experiment/cyrus-multitouch).
+    // 0x2F is POINTING_CONTACTS (native touchpad) in ordinary builds. SVAL_POINT_CONTROLS
+    // builds keep 0x2F-0x32 for the pointing tools instead: sval.c hands those commands
+    // to the tools first, and such a build doesn't offer POINTING_CONTACTS.
+    sval_cmd_pointing_contacts  = 0x2F, // advertised by sval_flag2_pointing_contacts
     // Pointing tools (SVAL_POINT_CONTROLS builds), advertised by sval_flag2_pointing_tools.
     sval_cmd_point_tools_get    = 0x2F,
     sval_cmd_point_tools_set    = 0x30,
@@ -121,7 +125,10 @@ enum sval_feature_flags2 {
     // Bit 4 is also claimed by the touch gesture experiment (experiment/cyrus-multitouch);
     // the two can't share a build until one of them moves.
     sval_flag2_pointing_motion_readers = (1 << 4), // 0x2D keeps counts per reader id and reports each hand's CPI
+    // Bit 5 means one of two things, never both: the pointing tools in SVAL_POINT_CONTROLS
+    // builds, POINTING_CONTACTS in native touchpad builds without them.
     sval_flag2_pointing_tools          = (1 << 5), // 0x2F-0x32 read and set the pointing tools
+    sval_flag2_pointing_contacts       = (1 << 5), // 0x2F reports each touch contact on its pad
 };
 
 // Status byte after the modifiers in the 0x16 reply (sval_flag2_modifier_state).
@@ -378,6 +385,11 @@ void sval_pointing_hardware_kb(uint8_t *out, uint8_t length);
 // the motion since `reader`'s previous read, then clears that reader's counts. Weak
 // no-op in the module; out[0] = 0 means no data.
 void sval_pointing_motion_kb(uint8_t reader, uint8_t *out, uint8_t length);
+
+// POINTING_CONTACTS (0x2F): the keyboard fills out[0..length-1] (already zeroed)
+// with the touch contacts down now. Weak no-op in the module; out[0] = 0 means
+// no data.
+void sval_pointing_contacts_kb(uint8_t *out, uint8_t length);
 
 void sval_keycode_down(uint16_t keycode);
 void sval_keycode_up(uint16_t keycode);

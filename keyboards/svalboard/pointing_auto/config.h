@@ -25,3 +25,6 @@
 #define PS2_MOUSE_SCROLL_DIVISOR_V 4
 // The probe has already heard from it, so its power-on self-test is done.
 #define PS2_MOUSE_INIT_DELAY 100
+
+// Native Precision Touchpad (SVAL_NATIVE_PTP): its build settings.
+#include "../azoteq/ptp_config.h"

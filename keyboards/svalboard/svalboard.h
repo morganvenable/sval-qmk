@@ -82,6 +82,7 @@ enum sval_pointer_sensor {
 #define SVAL_POINTER_LEFT     0x02 // the half is the left half (EE_HANDS)
 #define SVAL_POINTER_INIT_OK  0x04 // the sensor driver initialised
 #define SVAL_POINTER_AUTO     0x08 // the firmware drives whichever module is attached; built_for is the one it chose
+#define SVAL_POINTER_OS_TOUCHPAD 0x10 // the OS drives this pad as a touchpad (native touchpad builds): pointer settings do not apply
 typedef struct __attribute__((__packed__)) {
     uint8_t flags;              // SVAL_POINTER_*
     uint8_t built_for;          // enum sval_pointer_sensor
@@ -92,7 +93,8 @@ typedef struct __attribute__((__packed__)) {
 // Each pointing build fills built_for, detected (its own module, or
 // SVAL_SENSOR_NO_RESPONSE), the raw IDs and SVAL_POINTER_INIT_OK; the weak default
 // leaves it zeroed (no module). When the build's own module didn't answer,
-// svalboard.c probes the other buses once (pointing_detect.h) and reports what it found.
+// the search (pointer_reprobe.c) probes the other buses, at boot and up to 30 s after while
+// nothing works, and reports what it found.
 void sval_pointer_identity(sval_pointer_identity_t *id);
 // The bus the build's own driver uses (SVAL_BUS_*), which the probes skip; 0 for no module.
 uint8_t sval_pointer_own_bus(void);
@@ -133,6 +135,7 @@ enum sval_hw_rev {
 uint8_t sval_hw_rev(void);
 bool    sval_hw_rev_is_flipfet(void);
 bool    sval_other_half_connected(void);
+uint8_t sval_pad_hands(void); // hands whose pointing module is an Azoteq pad (bit 0 left, bit 1 right)
 void    sval_scan_timing(uint16_t *pre, uint16_t *post); // matrix.c
 uint8_t sval_pushed_mask(bool thumbs);                    // matrix.c
 void    sval_row_drive_raw(uint8_t row, bool on);         // matrix.c: no critical section

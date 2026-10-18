@@ -10,7 +10,7 @@ WS2812_DRIVER   = vendor
 
 CUSTOM_MATRIX = lite
 
-SRC += axis_scale.c matrix.c scanlab.c power.c identity.c pointing_detect.c build_reset.c
+SRC += axis_scale.c matrix.c scanlab.c power.c identity.c pointing_detect.c pointer_reprobe.c build_reset.c velocity_scroll.c
 SRC += pointing/scroll_policy.c
 
 # Settings start at 0x160000; keep firmware below them.
@@ -48,6 +48,17 @@ VIA_INSECURE = yes
 ifeq ($(strip $(SVAL_KEYTEST)), yes)
   SRC += keytest.c
   OPT_DEFS += -DSVAL_KEYTEST
+endif
+
+# Timing counters (perf.c: main loop, matrix frames, pad reads, split fetches,
+# touchpad frames), read with tools/multitouch/perf.py over raw HID 0xFC. Dev
+# builds only: opt in with -e SVAL_PERF_STATS=yes; release builds refuse it.
+ifeq ($(strip $(SVAL_PERF_STATS)), yes)
+  ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
+    $(error SVAL_PERF_STATS cannot be part of a release build)
+  endif
+  OPT_DEFS += -DSVAL_PERF_STATS
+  SRC += perf.c
 endif
 
 # Bench builds that reset stored settings when flashed over other firmware; opt in with -e SVAL_TEST_WIPE=yes.

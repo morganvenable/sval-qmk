@@ -65,6 +65,12 @@
 
 #define CDC_SIGNALING_DUMMY_CAPACITY 1
 
+// Two buffers: a host that stops reading finds at most one old frame waiting
+// (keyboards/svalboard/azoteq/ptp.c drops what it cannot send).
+#if defined(SVAL_NATIVE_PTP) && !defined(PTP_IN_CAPACITY)
+#    define PTP_IN_CAPACITY 2
+#endif
+
 typedef enum {
 #if defined(SHARED_EP_ENABLE)
     USB_ENDPOINT_IN_SHARED,
@@ -105,6 +111,10 @@ typedef enum {
 #if defined(VIRTSER_ENABLE)
     USB_ENDPOINT_IN_CDC_DATA,
     USB_ENDPOINT_IN_CDC_SIGNALING,
+#endif
+
+#if defined(SVAL_NATIVE_PTP)
+    USB_ENDPOINT_IN_PTP,
 #endif
     USB_ENDPOINT_IN_COUNT,
 /* All non shared endpoints have to be consequtive numbers starting from 0, so

@@ -14,3 +14,6 @@
 #define SPLIT_POINTING_ENABLE
 #define POINTING_DEVICE_COMBINED
 #define POINTING_DEVICE_AUTO_MOUSE_MH_ENABLE
+
+// Native Precision Touchpad (SVAL_NATIVE_PTP): its build settings.
+#include "ptp_config.h"

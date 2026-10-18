@@ -163,6 +163,11 @@
             "name": "SV_BOOST_5_TG",
             "title": "Toggle pointer/scroll 5x multiplier.",
             "shortName": "Boost\n5x TG"
+        },
+        {
+            "name": "SV_VELOCITY_SCROLL",
+            "title": "Hold, then move the pointer: the farther from where it started, the faster it scrolls.",
+            "shortName": "Velocity\nScroll"
         }
     ],
     "menus": [
