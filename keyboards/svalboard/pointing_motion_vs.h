@@ -31,10 +31,10 @@ typedef struct {
     float   pad_dead, pad_gain, pad_exp;
 } sval_motion_vs_t;
 
-static inline int32_t sval_motion_round(float v) {
+static inline int32_t sval_motion_vs_round(float v) {
     return (int32_t)(v < 0.0f ? v - 0.5f : v + 0.5f);
 }
-static inline void sval_motion_put16(uint8_t *out, int32_t v, int32_t lo, int32_t hi) {
+static inline void sval_motion_vs_put16(uint8_t *out, int32_t v, int32_t lo, int32_t hi) {
     if (v < lo) v = lo;
     if (v > hi) v = hi;
     out[0] = (uint8_t)((uint32_t)v & 0xFF);
@@ -46,15 +46,15 @@ static inline void sval_motion_put16(uint8_t *out, int32_t v, int32_t lo, int32_
 static inline void sval_motion_pack_vs(uint8_t *out, const sval_motion_vs_t *vs) {
     out[0] = SVAL_MOTION_VS_MAGIC;
     out[1] = vs->flags;
-    sval_motion_put16(&out[2], sval_motion_round(vs->off_x * 100.0f), INT16_MIN, INT16_MAX);
-    sval_motion_put16(&out[4], sval_motion_round(vs->off_y * 100.0f), INT16_MIN, INT16_MAX);
-    sval_motion_put16(&out[6], sval_motion_round(vs->speed_h * 100.0f), INT16_MIN, INT16_MAX);
-    sval_motion_put16(&out[8], sval_motion_round(vs->speed_v * 100.0f), INT16_MIN, INT16_MAX);
-    sval_motion_put16(&out[10], sval_motion_round(vs->max_nps * 100.0f), 0, UINT16_MAX);
-    sval_motion_put16(&out[12], sval_motion_round(vs->ball_dead * 100.0f), 0, UINT16_MAX);
-    sval_motion_put16(&out[14], sval_motion_round(vs->ball_gain * 100.0f), 0, UINT16_MAX);
-    sval_motion_put16(&out[16], sval_motion_round(vs->ball_exp * 1000.0f), 0, UINT16_MAX);
-    sval_motion_put16(&out[18], sval_motion_round(vs->pad_dead * 100.0f), 0, UINT16_MAX);
-    sval_motion_put16(&out[20], sval_motion_round(vs->pad_gain * 100.0f), 0, UINT16_MAX);
-    sval_motion_put16(&out[22], sval_motion_round(vs->pad_exp * 1000.0f), 0, UINT16_MAX);
+    sval_motion_vs_put16(&out[2], sval_motion_vs_round(vs->off_x * 100.0f), INT16_MIN, INT16_MAX);
+    sval_motion_vs_put16(&out[4], sval_motion_vs_round(vs->off_y * 100.0f), INT16_MIN, INT16_MAX);
+    sval_motion_vs_put16(&out[6], sval_motion_vs_round(vs->speed_h * 100.0f), INT16_MIN, INT16_MAX);
+    sval_motion_vs_put16(&out[8], sval_motion_vs_round(vs->speed_v * 100.0f), INT16_MIN, INT16_MAX);
+    sval_motion_vs_put16(&out[10], sval_motion_vs_round(vs->max_nps * 100.0f), 0, UINT16_MAX);
+    sval_motion_vs_put16(&out[12], sval_motion_vs_round(vs->ball_dead * 100.0f), 0, UINT16_MAX);
+    sval_motion_vs_put16(&out[14], sval_motion_vs_round(vs->ball_gain * 100.0f), 0, UINT16_MAX);
+    sval_motion_vs_put16(&out[16], sval_motion_vs_round(vs->ball_exp * 1000.0f), 0, UINT16_MAX);
+    sval_motion_vs_put16(&out[18], sval_motion_vs_round(vs->pad_dead * 100.0f), 0, UINT16_MAX);
+    sval_motion_vs_put16(&out[20], sval_motion_vs_round(vs->pad_gain * 100.0f), 0, UINT16_MAX);
+    sval_motion_vs_put16(&out[22], sval_motion_vs_round(vs->pad_exp * 1000.0f), 0, UINT16_MAX);
 }
