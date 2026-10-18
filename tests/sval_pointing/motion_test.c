@@ -98,8 +98,41 @@ static void test_layout(void) {
     CHECK(2 + SVAL_MOTION_REPORT_LEN <= 26); // fits a client-wrapped packet
 }
 
+static int16_t rd16(const uint8_t *b) { return (int16_t)(b[0] | (b[1] << 8)); }
+
+static void test_pack_vs(void) {
+    // The block sits after the per-reader extension (24-28) and fits a 64-byte
+    // client-wrapped packet: 64 - 5 wrapper bytes - 2 command bytes.
+    CHECK(SVAL_MOTION_VS_OFF == 29);
+    CHECK(SVAL_MOTION_VS_OFF + SVAL_MOTION_VS_LEN <= 57);
+    uint8_t          out[SVAL_MOTION_VS_LEN];
+    sval_motion_vs_t vs = {SVAL_MOTION_VS_HELD | SVAL_MOTION_VS_TOUCHING | SVAL_MOTION_VS_RIGHT_PAD | (1 << SVAL_MOTION_VS_LOCK_SHIFT),
+                           -3.256f, 12.5f, 0.0f, -17.344f, 60.0f, 0.8f, 12.0f, 1.5f, 1.5f, 16.0f, 1.5f};
+    sval_motion_pack_vs(out, &vs);
+    CHECK(out[0] == SVAL_MOTION_VS_MAGIC);
+    CHECK(out[1] == 0x17);
+    CHECK(rd16(&out[2]) == -326);
+    CHECK(rd16(&out[4]) == 1250);
+    CHECK(rd16(&out[6]) == 0);
+    CHECK(rd16(&out[8]) == -1734);
+    CHECK((uint16_t)rd16(&out[10]) == 6000);
+    CHECK((uint16_t)rd16(&out[12]) == 80);
+    CHECK((uint16_t)rd16(&out[14]) == 1200);
+    CHECK((uint16_t)rd16(&out[16]) == 1500);
+    CHECK((uint16_t)rd16(&out[18]) == 150);
+    CHECK((uint16_t)rd16(&out[20]) == 1600);
+    CHECK((uint16_t)rd16(&out[22]) == 1500);
+    // Out of range clamps rather than wraps.
+    vs.off_x = 900.0f; vs.speed_h = -900.0f; vs.ball_gain = -1.0f;
+    sval_motion_pack_vs(out, &vs);
+    CHECK(rd16(&out[2]) == INT16_MAX);
+    CHECK(rd16(&out[6]) == INT16_MIN);
+    CHECK(rd16(&out[14]) == 0);
+}
+
 int main(void) {
     test_mapping();
+    test_pack_vs();
     test_pack_plain();
     test_pack_clamps();
     test_elapsed();

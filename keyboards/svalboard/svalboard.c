@@ -668,6 +668,7 @@ void sval_pointing_motion_kb(uint8_t *out, uint8_t length) {
         sval_motion_pack_hand(&out[left ? SVAL_MOTION_LEFT_OFF : SVAL_MOTION_RIGHT_OFF], &motion_acc[hand], flags);
     }
     out[SVAL_MOTION_AXIS_OFF] = modes.axis_state;
+    if (modes.has_vs && length >= SVAL_MOTION_VS_OFF + SVAL_MOTION_VS_LEN) sval_motion_pack_vs(&out[SVAL_MOTION_VS_OFF], &modes.vs);
     memset(motion_acc, 0, sizeof(motion_acc));
 }
 #endif
