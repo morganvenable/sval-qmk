@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include "quantum.h"
+#include "pointing_motion_vs.h"
 
 extern const int16_t mh_timer_choices[6];
 
@@ -105,10 +106,13 @@ uint8_t sval_pointer_sensor_for_hand(bool left);
 // Pointing modes for POINTING_MOTION (Sval 0x2D). global_bits uses SVAL_MOTION_* from
 // pointing_motion.h; axis_state is 0 free, 1 locked vertical, 2 locked horizontal.
 // keymaps/keymap_support.c fills it; the weak default reports nothing active.
+// has_vs: the build has Velocity Scroll, so the reply carries its block (vs).
 typedef struct {
-    uint8_t global_bits;
-    uint8_t axis_state;
-    bool    left_scroll, right_scroll, left_automouse, right_automouse;
+    uint8_t          global_bits;
+    uint8_t          axis_state;
+    bool             left_scroll, right_scroll, left_automouse, right_automouse;
+    bool             has_vs;
+    sval_motion_vs_t vs;
 } sval_pointing_modes_t;
 void sval_pointing_modes(sval_pointing_modes_t *m);
 

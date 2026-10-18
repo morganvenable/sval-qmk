@@ -107,6 +107,33 @@ Each reader keeps its own counts, so two apps polling one board (Keybard in a br
 - The extension (bytes 24-28) needs a 64-byte report; in a client-wrapped 32-byte report only the 24-byte report fits.
 - CPI is the setting sent to a trackball's sensor (PMW3360 or PMW3389). A host turns counts into distance with it: counts / (CPI / 25.4) is millimeters of ball surface. A TrackPoint or touchpad hand reads `0`.
 
+### Velocity Scroll
+
+Builds with Velocity Scroll (`SV_VELOCITY_SCROLL`) add a 24-byte block at offsets 29-52, so a host can show the key held, the offset from the anchor and the speed it sets, and draw the dead zone and the curve without knowing the build's tunables. Bytes 24-28 are left for the per-reader extension, so the two never overlap.
+
+- Discovery: byte 29 reads `0x56` (`V`). Firmware without the block leaves it zero (the reply is zero-filled), and so does a client-wrapped 32-byte report, which has no room for it.
+- The block is in every reply from such a build, held or not; only the state fields are zero while the key is up.
+
+| off | size | field |
+|---|---|---|
+| 29 | 1 | `0x56`: the block is present (format 1) |
+| 30 | 1 | bit 0 Velocity Scroll is held, bit 1 a finger on a touchpad sets the offset (else the relative pointers: trackball, TrackPoint), bit 2 that touchpad is the right hand's, bit 3 the axis lock tunable is on, bits 4-5 the axis the lock picked: `1` vertical, `2` horizontal, `0` none yet |
+| 31 | 2 | offset x, int16 little-endian, 0.01 mm (+right) |
+| 33 | 2 | offset y, int16, 0.01 mm (+toward the user) |
+| 35 | 2 | speed h, int16, 0.01 notch/s (+right) |
+| 37 | 2 | speed v, int16, 0.01 notch/s (+up), before natural scroll |
+| 39 | 2 | maximum speed, uint16, 0.01 notch/s |
+| 41 | 2 | trackball dead zone, uint16, 0.01 mm per axis |
+| 43 | 2 | trackball gain, uint16, 0.01 notch/s at 10 mm past the dead zone |
+| 45 | 2 | trackball exponent, uint16, 0.001 |
+| 47 | 2 | touchpad dead zone, uint16, 0.01 mm |
+| 49 | 2 | touchpad gain, uint16, 0.01 notch/s |
+| 51 | 2 | touchpad exponent, uint16, 0.001 |
+
+- The offset is the one that sets the speed now. While bit 1 is set, it is a touchpad finger's position minus its anchor: where the finger was at the first sample after key-down, or where it touched down if it landed later. Otherwise it is the trackball's counts since key-down, in mm of ball surface, clamped per axis where the speed reaches its maximum.
+- Per axis, speed = gain × ((|offset| − dead zone) / 10 mm) ^ exponent, capped at the maximum, zero inside the dead zone, with the offset's sign. The speeds are the ones the board last sent at (every 8 ms), after the axis lock.
+- A notch is one wheel click; the board sends high-resolution units (120 a notch) where the computer takes them.
+
 ## Pointing tools (experimental)
 
 Builds made with `SVAL_POINT_CONTROLS=yes` turn pointer motion into discrete outputs (volume, arrows, tab and task switching, zoom, undo/redo) or proportional scrolling while a tool key is held or toggled. Released firmware doesn't include them. How they behave, and how they are stored, is in [pointing-tools.md](pointing-tools.md).

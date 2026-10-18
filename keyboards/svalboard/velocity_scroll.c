@@ -76,6 +76,12 @@ bool sval_vs_touching(const sval_vs_t *s) {
     return s->active && s->pad != SVAL_VS_NO_PAD;
 }
 
+void sval_vs_offset(const sval_vs_t *s, float *x_mm, float *y_mm) {
+    bool touching = s->pad != SVAL_VS_NO_PAD;
+    *x_mm         = !s->active ? 0.0f : touching ? s->pad_x - s->anchor_x : s->rel_x;
+    *y_mm         = !s->active ? 0.0f : touching ? s->pad_y - s->anchor_y : s->rel_y;
+}
+
 static int16_t take_units(float *acc) {
     float whole = truncf(*acc);
     if (whole > 32767.0f) whole = 32767.0f;
@@ -89,8 +95,8 @@ void sval_vs_step(sval_vs_t *s, const sval_vs_curve_t *ball, const sval_vs_curve
     if (!s->active) return;
     bool                   touching = s->pad != SVAL_VS_NO_PAD;
     const sval_vs_curve_t *c        = touching ? pad : ball;
-    float                  ox       = touching ? s->pad_x - s->anchor_x : s->rel_x;
-    float                  oy       = touching ? s->pad_y - s->anchor_y : s->rel_y;
+    float                  ox, oy;
+    sval_vs_offset(s, &ox, &oy);
     float                  sx       = sval_vs_speed(c, ox);
     float                  sy       = sval_vs_speed(c, oy);
     if (axis_lock) {
@@ -104,6 +110,8 @@ void sval_vs_step(sval_vs_t *s, const sval_vs_curve_t *ball, const sval_vs_curve
     // A stopped axis drops its fraction, so it never sends a stray unit later.
     if (sx == 0.0f) s->frac_h = 0.0f;
     if (sy == 0.0f) s->frac_v = 0.0f;
+    s->speed_h = sx;
+    s->speed_v = -sy;
     if (dt_ms > 1000.0f) dt_ms = 1000.0f; // a stall never turns into a burst
     float k = units_per_notch * dt_ms / 1000.0f;
     s->frac_h += sx * k;
