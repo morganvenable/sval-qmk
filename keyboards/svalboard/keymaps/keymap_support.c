@@ -276,8 +276,11 @@ static const sval_vs_curve_t vs_ball = {SVAL_VS_BALL_DEAD_MM, SVAL_VS_BALL_GAIN,
 static const sval_vs_curve_t vs_pad  = {SVAL_VS_PAD_DEAD_MM, SVAL_VS_PAD_GAIN, SVAL_VS_PAD_EXPONENT, SVAL_VS_MAX_NPS};
 static sval_vs_t             vs;
 static uint8_t               vs_keys; // velocity scroll keys down
-static bool                  vs_dev;  // velocity_scroll_dev_hold
-static uint32_t              vs_dev_at, vs_sent_at;
+static bool                  vs_dev;  // velocity_scroll_dev_hold (dev builds)
+static uint32_t              vs_sent_at;
+#    ifdef SVAL_TOUCH_DEV
+static uint32_t vs_dev_at;
+#    endif
 
 bool velocity_scroll_active(void) {
     return vs.active;
@@ -301,14 +304,18 @@ static void velocity_scroll_update(void) {
 #    endif
 }
 
+#    ifdef SVAL_TOUCH_DEV
 void velocity_scroll_dev_hold(bool on) {
     vs_dev    = on;
     vs_dev_at = timer_read32();
     velocity_scroll_update();
 }
+#    endif
 
 static report_mouse_t velocity_scroll_report(report_mouse_t left, report_mouse_t right) {
+#    ifdef SVAL_TOUCH_DEV
     if (vs_dev && timer_elapsed32(vs_dev_at) > 500) velocity_scroll_dev_hold(false);
+#    endif
     const report_mouse_t *hands[2] = {&left, &right};
     int16_t               dpi[2]   = {get_left_dpi(), get_right_dpi()};
     float                 clamp    = SVAL_VS_BALL_CLAMP_MARGIN_MM < 0 ? -1.0f : sval_vs_full_mm(&vs_ball) + SVAL_VS_BALL_CLAMP_MARGIN_MM;
@@ -353,7 +360,7 @@ static report_mouse_t velocity_scroll_report(report_mouse_t left, report_mouse_t
 report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, report_mouse_t reportMouse2) {
     report_mouse_t ret_mouse;
 
-    if (vs.active || vs_dev) return velocity_scroll_report(reportMouse1, reportMouse2);
+    if (vs.active) return velocity_scroll_report(reportMouse1, reportMouse2);
 
     if (any_sniper_active()) {
         reportMouse1.x = add_to_axis(&sniper_x, reportMouse1.x);
