@@ -119,7 +119,7 @@ const uint16_t PROGMEM keymaps[DYNAMIC_KEYMAP_LAYER_COUNT][MATRIX_ROWS][MATRIX_C
         /*R3*/ KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_NO             ,
         /*R4*/ KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_NO             ,
         /*L1*/ MS_BTN1           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_NO             ,
-        /*L2*/ MS_BTN3           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_NO             ,
+        /*L2*/ MS_BTN3           , KC_TRNS           , KC_TRNS           , SV_VELOCITY_SCROLL, KC_TRNS           , KC_NO             ,
         /*L3*/ MS_BTN2           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_TRNS           , KC_NO             ,
         /*L4*/ KC_TRNS           , KC_TRNS           , KC_TRNS           , SV_SNIPER_3       , KC_TRNS           , KC_NO             ,
 
