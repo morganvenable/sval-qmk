@@ -95,5 +95,47 @@ int main(void) {
         )
 
 
+    def test_reset_stores_a_usable_tap_dance_term(self):
+        core = 'modules/svalboard/core/'
+        header = (ROOT / core / 'sval.h').read_text()
+        start = header.index('typedef struct', header.index('// Enabled when custom_tapping_term bit 15'))
+        struct = header[start:header.index(';', header.index('}', start)) + 1]
+        default = header[header.index('#ifndef SVAL_TAP_DANCE_DEFAULT_TERM'):]
+        default = default[:default.index('#endif') + len('#endif')]
+        run_c(
+            PRELUDE + '#define SVAL_TAP_DANCE_ENTRIES 50\n#define SVAL_EEPROM_SIZE 2000\n#define SVAL_TAP_DANCE_OFFSET 0\n'
+            + struct + '\n' + default + '\n'
+            + """
+static uint8_t memory[SVAL_EEPROM_SIZE];
+void sval_write_eeprom(uint16_t a, const void *v, uint16_t n) { assert(a+n<=SVAL_EEPROM_SIZE); memcpy(memory+a,v,n); }
+void sval_read_eeprom(uint16_t a, void *v, uint16_t n) { assert(a+n<=SVAL_EEPROM_SIZE); memcpy(v,memory+a,n); }
+void dynamic_keymap_reset(void) {}
+void dynamic_keymap_macro_reset(void) {}
+void sval_reload_tap_dance(void) {}
+void sval_reload_combo(void) {}
+void sval_reload_key_override(void) {}
+void sval_reload_alt_repeat_key(void) {}
+void sval_reload_leader(void) {}
+"""
+            + function(core + 'sval.c', 'int sval_set_tap_dance') + '\n'
+            + function(core + 'sval.c', 'int sval_get_tap_dance') + '\n'
+            + function(core + 'sval.c', 'void sval_reset')
+            + """
+int main(void) {
+ memset(memory, 0xAB, sizeof(memory));
+ sval_reset();
+ for (uint16_t i = 0; i < SVAL_TAP_DANCE_ENTRIES; i++) {
+  sval_tap_dance_entry_t td;
+  assert(sval_get_tap_dance(i, &td) == 0);
+  assert(td.on_tap == 0 && td.on_hold == 0 && td.on_double_tap == 0 && td.on_tap_hold == 0);
+  assert(td.custom_tapping_term == 200); // 200 ms, enabled bit clear
+ }
+ for (unsigned a = SVAL_TAP_DANCE_ENTRIES * sizeof(sval_tap_dance_entry_t); a < SVAL_EEPROM_SIZE; a++) assert(memory[a] == 0);
+ return 0;
+}
+"""
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -391,6 +391,11 @@ void sval_reset(void) {
         }
         sval_write_eeprom(i, zero, chunk);
     }
+    // Every tap dance slot starts with a usable term instead of 0.
+    for (uint16_t i = 0; i < SVAL_TAP_DANCE_ENTRIES; i++) {
+        sval_tap_dance_entry_t td = {.custom_tapping_term = SVAL_TAP_DANCE_DEFAULT_TERM};
+        sval_set_tap_dance(i, &td);
+    }
     // Reset VIA dynamic keymap and macros
     dynamic_keymap_reset();
     dynamic_keymap_macro_reset();

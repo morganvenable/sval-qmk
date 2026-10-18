@@ -168,6 +168,11 @@ _Static_assert(sizeof(sval_tap_dance_entry_t) == 10, "sval_tap_dance_entry_t mus
 // Check if tap dance entry is enabled (bit 15 of custom_tapping_term)
 #define TD_ENABLED(entry) ((entry).custom_tapping_term & 0x8000)
 
+// Term stored in every tap dance slot on reset, in ms. A term of 0 breaks a tap dance.
+#ifndef SVAL_TAP_DANCE_DEFAULT_TERM
+#    define SVAL_TAP_DANCE_DEFAULT_TERM 200
+#endif
+
 // Combo entry structure (12 bytes)
 // Enabled when custom_combo_term bit 15 = 1
 typedef struct __attribute__((packed)) {
