@@ -502,6 +502,24 @@ void sval_pointing_modes(sval_pointing_modes_t *m) {
     m->right_scroll    = (global_saved_values.right_scroll != scroll_hold) != scroll_toggle;
     m->left_automouse  = global_saved_values.left_automouse;
     m->right_automouse = global_saved_values.right_automouse;
+    // Velocity Scroll: its state, and the curves so a host can draw them.
+    m->has_vs = true;
+    if (vs.active) {
+        m->vs.flags = SVAL_MOTION_VS_HELD;
+        if (sval_vs_touching(&vs)) m->vs.flags |= SVAL_MOTION_VS_TOUCHING | (vs.pad == 1 ? SVAL_MOTION_VS_RIGHT_PAD : 0);
+        m->vs.flags |= (uint8_t)((vs.lock & 3) << SVAL_MOTION_VS_LOCK_SHIFT);
+        sval_vs_offset(&vs, &m->vs.off_x, &m->vs.off_y);
+        m->vs.speed_h = vs.speed_h;
+        m->vs.speed_v = vs.speed_v;
+    }
+    if (SVAL_VS_AXIS_LOCK) m->vs.flags |= SVAL_MOTION_VS_AXIS_LOCK;
+    m->vs.max_nps   = SVAL_VS_MAX_NPS;
+    m->vs.ball_dead = vs_ball.dead_mm;
+    m->vs.ball_gain = vs_ball.gain;
+    m->vs.ball_exp  = vs_ball.exponent;
+    m->vs.pad_dead  = vs_pad.dead_mm;
+    m->vs.pad_gain  = vs_pad.gain;
+    m->vs.pad_exp   = vs_pad.exponent;
 }
 
 void toggle_axis_scroll_lock(void) {

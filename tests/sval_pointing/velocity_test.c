@@ -139,8 +139,34 @@ static void test_pad(void) {
     CHECK(s.pad == 1 && s.anchor_x == 15.0f);
 }
 
+// What the motion report shows: the offset in use and the speed the last step sent at.
+static void test_report_state(void) {
+    sval_vs_t s;
+    float     x, y;
+    sval_vs_start(&s);
+    sval_vs_add_relative(&s, 0.0f, 6.0f, -1.0f);
+    sval_vs_offset(&s, &x, &y);
+    CHECK(NEAR(x, 0.0f, 1e-6f) && NEAR(y, 6.0f, 1e-6f));
+    int16_t h, v;
+    sval_vs_step(&s, &ball, &pad, false, 8.0f, 120.0f, &h, &v);
+    CHECK(NEAR(s.speed_h, 0.0f, 1e-6f));
+    CHECK(NEAR(s.speed_v, -sval_vs_speed(&ball, 6.0f), 1e-4f)); // toward the user scrolls down
+    // A finger takes over the offset from its anchor.
+    sval_vs_pad(&s, 1, 7, 10.0f, 10.0f);
+    sval_vs_pad(&s, 1, 7, 14.0f, 9.0f);
+    sval_vs_offset(&s, &x, &y);
+    CHECK(NEAR(x, 4.0f, 1e-5f) && NEAR(y, -1.0f, 1e-5f));
+    sval_vs_step(&s, &ball, &pad, false, 8.0f, 120.0f, &h, &v);
+    CHECK(NEAR(s.speed_h, sval_vs_speed(&pad, 4.0f), 1e-4f));
+    CHECK(NEAR(s.speed_v, 0.0f, 1e-6f)); // inside the dead zone
+    sval_vs_stop(&s);
+    sval_vs_offset(&s, &x, &y);
+    CHECK(x == 0.0f && y == 0.0f && s.speed_h == 0.0f && s.speed_v == 0.0f);
+}
+
 int main(void) {
     test_curve();
+    test_report_state();
     test_ball();
     test_dead_zone_per_axis();
     test_axis_lock();

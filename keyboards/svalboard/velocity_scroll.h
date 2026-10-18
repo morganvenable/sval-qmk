@@ -115,6 +115,7 @@ typedef struct {
     uint16_t accept_after; // only touches with a newer serial are taken
     uint16_t newest;       // the newest serial seen
     float    anchor_x, anchor_y, pad_x, pad_y; // mm
+    float    speed_h, speed_v; // the speed the last step sent at, notches/s (+right, +up)
 } sval_vs_t;
 
 void sval_vs_start(sval_vs_t *s);
@@ -129,6 +130,9 @@ void sval_vs_add_relative(sval_vs_t *s, float dx_mm, float dy_mm, float clamp_mm
 void sval_vs_pad(sval_vs_t *s, uint8_t pad, uint16_t touch, float x_mm, float y_mm);
 // A finger is in use on a pad.
 bool sval_vs_touching(const sval_vs_t *s);
+// The offset that sets the speed now, mm (+x right, +y toward the user): the
+// finger's from its anchor while one is in use, else the relative pointers'.
+void sval_vs_offset(const sval_vs_t *s, float *x_mm, float *y_mm);
 
 // Advance dt_ms and return the wheel units to send now. units_per_notch: 120
 // for the high-resolution wheel, 1 without it (both divided for macOS as the

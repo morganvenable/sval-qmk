@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "pointing_motion_vs.h"
 
 #define SVAL_MOTION_FORMAT     1
 #define SVAL_MOTION_REPORT_LEN 24 // bytes after [0xDF] [0x2D]
