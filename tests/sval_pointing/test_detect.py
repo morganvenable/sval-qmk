@@ -71,5 +71,26 @@ class PointingMotionTests(unittest.TestCase):
                     self.assertEqual(opt['matrix_map'], [])
 
 
+class VelocityScrollTests(unittest.TestCase):
+    """velocity_scroll.c: the speed curve, trackball offset and clamp, touchpad anchors, axis lock, output."""
+    def test_velocity_scroll_math(self):
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / 'velocity'
+            subprocess.run(['gcc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'keyboards/svalboard'),
+                            str(HERE / 'velocity_test.c'), str(ROOT / 'keyboards/svalboard/velocity_scroll.c'), '-lm', '-o',
+                            str(binary)],
+                           check=True)
+            result = subprocess.run([str(binary)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('OK', result.stdout)
+
+    def test_keycode_is_position_30_in_both_keymaps(self):
+        for keymap in ('sval', 'blank'):
+            data = json.loads((ROOT / f'keyboards/svalboard/keymaps/{keymap}/sval.json').read_text())
+            names = [k['name'] for k in data['customKeycodes']]
+            self.assertEqual(names.index('SV_VELOCITY_SCROLL'), 30, keymap)
+            self.assertLessEqual(len(names), 32, keymap)  # QK_USER_31 is the last the GUI addresses
+
+
 if __name__ == '__main__':
     unittest.main()

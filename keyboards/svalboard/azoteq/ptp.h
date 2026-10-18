@@ -100,6 +100,17 @@ bool     sval_ptp_contacts_down(void);                      // a contact is down
 uint16_t sval_ptp_take_motion(uint8_t pad);                 // admitted contact motion, counts
 bool     sval_ptp_key_button(uint8_t button, bool pressed); // SVAL_PTP_KEY_BUTTONS
 
+// --- Velocity Scroll (keymaps/keymap_support.c, velocity_scroll.h) ---
+// While grabbed, the touchpad sends nothing (the OS sees every finger lift) and
+// one finger per pad is followed. A finger down at the grab is followed at
+// once; after it lifts, only a finger that lands later is.
+void     sval_ptp_set_grab(bool grab);
+bool     sval_ptp_grab_ready(uint8_t pad); // this pad's contact frames arrive here
+// The followed finger: its touch serial (never 0; a new one per finger), and
+// its position on the pad (x 0..SVAL_PTP_PAD_X-1, y 0..SVAL_PTP_PAD_Y-1, in the
+// touchpad's orientation). 0: none.
+uint16_t sval_ptp_grab_finger(uint8_t pad, uint16_t *x, uint16_t *y);
+
 // --- contacts (multitouch.c) ---
 // One version-1 56-byte pad frame: pad, flags, mask, seq, size, time, epoch,
 // five 8-byte slots (lifetime id, x, y, strength, area). sample_us is when the

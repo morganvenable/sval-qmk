@@ -132,6 +132,7 @@ enum sval_hw_rev {
 uint8_t sval_hw_rev(void);
 bool    sval_hw_rev_is_flipfet(void);
 bool    sval_other_half_connected(void);
+uint8_t sval_pad_hands(void); // hands whose pointing module is an Azoteq pad (bit 0 left, bit 1 right)
 void    sval_scan_timing(uint16_t *pre, uint16_t *post); // matrix.c
 uint8_t sval_pushed_mask(bool thumbs);                    // matrix.c
 void    sval_row_drive_raw(uint8_t row, bool on);         // matrix.c: no critical section

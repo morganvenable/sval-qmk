@@ -764,6 +764,51 @@ static void test_paused(void) {
     puts("  paused (update running): contacts lift, no reports, back after all-up");
 }
 
+// Velocity Scroll's grab: the OS sees the finger lift, gets nothing while
+// grabbed, and one finger per pad is followed by the firmware.
+static void test_grab(void) {
+    start("grab");
+    uint16_t x, y;
+    FEED(0, {0, 1, 100, 200});
+    run(5000);
+    new_reports();
+    assert(sval_ptp_grab_ready(0) && sval_ptp_grab_ready(1));
+    assert(sval_ptp_grab_finger(0, &x, &y) == 0); // not grabbed
+    sval_ptp_set_grab(true);
+    run(5000);
+    assert(new_reports() == 1 && flags_of(last(), 0) == 1 && sval_ptp_suppress_mouse()); // the OS sees a lift
+    FEED(0, {0, 1, 110, 205}); // the finger already down is followed at once
+    run(5000);
+    uint16_t a = sval_ptp_grab_finger(0, &x, &y);
+    assert(a && x == 110 && y == 205);
+    FEED(1, {0, 1, 300, 300}); // the other pad follows its own finger
+    FEED(0, {0, 1, 150, 260}, {1, 2, 900, 900});
+    run(50000);
+    assert(new_reports() == 0); // nothing reaches the OS while grabbed
+    uint16_t b = sval_ptp_grab_finger(1, &x, &y);
+    assert(b && b != a && x == 300);
+    assert(sval_ptp_grab_finger(0, &x, &y) == a && x == 150 && y == 260); // a second finger never takes over
+    FEED(0, {1, 2, 910, 900}); // the followed finger lifts
+    assert(sval_ptp_grab_finger(0, &x, &y) == 0); // the one still down stays unused
+    up(0);
+    FEED(0, {2, 3, 700, 700}); // a finger that lands later is taken
+    uint16_t c = sval_ptp_grab_finger(0, &x, &y);
+    assert(c && c != a && c != b && x == 700);
+    flagged(0, 0x02); // palm: that finger is done
+    assert(sval_ptp_grab_finger(0, &x, &y) == 0);
+    sval_ptp_set_grab(false);
+    FEED(0, {2, 3, 720, 700});
+    run(5000);
+    assert(new_reports() == 0 && sval_ptp_grab_finger(0, &x, &y) == 0); // a finger down at release never moves the pointer
+    up(0);
+    up(1);
+    run(5000);
+    FEED(0, {0, 4, 50, 50});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == 50); // reports again after all-up
+    puts("  grab: OS sees the lift, then nothing; one finger per pad followed; resting fingers never take over");
+}
+
 // Sval POINTING_CONTACTS (0x2F): every contact the computer has, back on its
 // own pad in that pad's counts.
 typedef struct {
@@ -864,6 +909,7 @@ int main(int argc, char **argv) {
     test_sample_time();
     test_host_silent();
     test_paused();
+    test_grab();
     test_host_contacts();
     fresh("end");
     if (ptp_trace) fclose(ptp_trace);

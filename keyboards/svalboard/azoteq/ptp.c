@@ -368,6 +368,55 @@ static uint8_t key_taken; // buttons whose press went to the touchpad
 #endif
 static uint16_t motion[2];
 static uint8_t  lost_down[2]; // sval_ptp_lost_down
+
+// Velocity Scroll's grab (sval_ptp_set_grab): one finger per pad, followed by
+// slot and lifetime ID. A finger already down when the grab starts is taken
+// at once; once it lifts, only a finger that lands later is taken, so one
+// resting on the pad never takes over.
+typedef struct {
+    bool     down;
+    uint8_t  slot, life;
+    uint8_t  skip[5]; // lifetime ID + 1 per slot of fingers not to take (0: none)
+    uint16_t touch;   // serial of the finger followed
+    uint16_t x, y;    // its position on this pad, in the touchpad's orientation
+} grab_t;
+static bool     grabbed;
+static grab_t   grab[2];
+static uint16_t grab_serial;
+
+static void map_xy(uint8_t pad, const uint8_t *slot, uint16_t *x, uint16_t *y);
+
+static void grab_reset(uint8_t pad) {
+    memset(&grab[pad], 0, sizeof(grab[pad]));
+}
+
+static void grab_feed(uint8_t pad, uint8_t mask, const uint8_t *f) {
+    grab_t *g = &grab[pad];
+    if (g->down) {
+        const uint8_t *s = f + 16 + 8 * g->slot;
+        if (!(mask & (1u << g->slot)) || s[0] != g->life) {
+            g->down = false;
+            // Every finger still down stays unused until it lifts.
+            for (uint8_t slot = 0; slot < 5; slot++)
+                g->skip[slot] = (mask & (1u << slot)) ? (uint8_t)(f[16 + 8 * slot] + 1) : 0;
+        }
+    }
+    for (uint8_t slot = 0; slot < 5; slot++)
+        if (!(mask & (1u << slot)) || g->skip[slot] != (uint8_t)(f[16 + 8 * slot] + 1)) g->skip[slot] = 0;
+    for (uint8_t slot = 0; !g->down && slot < 5; slot++) {
+        if (!(mask & (1u << slot)) || g->skip[slot]) continue;
+        g->down  = true;
+        g->slot  = slot;
+        g->life  = f[16 + 8 * slot];
+        g->touch = ++grab_serial ? grab_serial : ++grab_serial;
+    }
+    if (g->down) {
+        uint16_t x, y;
+        map_xy(pad, f + 16 + 8 * g->slot, &x, &y);
+        g->x = x - pad * SVAL_PTP_PAD_STRIDE;
+        g->y = y;
+    }
+}
 static uint8_t  last_report[SVAL_PTP_INPUT_SIZE] = {SVAL_PTP_REPORT_ID_INPUT};
 
 static uint16_t ptp_get16(const uint8_t *p) {
@@ -535,6 +584,12 @@ void sval_ptp_feed(const uint8_t *f, uint32_t sample_us) {
     // The chip answered: whatever it said, the pad is alive.
     p->valid_us  = sample_us;
     p->has_valid = true;
+    if (grabbed) {
+        if (flags & 0x0B)
+            grab[pad].down = false; // reset, palm or too many fingers: that finger is done
+        else
+            grab_feed(pad, mask, f);
+    }
     if (flags & 0x08) { // chip reset or recalibration
         lift_pad(pad);
         p->known = true;
@@ -644,6 +699,7 @@ void sval_ptp_pad_lost(uint8_t pad) {
     pad &= 1;
     if (output && pad_down(pad) && lost_down[pad] != 0xFF) lost_down[pad]++;
     lift_pad(pad);
+    grab[pad].down      = false;
     pads[pad].known     = false; // unknown counts as up for the mouse hold
     pads[pad].has_epoch = false;
     pads[pad].has_valid = false;
@@ -871,7 +927,7 @@ void sval_ptp_task(void) {
     bool m3 = native && pad_mask && f_mode == 3;
     if (mode3 && !m3) hold = true; // the pad mouse resumes once all fingers are up
     mode3    = m3;
-    bool out = m3 && !paused && (f_switches & 1);
+    bool out = m3 && !paused && !grabbed && (f_switches & 1);
     if (out != output) {
         if (out) {
             // Both pads arm again before PTP reports start. A release still
@@ -934,6 +990,30 @@ void sval_ptp_set_native(bool n) {
 
 void sval_ptp_set_paused(bool p) {
     paused = p;
+}
+
+// Velocity Scroll holds the pads: no reports while grabbed, so the operating
+// system sees every finger lift (start_release), and the pads arm again
+// afterwards on an all-up sample, so a finger still down when the grab ends
+// never moves the pointer.
+void sval_ptp_set_grab(bool g) {
+    if (g && !grabbed) {
+        grab_reset(0);
+        grab_reset(1);
+    }
+    grabbed = g;
+}
+
+bool sval_ptp_grab_ready(uint8_t pad) {
+    return pads[pad & 1].present && sval_ptp_wants_frames();
+}
+
+uint16_t sval_ptp_grab_finger(uint8_t pad, uint16_t *x, uint16_t *y) {
+    const grab_t *g = &grab[pad & 1];
+    if (!grabbed || !g->down) return 0;
+    *x = g->x;
+    *y = g->y;
+    return g->touch;
 }
 
 bool sval_ptp_wants_frames(void) {
@@ -1127,6 +1207,10 @@ void sval_ptp_test_reset(void) {
     pad_used[0] = pad_used[1] = 0;
     arrival                   = 0;
     native = paused = mode3 = output = hold = release_pending = dirty = ever_sent = scan_started = busy_streak = false;
+    grabbed     = false;
+    grab_serial = 0;
+    grab_reset(0);
+    grab_reset(1);
     release_at = last_sent = scan_clock = scan_rem = frames_sent = send_busy = busy_since = 0;
     cid_busy = scan = host_silent = merge_waits = pool_full = 0;
     cid_next = key_buttons = sent_buttons = pad_mask = 0;

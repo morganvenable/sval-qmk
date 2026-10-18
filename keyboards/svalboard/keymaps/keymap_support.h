@@ -53,10 +53,19 @@ enum my_keycodes {
     SV_BOOST_5,         // pos 26
     SV_BOOST_2_TG,      // pos 27
     SV_BOOST_3_TG,      // pos 28
-    SV_BOOST_5_TG,      // pos 29 — last addressable by GUI (cap is QK_USER_31 inclusive)
+    SV_BOOST_5_TG,      // pos 29
+    SV_VELOCITY_SCROLL, // pos 30 — hold: pointer offset sets a scroll speed (velocity_scroll.h). The GUI cap is QK_USER_31 inclusive
     KC_NORMAL_HOLD = SAFE_RANGE,
     KC_FUNC_HOLD,
     SV_SAFE_RANGE, // Keycodes over this are safe on Svalboard.
 };
 
 #define MH_AUTO_BUTTONS_LAYER (DYNAMIC_KEYMAP_LAYER_COUNT - 1)
+
+_Static_assert(SV_VELOCITY_SCROLL == QK_USER_30, "sval.json customKeycodes position 30");
+
+// Velocity Scroll is held (by its key or the touchpad dev command).
+bool velocity_scroll_active(void);
+// Dev builds (SVAL_TOUCH_DEV, raw HID 0xFC op 0x42 action 2): hold it with no
+// key, for keyless test boards. Expires unless repeated within 500 ms.
+void velocity_scroll_dev_hold(bool on);

@@ -89,6 +89,14 @@ new contact instead of staying unseen until it lifts; a chip reset or palm
 still waits for an all-up sample. The dev command's status (v3) counts these
 lifts per pad.
 
+While Velocity Scroll is held (`SV_VELOCITY_SCROLL`, `velocity_scroll.h`), the
+firmware takes the pads from the operating system: reports stop after a
+release of every contact, and `ptp.c` follows one finger per pad for the
+scroll. A finger already down is followed at once; after it lifts, only a
+finger that lands later is, so one resting on a pad never takes over. When
+the key goes up, the pads arm again on an all-up sample, so a finger still
+down never moves the pointer.
+
 ## Builds
 
 | Flag | Where | Effect |
@@ -96,7 +104,7 @@ lifts per pad.
 | `SVAL_NATIVE_PTP` | on in the auto builds (`svalboard/left`, `svalboard/right`), off in `svalboard/azoteq/*` | The native touchpad. `SVAL_NATIVE_PTP=no` builds without it |
 | `SVAL_PTP_KEY_BUTTONS=yes` | with the touchpad | MS_BTN1 and MS_BTN2 are the touchpad's buttons while it reports |
 | `SVAL_PTP_MOUSE_BEFORE_MODE3=no` | with the touchpad | The pads stay silent until the host asks for touchpad mode |
-| `SVAL_TOUCH_DEV=yes` | dev builds only | Raw HID 0xFC op 0x42: owner (native or mouse) and status, for `tools/multitouch/ptp_owner.py` |
+| `SVAL_TOUCH_DEV=yes` | dev builds only | Raw HID 0xFC op 0x42: owner (native or mouse) and status, for `tools/multitouch/ptp_owner.py`; action 2 holds Velocity Scroll with no key, for `tools/multitouch/velocity_hold.py` |
 | `SVAL_PERF_STATS=yes` | dev builds only | Timing counters over raw HID 0xFC op 0x43, for `tools/multitouch/perf.py`; with or without the touchpad. They include the slowest scan gap split into exclusive parts: matrix row reads, the split exchange of every scan, the pad driver call, the other pad's split fetch, USB IN sends, the counters' own split reads, and everything else |
 
 Release builds refuse `SVAL_TOUCH_DEV` and `SVAL_PERF_STATS`, and

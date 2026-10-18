@@ -19,6 +19,13 @@
 #include "../../keyboards/svalboard/azoteq/multitouch.c" // brings mt_test_platform.h
 #include "../../keyboards/svalboard/azoteq/ptp.c"
 
+// keymaps/keymap_support.c on the board.
+static int velocity_holds, velocity_on;
+void       velocity_scroll_dev_hold(bool on) {
+    velocity_holds++;
+    velocity_on = on;
+}
+
 // ------------------------------------------------------------- helpers
 
 static void raw_sample(uint8_t *raw, bool finger, uint16_t x, uint16_t y) {
@@ -383,7 +390,18 @@ static void test_owner(void) {
     d[8] = SVAL_TOUCH_OWNER_NATIVE;
     sval_mt_command(d, 64);
     assert(d[7] == 0 && d[10] == 1 && d[10 + 16] == 3); // pads: left and right
-    puts("  owner command: mouse and native only; status v2 reports both pads");
+    memset(d, 0, 64);
+    d[6] = 0x42;
+    d[7] = 2; // Velocity Scroll dev hold
+    d[8] = 1;
+    sval_mt_command(d, 64);
+    assert(d[6] == 0xC2 && d[7] == 0 && (d[9] & 8) && velocity_holds == 1 && velocity_on);
+    d[6] = 0x42;
+    d[7] = 2;
+    d[8] = 0;
+    sval_mt_command(d, 64);
+    assert(velocity_holds == 2 && !velocity_on && d[8] == SVAL_TOUCH_OWNER_NATIVE);
+    puts("  owner command: mouse and native only; status v2 reports both pads; Velocity Scroll dev hold");
 }
 
 // ------------------------------------------------ a pinch over a flaky link

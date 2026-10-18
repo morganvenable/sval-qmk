@@ -417,9 +417,15 @@ static void poll_remote(void) {
 // released protocol): get or set the pads' owner. data[7] 0 get, 1 set; data[8]
 // the owner (ptp.h). Refusals keep the old owner. Reply: 0xC2, status, owner,
 // built flags, ptp.c status (24 bytes), then this file's counters.
+// data[7] 2: hold Velocity Scroll (data[8] 1) or let it go (0) with no key,
+// for keyless test boards; a hold ends unless repeated within 500 ms
+// (tools/multitouch/velocity_hold.py).
+void velocity_scroll_dev_hold(bool on); // keymaps/keymap_support.c
 void sval_mt_command(uint8_t *data, uint8_t length) {
     uint8_t action = data[7], wanted = data[8], status = 0;
-    if (action == 1 && wanted != touch_owner) {
+    if (action == 2) {
+        velocity_scroll_dev_hold(wanted != 0);
+    } else if (action == 1 && wanted != touch_owner) {
         if (wanted != SVAL_TOUCH_OWNER_MOUSE && wanted != SVAL_TOUCH_OWNER_NATIVE) {
             status = 2; // host injection is retired and the detector is not built
         } else {
@@ -433,7 +439,7 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
     data[6] = 0xC2;
     data[7] = status;
     data[8] = touch_owner;
-    data[9] = 1 | 2 | 4; // bit 0 native touchpad built, bit 1 status v2 (pads, link), bit 2 v3 (lost fingers)
+    data[9] = 1 | 2 | 4 | 8; // bit 0 native touchpad built, bit 1 status v2 (pads, link), bit 2 v3 (lost fingers), bit 3 action 2
     sval_ptp_status(data + 10);
     uint8_t *o = data + 10 + SVAL_PTP_STATUS_SIZE;
     put32(o, samples);
