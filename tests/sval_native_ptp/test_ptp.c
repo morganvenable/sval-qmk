@@ -777,7 +777,7 @@ static void test_grab(void) {
     sval_ptp_set_grab(true);
     run(5000);
     assert(new_reports() == 1 && flags_of(last(), 0) == 1 && sval_ptp_suppress_mouse()); // the OS sees a lift
-    FEED(0, {0, 1, 110, 205}); // the finger already down is followed at once
+    FEED(0, {0, 1, 110, 205});                                                           // the finger already down is followed at once
     run(5000);
     uint16_t a = sval_ptp_grab_finger(0, &x, &y);
     assert(a && x == 110 && y == 205);
@@ -788,8 +788,8 @@ static void test_grab(void) {
     uint16_t b = sval_ptp_grab_finger(1, &x, &y);
     assert(b && b != a && x == 300);
     assert(sval_ptp_grab_finger(0, &x, &y) == a && x == 150 && y == 260); // a second finger never takes over
-    FEED(0, {1, 2, 910, 900}); // the followed finger lifts
-    assert(sval_ptp_grab_finger(0, &x, &y) == 0); // the one still down stays unused
+    FEED(0, {1, 2, 910, 900});                                            // the followed finger lifts
+    assert(sval_ptp_grab_finger(0, &x, &y) == 0);                         // the one still down stays unused
     up(0);
     FEED(0, {2, 3, 700, 700}); // a finger that lands later is taken
     uint16_t c = sval_ptp_grab_finger(0, &x, &y);

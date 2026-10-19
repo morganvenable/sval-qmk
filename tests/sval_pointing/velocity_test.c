@@ -31,13 +31,13 @@ static void run(sval_vs_t *s, bool lock, int ms, int dt, float units, long *h, l
 
 static void test_curve(void) {
     CHECK(sval_vs_speed(&ball, 0.0f) == 0.0f);
-    CHECK(sval_vs_speed(&ball, 1.0f) == 0.0f);                // the edge of the dead zone
-    CHECK(NEAR(sval_vs_speed(&ball, 11.0f), 10.0f, 1e-4f));   // gain at 10 mm past it
-    CHECK(NEAR(sval_vs_speed(&ball, -6.0f), -5.0f, 1e-4f));   // signed, linear at exponent 1
-    CHECK(sval_vs_speed(&ball, 500.0f) == 60.0f);             // capped
+    CHECK(sval_vs_speed(&ball, 1.0f) == 0.0f);              // the edge of the dead zone
+    CHECK(NEAR(sval_vs_speed(&ball, 11.0f), 10.0f, 1e-4f)); // gain at 10 mm past it
+    CHECK(NEAR(sval_vs_speed(&ball, -6.0f), -5.0f, 1e-4f)); // signed, linear at exponent 1
+    CHECK(sval_vs_speed(&ball, 500.0f) == 60.0f);           // capped
     CHECK(NEAR(sval_vs_speed(&pad, 12.0f), 20.0f, 1e-4f));
-    CHECK(NEAR(sval_vs_speed(&pad, 7.0f), 5.0f, 1e-4f));      // (5/10)^2 * 20
-    CHECK(NEAR(sval_vs_full_mm(&ball), 61.0f, 1e-3f));        // 1 + 10 * 60/10
+    CHECK(NEAR(sval_vs_speed(&pad, 7.0f), 5.0f, 1e-4f)); // (5/10)^2 * 20
+    CHECK(NEAR(sval_vs_full_mm(&ball), 61.0f, 1e-3f));   // 1 + 10 * 60/10
     CHECK(NEAR(sval_vs_full_mm(&pad), 2.0f + 10.0f * sqrtf(2.0f), 1e-3f));
 }
 
@@ -46,12 +46,12 @@ static void test_ball(void) {
     long      h, v;
     sval_vs_start(&s);
     run(&s, false, 1000, 8, 120, &h, &v);
-    CHECK(h == 0 && v == 0); // at the anchor: nothing
+    CHECK(h == 0 && v == 0);                      // at the anchor: nothing
     sval_vs_add_relative(&s, 0.0f, 11.0f, -1.0f); // 11 mm toward the user
     run(&s, false, 1000, 8, 120, &h, &v);
     CHECK(h == 0 && NEAR(v, -1200, 2)); // 10 notches/s down, while the ball is still
     run(&s, false, 1000, 1, 120, &h, &v);
-    CHECK(NEAR(v, -1200, 2)); // cadence does not matter
+    CHECK(NEAR(v, -1200, 2));                      // cadence does not matter
     sval_vs_add_relative(&s, 0.0f, -11.0f, -1.0f); // rolled back to the anchor
     run(&s, false, 1000, 8, 120, &h, &v);
     CHECK(h == 0 && v == 0);

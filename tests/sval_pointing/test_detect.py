@@ -76,10 +76,7 @@ class VelocityScrollTests(unittest.TestCase):
     def test_velocity_scroll_math(self):
         with tempfile.TemporaryDirectory() as directory:
             binary = Path(directory) / 'velocity'
-            subprocess.run(['gcc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'keyboards/svalboard'),
-                            str(HERE / 'velocity_test.c'), str(ROOT / 'keyboards/svalboard/velocity_scroll.c'), '-lm', '-o',
-                            str(binary)],
-                           check=True)
+            subprocess.run(['gcc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'keyboards/svalboard'), str(HERE / 'velocity_test.c'), str(ROOT / 'keyboards/svalboard/velocity_scroll.c'), '-lm', '-o', str(binary)], check=True)
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('OK', result.stdout)
