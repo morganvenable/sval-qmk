@@ -449,7 +449,7 @@
         {
             "name": "SV_VELOCITY_SCROLL",
             "title": "Hold, then move the pointer: the farther from where it started, the faster it scrolls.",
-            "shortName": "Velocity\nScroll"
+            "shortName": "Vel\nScroll"
         }
     ],
     "menus": [
