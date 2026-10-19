@@ -94,7 +94,6 @@ int main(void) {
 '''
         )
 
-
     def test_reset_stores_a_usable_tap_dance_term(self):
         core = 'modules/svalboard/core/'
         header = (ROOT / core / 'sval.h').read_text()
@@ -103,9 +102,7 @@ int main(void) {
         default = header[header.index('#ifndef SVAL_TAP_DANCE_DEFAULT_TERM'):]
         default = default[:default.index('#endif') + len('#endif')]
         run_c(
-            PRELUDE + '#define SVAL_TAP_DANCE_ENTRIES 50\n#define SVAL_EEPROM_SIZE 2000\n#define SVAL_TAP_DANCE_OFFSET 0\n'
-            + struct + '\n' + default + '\n'
-            + """
+            PRELUDE + '#define SVAL_TAP_DANCE_ENTRIES 50\n#define SVAL_EEPROM_SIZE 2000\n#define SVAL_TAP_DANCE_OFFSET 0\n' + struct + '\n' + default + '\n' + """
 static uint8_t memory[SVAL_EEPROM_SIZE];
 void sval_write_eeprom(uint16_t a, const void *v, uint16_t n) { assert(a+n<=SVAL_EEPROM_SIZE); memcpy(memory+a,v,n); }
 void sval_read_eeprom(uint16_t a, void *v, uint16_t n) { assert(a+n<=SVAL_EEPROM_SIZE); memcpy(v,memory+a,n); }
@@ -116,11 +113,7 @@ void sval_reload_combo(void) {}
 void sval_reload_key_override(void) {}
 void sval_reload_alt_repeat_key(void) {}
 void sval_reload_leader(void) {}
-"""
-            + function(core + 'sval.c', 'int sval_set_tap_dance') + '\n'
-            + function(core + 'sval.c', 'int sval_get_tap_dance') + '\n'
-            + function(core + 'sval.c', 'void sval_reset')
-            + """
+""" + function(core + 'sval.c', 'int sval_set_tap_dance') + '\n' + function(core + 'sval.c', 'int sval_get_tap_dance') + '\n' + function(core + 'sval.c', 'void sval_reset') + """
 int main(void) {
  memset(memory, 0xAB, sizeof(memory));
  sval_reset();
