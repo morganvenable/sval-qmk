@@ -142,7 +142,7 @@ void svalboard_saved_values_defaults(void) {
     global_saved_values.natural_scroll      = false;
     global_saved_values.left_automouse      = true;
     global_saved_values.right_automouse     = true;
-    global_saved_values.automouse_threshold = 50;
+    global_saved_values.automouse_threshold = 15;
     global_saved_values.automouse_decay     = 7; // 70ms
     // Revision B settles more slowly; start it on explicit conservative timing.
     global_saved_values.scan_prewait_us     = sval_hw_rev_is_flipfet() ? SVAL_FLIPFET_DEFAULT_PREWAIT_US : 0;
