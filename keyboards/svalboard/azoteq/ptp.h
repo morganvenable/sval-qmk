@@ -123,14 +123,21 @@ bool    sval_ptp_pad_quiet(uint8_t pad);                 // all up, armed, nothi
 void    sval_ptp_task(void);
 
 // --- contacts for host apps (Sval POINTING_CONTACTS 0x2F, svalboard.c) ---
-// The contacts of the last report the computer took, each on its own pad:
-// [0] format 1, [1] bit 0 reporting, bit 1 left pad in the touchpad, bit 2
-// right pad, [2] the report's age in ms (saturating), [3] contacts n (0..5),
-// then n x 4 bytes: [0] bits 0-3 contact ID, bit 4 tip, bit 5 confidence,
-// bit 6 right pad; [1..3] x | y << 12, little-endian, x 0..2047 across the
+// The contacts of the last report the computer took, each on its own pad,
+// then the fingers down that the touchpad leaves out because more than
+// SVAL_PTP_MAX_CONTACTS are down (at their live positions), up to
+// SVAL_CONTACTS_REPORT_MAX in all: [0] format 1, [1] bit 0 reporting, bit 1
+// left pad in the touchpad, bit 2 right pad, [2] the report's age in ms
+// (saturating), [3] contacts n (0..SVAL_CONTACTS_REPORT_MAX), then n x 4
+// bytes: [0] bits 0-3 contact ID, bit 4 tip, bit 5 confidence, bit 6 right
+// pad, bit 7 the computer does not have this contact (its ID is in a
+// separate space); [1..3] x | y << 12, little-endian, x 0..2047 across the
 // pad and y 0..1791 down it, in the touchpad's own orientation. A stream that
 // stopped (no report for SVAL_PTP_CONTACTS_STALE_MS) reads as no contacts.
-#define SVAL_PTP_CONTACTS_LEN 24
+// Six: three fingers on each pad. The touchpad itself stays at 5
+// (SVAL_PTP_MAX_CONTACTS), the most a Windows Precision Touchpad allows.
+#define SVAL_CONTACTS_REPORT_MAX 6
+#define SVAL_PTP_CONTACTS_LEN (4 + 4 * SVAL_CONTACTS_REPORT_MAX) // 28
 #ifndef SVAL_PTP_CONTACTS_STALE_MS
 #    define SVAL_PTP_CONTACTS_STALE_MS (3 * SVAL_PTP_KEEPALIVE_MS)
 #endif

@@ -127,24 +127,25 @@ Builds with Velocity Scroll (`SV_VELOCITY_SCROLL`) add a 24-byte block at offset
 
 - Discovery: GET_INFO byte 19, bit 5 (`sval_flag2_pointing_contacts`, `0x20`). Firmware without the native touchpad leaves it zero.
 - Request: `DF 2F`
-- Response: `DF 2F` then 24 bytes (offsets from the first of them). `format` `0` means no data (the half without USB, or no native touchpad).
+- Response: `DF 2F` then 28 bytes (offsets from the first of them). `format` `0` means no data (the half without USB, or no native touchpad). Firmware before 6 contacts sent 24 bytes and at most 5; read `n` contacts, not a fixed count.
 
 | off | size | field |
 |---|---|---|
 | 0 | 1 | format = `1` |
 | 1 | 1 | bit 0 the touchpad is reporting to the computer (Input Mode 3 and the surface switch on), bit 1 the left pad is part of it, bit 2 the right pad is |
 | 2 | 1 | ms since the report these contacts come from, up to 255 |
-| 3 | 1 | contacts `n`, 0 to 5 |
+| 3 | 1 | contacts `n`, 0 to 6 |
 | 4 | 4 × n | the contacts, then zeros |
 
 Each contact:
 
 | off | size | field |
 |---|---|---|
-| 0 | 1 | bits 0-3 contact ID (the touchpad's own, stable while the finger is down), bit 4 tip (down), bit 5 confidence (clear: a palm), bit 6 right pad |
+| 0 | 1 | bits 0-3 contact ID (the touchpad's own, stable while the finger is down), bit 4 tip (down), bit 5 confidence (clear: a palm), bit 6 right pad, bit 7 the computer doesn't have this contact (see below) |
 | 1 | 3 | `x \| y << 12`, 24-bit little-endian: `x` 0-2047 across that pad, `y` 0-1791 down it |
 
 - The contacts are the last input report the computer took from the touchpad, so they are exactly what the operating system has. A contact with tip clear is lifting: that report is its last.
+- The touchpad reports at most 5 contacts, the most a Windows Precision Touchpad allows. A finger that lands while 5 are down is left out of the touchpad for as long as it stays down. `POINTING_CONTACTS` still lists such fingers after the reported ones, at their live position, with bit 7 set, up to 6 contacts in all, so three fingers on each pad all show. Contacts with bit 7 have IDs of their own (also stable while the finger is down), so the touchpad's IDs are unchanged: bit 7 and the ID together identify a contact.
 - Coordinates are per pad, in the touchpad's own orientation (the one the operating system sees), not the merged surface: the right pad does not carry the 2048 + gap offset.
 - While the touchpad isn't reporting, or its last report is older than 150 ms (the computer stopped reading), `n` is `0`.
 

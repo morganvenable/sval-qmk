@@ -2,6 +2,7 @@
 import struct
 import unittest
 
+import contacts
 import perf
 import ptp_hid
 from ptp_owner import describe
@@ -42,6 +43,31 @@ class OwnerReply(unittest.TestCase):
         r[34 + 19], r[34 + 20] = 4, 0
         self.assertIn("fingers lifted because their pad's samples stopped: left 4, right 0", describe(bytes(r)))
         self.assertNotIn("fingers lifted", describe(owner_reply()))
+
+
+def contacts_payload(flags, fingers):
+    """A 0x2F payload as sval_ptp_contacts packs it (azoteq/ptp.c)."""
+    p = bytearray(28)
+    p[0], p[1], p[3] = 1, flags, len(fingers)
+    for i, (cid, right, tip, x, y, *extra) in enumerate(fingers):
+        p[4 + 4 * i] = cid | (0x10 if tip else 0) | 0x20 | (0x40 if right else 0) | (0x80 if extra else 0)
+        p[5 + 4 * i:8 + 4 * i] = (x | y << 12).to_bytes(3, "little")
+    return bytes(p)
+
+
+class Contacts(unittest.TestCase):
+    def test_six(self):
+        fingers = [(i, i >= 3, True, 100 * i, 1791 - i) for i in range(5)] + [(5, True, True, 500, 1786, 1)]
+        c = contacts.parse(contacts_payload(7, fingers))
+        self.assertTrue(c["reporting"] and c["pads"]["left"] and c["pads"]["right"])
+        self.assertEqual([f["id"] for f in c["left"]], [0, 1, 2])
+        self.assertEqual([(f["x"], f["y"]) for f in c["right"]], [(300, 1788), (400, 1787), (500, 1786)])
+        self.assertEqual(contacts.describe(c), "6 down: left 3 (IDs 0,1,2), right 3 (IDs 3,4,5*); 1 beyond the touchpad's 5 (*)")
+
+    def test_lifting_and_none(self):
+        c = contacts.parse(contacts_payload(7, [(4, False, False, 1, 1), (5, True, True, 2, 2)]))
+        self.assertEqual(contacts.describe(c), "1 down: left 0, right 1 (IDs 5)")
+        self.assertIsNone(contacts.parse(bytes(28)))
 
 
 class PerfReport(unittest.TestCase):

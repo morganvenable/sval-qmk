@@ -361,7 +361,7 @@ static pad_state_t pads[2];
 
 static bool     native, paused, mode3, output, hold, release_pending, dirty, ever_sent, scan_started, busy_streak;
 static uint32_t release_at, last_sent, scan_clock, scan_rem, frames_sent, send_busy, busy_since;
-static uint16_t cid_busy, scan, host_silent, merge_waits, pool_full;
+static uint16_t cid_busy, xid_busy, scan, host_silent, merge_waits, pool_full;
 static uint8_t  cid_next, key_buttons, sent_buttons, seen_switches = 3, pad_mask;
 #if SVAL_PTP_KEY_BUTTONS
 static uint8_t key_taken; // buttons whose press went to the touchpad
@@ -452,6 +452,7 @@ static void clear_last_report(void) {
 static void free_contact(contact_t *c) {
     if (c->state == C_FREE) return;
     if (c->state == C_ACTIVE) cid_busy &= ~(1u << c->cid);
+    if (c->state == C_IGNORED) xid_busy &= ~(1u << c->cid);
     pad_used[c->pad]--;
     memset(c, 0, sizeof(*c));
 }
@@ -486,6 +487,18 @@ static uint8_t take_cid(void) {
         }
     }
     return 0; // unreachable: admit() gives at most 5 contacts an ID
+}
+
+// IDs for contacts the touchpad leaves out (C_IGNORED): their own space, so
+// the touchpad's IDs are exactly as without them. At most 10 (the chip slots).
+static uint8_t take_xid(void) {
+    for (uint8_t id = 0; id < 16; id++) {
+        if (!(xid_busy & (1u << id))) {
+            xid_busy |= 1u << id;
+            return id;
+        }
+    }
+    return 0; // unreachable
 }
 
 static void end_contact(contact_t *c) {
@@ -655,7 +668,11 @@ void sval_ptp_feed(const uint8_t *f, uint32_t sample_us) {
         bool       palm_area = SVAL_PTP_PALM_AREA && s[7] > SVAL_PTP_PALM_AREA;
         contact_t *c         = find_contact(pad, slot, s[0]);
         if (c) {
-            if (c->state == C_IGNORED) continue;
+            if (c->state == C_IGNORED) { // never reported; tracked only for POINTING_CONTACTS
+                c->x = x;
+                c->y = y;
+                continue;
+            }
             if (c->state == C_ACTIVE) {
                 uint32_t m  = (uint32_t)motion[pad] + distance(c, x, y);
                 motion[pad] = m > 0xFFFF ? 0xFFFF : m;
@@ -731,10 +748,14 @@ static void admit(void) {
             if (pool[i].state == C_CANDIDATE && (!best || pool[i].order < best->order)) best = &pool[i];
         if (!best) break;
         if (live >= SVAL_PTP_MAX_CONTACTS) {
-            if (best->lift)
+            if (best->lift) {
                 free_contact(best);
-            else
+            } else {
+                // An ID of its own, apart from the touchpad's, so
+                // POINTING_CONTACTS can show it beside the reported ones.
+                best->cid   = take_xid();
                 best->state = C_IGNORED;
+            }
             continue;
         }
         if (slots >= SVAL_PTP_MAX_CONTACTS) break;
@@ -1095,7 +1116,30 @@ void sval_ptp_status(uint8_t *o) {
 // ------------------------------------------------- contacts for host apps
 // Sval POINTING_CONTACTS (ptp.h): read only, so it never changes what the
 // touchpad sends. It copies the last report the computer took, so a host
-// app draws exactly the contacts the operating system has.
+// app draws the contacts the operating system has, then adds the fingers
+// down beyond the touchpad's limit (bit 7), so every finger shows.
+
+_Static_assert(SVAL_CONTACTS_REPORT_MAX >= SVAL_PTP_MAX_CONTACTS, "0x2F carries every reported contact");
+
+// One 4-byte contact from a surface position: bits is the first byte without
+// the right-pad bit. False for a position in the gap (never sent).
+static bool put_contact(uint8_t *c, uint8_t bits, uint16_t x, uint16_t y) {
+    uint8_t right = 0;
+    if (x >= SVAL_PTP_PAD_STRIDE) {
+        right = 1;
+        x -= SVAL_PTP_PAD_STRIDE;
+    } else if (x >= SVAL_PTP_PAD_X) {
+        return false;
+    }
+    if (x > SVAL_PTP_PAD_X - 1) x = SVAL_PTP_PAD_X - 1;
+    if (y > SVAL_PTP_PAD_Y - 1) y = SVAL_PTP_PAD_Y - 1;
+    c[0]       = bits | (right ? 0x40 : 0);
+    uint32_t w = (uint32_t)x | (uint32_t)y << 12;
+    c[1]       = w;
+    c[2]       = w >> 8;
+    c[3]       = w >> 16;
+    return true;
+}
 
 uint8_t sval_ptp_contacts(uint8_t *o, uint8_t length) {
     if (length < SVAL_PTP_CONTACTS_LEN) return 0;
@@ -1113,22 +1157,14 @@ uint8_t sval_ptp_contacts(uint8_t *o, uint8_t length) {
     uint8_t taken = 0;
     for (uint8_t i = 0; i < n; i++) {
         const uint8_t *s = r + 1 + 6 * i;
-        uint16_t       x = ptp_get16(s + 2), y = ptp_get16(s + 4);
-        uint8_t        right = 0;
-        if (x >= SVAL_PTP_PAD_STRIDE) {
-            right = 1;
-            x -= SVAL_PTP_PAD_STRIDE;
-        } else if (x >= SVAL_PTP_PAD_X) {
-            continue; // in the gap: never sent
-        }
-        if (x > SVAL_PTP_PAD_X - 1) x = SVAL_PTP_PAD_X - 1;
-        if (y > SVAL_PTP_PAD_Y - 1) y = SVAL_PTP_PAD_Y - 1;
-        uint8_t *c = o + 4 + 4 * taken++;
-        c[0]       = (s[1] & 15) | ((s[0] & 2) ? 0x10 : 0) | ((s[0] & 1) ? 0x20 : 0) | (right ? 0x40 : 0);
-        uint32_t w = (uint32_t)x | (uint32_t)y << 12;
-        c[1]       = w;
-        c[2]       = w >> 8;
-        c[3]       = w >> 16;
+        if (put_contact(o + 4 + 4 * taken, (s[1] & 15) | ((s[0] & 2) ? 0x10 : 0) | ((s[0] & 1) ? 0x20 : 0), ptp_get16(s + 2), ptp_get16(s + 4))) taken++;
+    }
+    // Fingers down that the touchpad leaves out (more than SVAL_PTP_MAX_CONTACTS
+    // at once), at their live positions, so a host app shows every finger.
+    for (uint8_t i = 0; i < POOL && taken < SVAL_CONTACTS_REPORT_MAX; i++) {
+        const contact_t *c = &pool[i];
+        if (c->state != C_IGNORED || c->lift) continue;
+        if (put_contact(o + 4 + 4 * taken, c->cid | 0x10 | (c->conf ? 0x20 : 0) | 0x80, c->x, c->y)) taken++;
     }
     o[3] = taken;
     return SVAL_PTP_CONTACTS_LEN;
@@ -1212,7 +1248,7 @@ void sval_ptp_test_reset(void) {
     grab_reset(0);
     grab_reset(1);
     release_at = last_sent = scan_clock = scan_rem = frames_sent = send_busy = busy_since = 0;
-    cid_busy = scan = host_silent = merge_waits = pool_full = 0;
+    cid_busy = xid_busy = scan = host_silent = merge_waits = pool_full = 0;
     cid_next = key_buttons = sent_buttons = pad_mask = 0;
 #    if SVAL_PTP_KEY_BUTTONS
     key_taken = 0;

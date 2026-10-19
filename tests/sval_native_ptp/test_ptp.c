@@ -812,7 +812,7 @@ static void test_grab(void) {
 // Sval POINTING_CONTACTS (0x2F): every contact the computer has, back on its
 // own pad in that pad's counts.
 typedef struct {
-    uint8_t  id, right, tip, conf;
+    uint8_t  id, right, tip, conf, extra; // extra: bit 7, the computer does not have it
     uint16_t x, y;
 } host_contact_t;
 static uint8_t read_contacts(uint8_t *flags, host_contact_t *c) {
@@ -820,12 +820,12 @@ static uint8_t read_contacts(uint8_t *flags, host_contact_t *c) {
     memset(o, 0xAA, sizeof(o));
     assert(sval_ptp_contacts(o, 10) == 0); // too short: nothing written
     assert(sval_ptp_contacts(o, sizeof(o)) == SVAL_PTP_CONTACTS_LEN);
-    assert(o[0] == 1 && o[3] <= 5);
+    assert(o[0] == 1 && o[3] <= SVAL_CONTACTS_REPORT_MAX);
     *flags = o[1];
     for (uint8_t i = 0; i < o[3]; i++) {
         const uint8_t *p = o + 4 + 4 * i;
         uint32_t       w = p[1] | (uint32_t)p[2] << 8 | (uint32_t)p[3] << 16;
-        c[i]             = (host_contact_t){p[0] & 15, (p[0] >> 6) & 1, (p[0] >> 4) & 1, (p[0] >> 5) & 1, w & 0xFFF, (w >> 12) & 0xFFF};
+        c[i]             = (host_contact_t){p[0] & 15, (p[0] >> 6) & 1, (p[0] >> 4) & 1, (p[0] >> 5) & 1, p[0] >> 7, w & 0xFFF, (w >> 12) & 0xFFF};
     }
     for (uint8_t i = 4 + 4 * o[3]; i < SVAL_PTP_CONTACTS_LEN; i++)
         assert(o[i] == 0);
@@ -838,7 +838,7 @@ static const host_contact_t *find_host(const host_contact_t *c, uint8_t n, uint8
 }
 
 static void test_host_contacts(void) {
-    host_contact_t c[5];
+    host_contact_t c[SVAL_CONTACTS_REPORT_MAX];
     uint8_t        flags;
     fresh("host-contacts-off");
     assert(read_contacts(&flags, c) == 0 && flags == 6); // both pads, not reporting
@@ -879,6 +879,53 @@ static void test_host_contacts(void) {
     puts("  host contacts: each on its own pad in pad counts, lifts carry tip off, a stale stream reads as none");
 }
 
+// Three fingers on each pad: the touchpad reports five (Microsoft's limit),
+// and 0x2F shows all six, the sixth marked as one the computer does not have.
+static void test_host_contacts_six(void) {
+    host_contact_t c[SVAL_CONTACTS_REPORT_MAX];
+    uint8_t        flags, n;
+    start("host-contacts-six");
+    FEED(0, {0, 1, 100, 100}, {1, 2, 200, 100}, {2, 3, 300, 100});
+    FEED(1, {0, 1, 100, 100}, {1, 2, 200, 100});
+    run(5000);
+    assert(new_reports() == 1 && count_of(last()) == 5);
+    FEED(1, {0, 1, 100, 100}, {1, 2, 200, 100}, {2, 3, 300, 100}); // the sixth finger
+    run(9000);
+    assert(new_reports() == 1 && count_of(last()) == 5);
+    assert(read_contacts(&flags, c) == 6 && flags == 7);
+    uint8_t left = 0, right = 0, extra = 0;
+    for (uint8_t i = 0; i < 6; i++) {
+        assert(c[i].tip && c[i].conf);
+        left += !c[i].right;
+        right += c[i].right;
+        extra += c[i].extra;
+        for (uint8_t j = 0; j < i; j++)
+            assert(c[i].id != c[j].id || c[i].extra != c[j].extra); // bit 7 has its own IDs
+    }
+    assert(left == 3 && right == 3 && extra == 1);
+    const host_contact_t *sixth = find_host(c, 6, 1, 300, 100);
+    assert(sixth && sixth->extra);
+    // It follows the finger, though the touchpad never reports it.
+    FEED(1, {0, 1, 100, 100}, {1, 2, 200, 100}, {2, 3, 350, 120});
+    run(9000);
+    assert(count_of(last()) == 5 && slot_at(last(), 350 + 2048 + SVAL_PTP_GAP, 120) < 0);
+    assert(read_contacts(&flags, c) == 6 && find_host(c, 6, 1, 350, 120)->extra);
+    // A reported finger lifts: the sixth stays out of the touchpad (ignored for
+    // its lifetime) but stays in 0x2F; after it lifts, it is gone.
+    FEED(0, {1, 2, 200, 100}, {2, 3, 300, 100});
+    run(9000);
+    FEED(1, {0, 1, 100, 100}, {1, 2, 200, 100}, {2, 3, 360, 120});
+    run(9000);
+    assert(count_of(last()) == 4 && slot_at(last(), 360 + 2048 + SVAL_PTP_GAP, 120) < 0);
+    n = read_contacts(&flags, c);
+    assert(n == 5 && find_host(c, n, 1, 360, 120) && find_host(c, n, 1, 360, 120)->extra);
+    FEED(1, {0, 1, 100, 100}, {1, 2, 200, 100});
+    run(9000);
+    n = read_contacts(&flags, c);
+    assert(n == 4 && !find_host(c, n, 1, 360, 120));
+    puts("  host contacts: three on each pad, the touchpad reports five, 0x2F all six (the sixth marked, live position, gone after it lifts)");
+}
+
 int main(int argc, char **argv) {
     if (argc > 1) ptp_trace = fopen(argv[1], "w");
     puts("native PTP host tests:");
@@ -911,6 +958,7 @@ int main(int argc, char **argv) {
     test_paused();
     test_grab();
     test_host_contacts();
+    test_host_contacts_six();
     fresh("end");
     if (ptp_trace) fclose(ptp_trace);
     printf("native PTP: %u reports checked, all passed\n", ptp_sent_count);
