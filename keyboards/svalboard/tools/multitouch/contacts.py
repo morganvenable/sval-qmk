@@ -65,7 +65,13 @@ def main():
     last, best, best_line, polls = None, -1, "", 0
     try:
         while end is None or time.monotonic() < end:
-            r = board.command(SVAL, OP)
+            try:
+                r = board.command(SVAL, OP)
+            except RuntimeError:
+                # The board dropped this client ID (another app took its
+                # place): get a new one and carry on.
+                board = Board(args.serial, device=board.dev)
+                continue
             polls += 1
             contacts = parse(r[7:])
             if contacts is None:
