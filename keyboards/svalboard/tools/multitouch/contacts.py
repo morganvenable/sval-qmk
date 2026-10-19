@@ -1,12 +1,13 @@
-"""Watch the touch contacts the computer gets from the native touchpad (Sval 0x2F).
+"""Watch the touch contacts on the native touchpad's pads (Sval 0x2F).
 
 usage: python contacts.py --serial EXACT_SERIAL [--seconds N]
 
 Polls POINTING_CONTACTS (docs/protocol.md, "Pointing contacts") and prints a
 line each time the fingers down change: how many on each pad, with their
-contact IDs. These are the contacts of the last report the computer took, so
-they are what the operating system has. On exit (after --seconds, or Ctrl+C)
-it prints the most fingers that were down at once.
+contact IDs. These are the contacts of the last report the computer took
+(what the operating system has), plus any finger beyond the touchpad's 5,
+which the board lists too and this tool marks with a *. On exit (after
+--seconds, or Ctrl+C) it prints the most fingers that were down at once.
 
 Any build with the native touchpad; the computer must have it in touchpad mode
 (Windows does by itself).
@@ -33,7 +34,7 @@ def parse(payload):
         if len(c) < 4:
             break
         w = int.from_bytes(c[1:4], "little")
-        contact = dict(id=c[0] & 15, tip=bool(c[0] & 0x10), confident=bool(c[0] & 0x20), x=w & 0xFFF, y=(w >> 12) & 0xFFF)
+        contact = dict(id=c[0] & 15, tip=bool(c[0] & 0x10), confident=bool(c[0] & 0x20), extra=bool(c[0] & 0x80), x=w & 0xFFF, y=(w >> 12) & 0xFFF)
         out["right" if c[0] & 0x40 else "left"].append(contact)
     return out
 
@@ -46,10 +47,12 @@ def describe(contacts):
     parts = []
     for side in ("left", "right"):
         fingers = down(contacts, side)
-        ids = ",".join(str(c["id"]) for c in fingers)
+        ids = ",".join(str(c["id"]) + ("*" if c["extra"] else "") for c in fingers)
         parts.append(f"{side} {len(fingers)}" + (f" (IDs {ids})" if fingers else ""))
     total = len(down(contacts, "left")) + len(down(contacts, "right"))
-    return f"{total} down: " + ", ".join(parts)
+    extra = sum(1 for side in ("left", "right") for c in down(contacts, side) if c["extra"])
+    note = f"; {extra} beyond the touchpad's 5 (*)" if extra else ""
+    return f"{total} down: " + ", ".join(parts) + note
 
 
 def main():

@@ -70,8 +70,11 @@ subtracts is kept per read length (0 to 5 slots), so a longer read is not
 taken for a stretch. A pad that stops answering is read less and less often,
 down to about once a second.
 
-**Contacts.** Contact IDs, the 5-contact limit, arming on an all-up sample,
-palm, faults and lifts are in `ptp.c`. A pad whose contacts get no valid
+**Contacts.** Contact IDs, the 5-contact limit (the most a Windows Precision
+Touchpad allows), arming on an all-up sample, palm, faults and lifts are in
+`ptp.c`. A finger beyond the five is left out of the touchpad for its
+lifetime, but `POINTING_CONTACTS` (0x2F) still shows it, up to 6 fingers in
+all, so a host app draws three on each pad. A pad whose contacts get no valid
 sample for 50 ms is lifted; so is the other pad while an update runs. With
 contacts on both pads, a frame waits up to one period for the second pad's
 sample, and every frame is stamped with its newest sample's read time.
