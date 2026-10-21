@@ -795,14 +795,16 @@ def pair(dev, args, paths, sessions):
     confirm_mismatches([f"{p.name}: {w}" for p, m, h in halves for w in image_mismatches(m, infos[h])], args)
     print("pair: the chord is made twice, both times on this half (the one with USB): once for each image")
     print(f"== 1/2: the other ({HANDS[board ^ 1]}) half, {other[0][0].name} ==")
-    sessions.append(Session(dev, args))
+    # Each session is told its half: an either-hand image (hand 2) names neither,
+    # and the image's own hand would otherwise pick this half for both.
+    sessions.append(Session(dev, argparse.Namespace(**{**vars(args), "half": "other"})))
     rc = sessions[-1].run(other[0][0], confirm_other=False, confirmed=True)
     if rc != 0:
         return rc
     # Straight on, without waiting to hear from the other half: it may not be
     # able to talk to this half's old firmware (V).
     print(f"== 2/2: this ({HANDS[board]}) half, {this[0][0].name} ==")
-    sessions.append(Session(dev, args))
+    sessions.append(Session(dev, argparse.Namespace(**{**vars(args), "half": "usb"})))
     rc = sessions[-1].run(this[0][0], confirmed=True)
     if rc != 0:
         return rc

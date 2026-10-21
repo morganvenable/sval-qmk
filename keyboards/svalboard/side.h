@@ -131,6 +131,7 @@ void sval_side_command(uint8_t *data, uint8_t length);
 #    define SVAL_SIDE_RPC_OP 0xA5
 bool sval_side_rpc(uint8_t in_len, const uint8_t *in, uint8_t out_len, uint8_t *out);
 // The split link pins this half chose (SERIAL_USART_PINS_RUNTIME): its TX GPIO,
-// 0xFF before the link started. how: 0 by side, 1 found by listening, 2 by role default.
+// 0xFF before the link started. how: 0 by side, 1 found by listening, 2 by role default,
+// 3 swapped by the master's search while the link was down.
 uint8_t sval_side_link_tx(uint8_t *how);
 #endif

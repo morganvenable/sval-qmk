@@ -168,7 +168,7 @@ Each contact:
 - `record side` and `record source`: the stored record as it is now (`FE`: no record, or no room for one). It differs from `side` after a write until the restart, and on a board whose strap overrode it.
 - `other flags`: bit 0 the other half is connected, bit 1 it has reported its side. `other side` as `side`.
 - `pair`: `0` fine (or no other half), `1` both halves claim the same side, `2` a connected half has no side, `3` the other half hasn't reported yet (up to 0.5 s after it connects).
-- `link tx`: the GPIO this half transmits on over the split link (`0` or `1`; `FF` before the link starts). `link how`: `0` chosen by side, `1` found by listening for the other half, `2` the default for a half with no side.
+- `link tx`: the GPIO this half transmits on over the split link (`0` or `1`; `FF` before the link starts). `link how`: `0` chosen by side, `1` found by listening for the other half, `2` the default for a half with no side, `3` swapped by the half with USB while the link was down (it tries the other pin pair every 2 s, so a half that transmits on its line still links).
 - `flags`: bit 0 keys and pointing are dropped now, bit 1 the record differs from the running side (a restart is pending), bit 2 this half has room for the record (16 MB flash), bit 3 this half has USB.
 
 **SET:** `DF 33 01 <target> <side> <source> <flags>` → `DF 33 01 <status>`

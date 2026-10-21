@@ -113,6 +113,7 @@ uint8_t sval_side_pair(uint8_t mine, bool other_connected, bool other_reported, 
 #    include "identity.h"
 #    include "build_reset.h"
 #    include "split_common/transactions.h"
+#    include "split_common/split_util.h"
 #    include "hardware/regs/addressmap.h"
 #    include "hardware/structs/sio.h"
 
@@ -129,6 +130,8 @@ _Static_assert(SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE <= SVAL_SIDE_SECTOR_A, "the s
 _Static_assert(sizeof(sval_side_record_t) == 16, "the side record is 16 bytes");
 
 #    define ROWS_PER_HAND (MATRIX_ROWS / 2)
+
+static void link_search_task(void);
 
 static uint8_t side = SVAL_SIDE_UNKNOWN, source = SVAL_SIDE_SRC_NONE;
 static bool    other_connected, other_reported;
@@ -238,6 +241,7 @@ void sval_side_task(void) {
         rpc_pending = false;
         host_write(rpc_side, rpc_source, rpc_flags);
     }
+    link_search_task();
     if (restart_at && timer_expired32(timer_read32(), restart_at)) {
         restart_at = 0;
         soft_reset_keyboard();
@@ -264,35 +268,37 @@ uint8_t sval_side_link_tx(uint8_t *how) {
 #    ifndef SVAL_LINK_LISTEN_MS
 #        define SVAL_LINK_LISTEN_MS 1500 // the master retries a link that is down every 500 ms
 #    endif
-#    define LINK_WINDOW_MS 50
-#    define LINK_MIN_FALLS 4
+#    define LINK_MIN_FALLS 2 // the master sends one byte per try while the link is down (one every 500 ms)
 
 // Which of GPIO0 (0) or GPIO1 (1) carries the master's transmissions, or -1.
 // A UART line idles high; the master's RX idles high under our pull-up, and
-// its TX shows start bits. A master still in reset pulls both lines down
-// (RP2040 pad default), which shows lows on both, and is not taken.
+// its TX shows start bits: LINK_MIN_FALLS falling edges on one line while the
+// other never goes low. A master still in reset pulls both lines down (RP2040
+// pad default): lows on both lines start the count again.
 static int8_t link_listen(uint32_t ms) {
     gpio_set_pin_input_high(GP0);
     gpio_set_pin_input_high(GP1);
     wait_us(100);
-    uint32_t start = timer_read32(), window = start;
-    uint16_t falls[2] = {0, 0}, lows[2] = {0, 0};
-    uint32_t prev = 3;
+    uint32_t start = timer_read32();
+    uint16_t falls[2] = {0, 0};
+    bool     low[2]   = {false, false};
+    uint32_t prev     = 3;
     while (timer_elapsed32(start) < ms) {
         uint32_t now = sio_hw->gpio_in & 3u;
         for (uint8_t p = 0; p < 2; p++) {
             if (!(now & (1u << p))) {
-                if (lows[p] < 0xFFFF) lows[p]++;
+                low[p] = true;
                 if ((prev & (1u << p)) && falls[p] < 0xFFFF) falls[p]++;
             }
         }
         prev = now;
-        if (timer_elapsed32(window) >= LINK_WINDOW_MS) {
-            for (uint8_t p = 0; p < 2; p++) {
-                if (falls[p] >= LINK_MIN_FALLS && lows[p ^ 1] == 0) return (int8_t)p;
-            }
-            falls[0] = falls[1] = lows[0] = lows[1] = 0;
-            window = timer_read32();
+        if (low[0] && low[1]) {
+            falls[0] = falls[1] = 0;
+            low[0] = low[1] = false;
+            continue;
+        }
+        for (uint8_t p = 0; p < 2; p++) {
+            if (falls[p] >= LINK_MIN_FALLS && !low[p ^ 1]) return (int8_t)p;
         }
     }
     return -1;
@@ -318,6 +324,37 @@ void serial_usart_pins_kb(bool master, pin_t *tx, pin_t *rx) {
     *tx     = tx_on_gp0 ? GP0 : GP1;
     *rx     = tx_on_gp0 ? GP1 : GP0;
     link_tx = tx_on_gp0 ? 0 : 1;
+}
+
+// The half with USB, while the link is down: every LINK_SEARCH_MS it moves to
+// the other pin pair and back. The other half may transmit on our TX line: a
+// half that claims our side and could not hear us (older either builds), or a
+// per-hand build of our side. On the swapped pins the link comes up, and its
+// side report shows the pair for what it is (side.h, pair SAME).
+#    ifndef LINK_SEARCH_MS
+#        define LINK_SEARCH_MS 2000
+#    endif
+void serial_transport_repin(pin_t tx_pin, pin_t rx_pin);
+static void link_search_task(void) {
+    static uint32_t down_since = 0;
+    static bool     was_up     = false;
+    if (!is_keyboard_master() || link_tx == 0xFF) return;
+    if (is_transport_connected()) {
+        was_up     = true;
+        down_since = 0;
+        return;
+    }
+    if (!down_since || was_up) {
+        down_since = timer_read32();
+        was_up     = false;
+        return;
+    }
+    if (timer_elapsed32(down_since) < LINK_SEARCH_MS) return;
+    down_since = timer_read32();
+    bool tx_on_gp0 = link_tx != 0;
+    serial_transport_repin(tx_on_gp0 ? GP0 : GP1, tx_on_gp0 ? GP1 : GP0);
+    link_tx  = tx_on_gp0 ? 0 : 1;
+    link_how = 3;
 }
 
 // ---- USB identity -------------------------------------------------------------------
