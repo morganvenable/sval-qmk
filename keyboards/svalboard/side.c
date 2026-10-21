@@ -191,7 +191,14 @@ bool is_keyboard_left_impl(void) {
     return side == SVAL_SIDE_LEFT;
 }
 
+// A presence ping that fails now and then (the other half busy, a noisy cable)
+// is not a disconnect: only SIDE_MISSES in a row (1.5 s) drop the other half,
+// so its keys are not blocked and released on a single miss.
+#    define SIDE_MISSES 3
 void sval_side_other_set(bool connected, bool reported, uint8_t s) {
+    static uint8_t misses = 0;
+    if (!connected && other_connected && ++misses < SIDE_MISSES) return;
+    misses          = 0;
     other_connected = connected;
     other_reported  = connected && reported;
     other_side      = other_reported ? s : SVAL_SIDE_UNKNOWN;
