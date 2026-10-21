@@ -79,6 +79,7 @@ is refused: update it with the sval_update.py of its own release, or copy the
 .uf2 in BOOTSEL mode.
 """
 import argparse
+import copy
 import hashlib
 import json
 import secrets
@@ -761,6 +762,13 @@ def pair_images(images, board):
     return [(other[0][0], other[0][1], board ^ 1), (this[0][0], this[0][1], board)]
 
 
+def with_half(args, half):
+    """A copy of args that names the half a session updates."""
+    a = copy.copy(args)
+    a.half = half
+    return a
+
+
 def pair(dev, args, paths, sessions):
     """Both halves: the other one through this one, then this one over USB; then presence must match (V)."""
     images = []
@@ -797,14 +805,14 @@ def pair(dev, args, paths, sessions):
     print(f"== 1/2: the other ({HANDS[board ^ 1]}) half, {other[0][0].name} ==")
     # Each session is told its half: an either-hand image (hand 2) names neither,
     # and the image's own hand would otherwise pick this half for both.
-    sessions.append(Session(dev, argparse.Namespace(**{**vars(args), "half": "other"})))
+    sessions.append(Session(dev, with_half(args, "other")))
     rc = sessions[-1].run(other[0][0], confirm_other=False, confirmed=True)
     if rc != 0:
         return rc
     # Straight on, without waiting to hear from the other half: it may not be
     # able to talk to this half's old firmware (V).
     print(f"== 2/2: this ({HANDS[board]}) half, {this[0][0].name} ==")
-    sessions.append(Session(dev, argparse.Namespace(**{**vars(args), "half": "usb"})))
+    sessions.append(Session(dev, with_half(args, "usb")))
     rc = sessions[-1].run(this[0][0], confirmed=True)
     if rc != 0:
         return rc
