@@ -6,12 +6,4 @@
 #define SERIAL_PIO_USE_PIO0
 #define SERIAL_USART_PINS_RUNTIME
 
-// Each half enumerates as its per-hand build did (svalboard/left, svalboard/right);
-// a half with no side uses this target's own PID and name.
-#define USB_PRODUCT_ID_RUNTIME
-#define SVAL_EITHER_PID_LEFT 0x4044
-#define SVAL_EITHER_PID_RIGHT 0x4045
-#define SVAL_EITHER_PRODUCT_LEFT "Svalboard Left"
-#define SVAL_EITHER_PRODUCT_RIGHT "Svalboard Right"
-
 #include "../pointing_auto/config.h"

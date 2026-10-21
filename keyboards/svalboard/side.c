@@ -364,17 +364,6 @@ static void link_search_task(void) {
     link_how = 3;
 }
 
-// ---- USB identity -------------------------------------------------------------------
-
-// The per-hand builds' product IDs and names, so a host sees each half as before.
-uint16_t usb_product_id(void) {
-    return side == SVAL_SIDE_LEFT ? SVAL_EITHER_PID_LEFT : side == SVAL_SIDE_RIGHT ? SVAL_EITHER_PID_RIGHT : PRODUCT_ID;
-}
-
-const char *sval_side_product_name(void) {
-    return side == SVAL_SIDE_LEFT ? SVAL_EITHER_PRODUCT_LEFT : side == SVAL_SIDE_RIGHT ? SVAL_EITHER_PRODUCT_RIGHT : NULL;
-}
-
 // ---- host protocol: Sval 0x33 (docs/protocol.md, "Side") ---------------------------
 //
 // data[0] op, data[1] status; the rest per op. Ops: 0 GET, 1 SET, 2 CLEAR.

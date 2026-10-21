@@ -270,12 +270,7 @@ hardware_id_t get_hardware_id(void) {
 // The USB product string: the user's name, or the compiled PRODUCT when unset.
 const char *usb_product_string(void) {
     const char *name = identity_name();
-#ifdef SVAL_EITHER_HAND
-    // An either-hand build names each half as its per-hand build did.
-    return name[0] ? name : sval_side_product_name();
-#else
     return name[0] ? name : NULL;
-#endif
 }
 
 // ---- host protocol: VIA custom values on channel IDENTITY_CHANNEL --------------

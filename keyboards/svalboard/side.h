@@ -111,8 +111,6 @@ enum sval_side_pair {
 uint8_t sval_side_pair(uint8_t mine, bool other_connected, bool other_reported, uint8_t other);
 
 #ifndef SVAL_SIDE_HOST_TEST
-// The USB product name for this side (SVAL_EITHER_PRODUCT_LEFT/RIGHT), NULL when unknown.
-const char *sval_side_product_name(void);
 void    sval_side_init(void); // keyboard_pre_init_kb: after identity_init() and the strap probe, before build_reset_pre_init()
 uint8_t sval_side(void);      // SVAL_SIDE_*, for this boot
 uint8_t sval_side_source(void);

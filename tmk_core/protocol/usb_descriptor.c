@@ -1247,15 +1247,6 @@ const USB_Descriptor_String_t PROGMEM ProductString = {
 
 // clang-format on
 
-#ifdef USB_PRODUCT_ID_RUNTIME
-// A keyboard can pick its product ID at runtime (e.g. one image for both halves
-// of a split board that keeps each half's ID): return it, or 0 for the
-// compiled PRODUCT_ID. Read when the host asks for the device descriptor.
-__attribute__((weak)) uint16_t usb_product_id(void) {
-    return 0;
-}
-#endif // USB_PRODUCT_ID_RUNTIME
-
 #ifdef USB_PRODUCT_STRING_RUNTIME
 // A keyboard can name itself at runtime (e.g. a user-chosen name kept in
 // flash): return a NUL-terminated UTF-8 string, or NULL for the compiled
@@ -1403,17 +1394,6 @@ uint16_t get_usb_descriptor(const uint16_t wValue, const uint16_t wIndex, const 
         case DTYPE_Device:
             Address = &DeviceDescriptor;
             Size    = sizeof(USB_Descriptor_Device_t);
-#ifdef USB_PRODUCT_ID_RUNTIME
-            {
-                static USB_Descriptor_Device_t runtime_device;
-                const uint16_t                 pid = usb_product_id();
-                if (pid) {
-                    runtime_device           = DeviceDescriptor;
-                    runtime_device.ProductID = pid;
-                    Address                  = &runtime_device;
-                }
-            }
-#endif // USB_PRODUCT_ID_RUNTIME
 
             break;
         case DTYPE_Configuration:

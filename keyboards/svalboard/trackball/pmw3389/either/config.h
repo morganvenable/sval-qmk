@@ -6,10 +6,3 @@
 #define SERIAL_PIO_USE_PIO0
 #define SERIAL_USART_PINS_RUNTIME
 
-// Each half enumerates as its per-hand build did (trackball/pmw3389/left, right);
-// a half with no side uses this target's own PID and name.
-#define USB_PRODUCT_ID_RUNTIME
-#define SVAL_EITHER_PID_LEFT 0x4048
-#define SVAL_EITHER_PID_RIGHT 0x4049
-#define SVAL_EITHER_PRODUCT_LEFT "Svalboard Trackball PMW3389 Left"
-#define SVAL_EITHER_PRODUCT_RIGHT "Svalboard Trackball PMW3389 Right"

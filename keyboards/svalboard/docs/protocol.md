@@ -156,7 +156,7 @@ Each contact:
 - Discovery: GET_INFO byte 19, bit 6 (`sval_flag2_side`).
 - The stored side lives in its own flash record, apart from the settings. Settings resets, `EE_CLR`, storage format changes, UF2 copies and updates keep it; only a whole-chip erase clears it. Only this command or a thumb strap changes it.
 - The first start of a one-image build on a half that ran a per-hand build adopts that build's side (source `3`, migrated). A half that has never had a per-hand build (a new board) starts unknown.
-- A half with no side still enumerates and answers this protocol, but sends no keys and no pointing. It enumerates with the target's own product ID and name; a half with a side enumerates as its per-hand build did (left `0x4044` "Svalboard Left", right `0x4045` "Svalboard Right"; PMW3389: `0x4048`, `0x4049`).
+- A half with no side still enumerates and answers this protocol, but sends no keys and no pointing. Every half enumerates as the per-hand builds do (product ID `0x4044`, or the name the user gave the board).
 - The split link comes up whatever the other half's side, so the half with USB learns it (POINTING_HARDWARE flags bit 5 means "no side"). While the other half has no side, or both halves claim the same side, neither half's keys or pointing count: which one is wrong isn't known, so nothing is guessed. The reply below reports it.
 - A new side takes effect at the next start. Set bit 0 of `flags` to restart the half 0.1 s after the write.
 
