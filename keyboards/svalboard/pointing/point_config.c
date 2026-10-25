@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "point_config.h"
 #include "point_control.h"
+#include "point_device.h"
 #include "svalboard.h"
 #include "via.h"
 #include "sval.h"
@@ -17,6 +18,13 @@ _Static_assert(EECONFIG_USER_DATA_SIZE == 0, "Pointing tools require the unused 
 _Static_assert(CONFIG_SIZE <= SVAL_VIA_POINT_TOOLS_SIZE, "pointing tools record fits its VIA custom config range");
 _Static_assert(sizeof(saved_values_t) + 6 <= SVAL_VIA_BOARD_OFFSET + SVAL_VIA_BOARD_SIZE, "board settings and magic stay in their range");
 _Static_assert(SVAL_VIA_POINT_TOOLS_OFFSET + SVAL_VIA_POINT_TOOLS_SIZE <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "pointing tools range is inside the VIA custom block");
+// The gains record: 0x47, GAINS_VERSION, touchpad gain, TrackPoint gain, two zero bytes,
+// CRC-16/CCITT of the first 6, little-endian.
+#define GAINS_OFFSET SVAL_VIA_POINT_GAINS_OFFSET
+#define GAINS_SIZE 8
+#define GAINS_VERSION 1
+_Static_assert(GAINS_SIZE <= SVAL_VIA_POINT_GAINS_SIZE, "pointing tools gains record fits its VIA custom config range");
+_Static_assert(SVAL_VIA_POINT_GAINS_OFFSET + SVAL_VIA_POINT_GAINS_SIZE <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "pointing tools gains range is inside the VIA custom block");
 static sval_point_profile_t       profiles[SVAL_POINT_PROFILE_COUNT];
 static bool                       loaded;
 static uint16_t                   generation;
@@ -40,6 +48,8 @@ static bool    universal, inherit[4];
 // Four configurable slots: 3-bit preset and two direction flags per slot.
 // The existing user word is unused by this keymap; no EEPROM addresses move.
 static uint8_t tools[4], inversions[4];
+// Device gains (x16): touchpad, TrackPoint. Never 0.
+static uint8_t gains[2];
 static uint8_t options_crc(uint32_t bits) {
     uint8_t c = 0;
     for (uint8_t n = 0; n < 3; ++n) {
@@ -74,8 +84,8 @@ static bool decode_options(const uint8_t *data, bool apply) {
 }
 static const uint16_t distances[64] = {1024, 948, 878, 813, 753, 697, 645, 597, 553, 512, 474, 439, 406, 376, 348, 323, 299, 276, 256, 237, 219, 203, 188, 174, 161, 149, 138, 128, 119, 110, 102, 94, 87, 81, 75, 69, 64, 59, 55, 51, 47, 44, 40, 37, 35, 32, 30, 27, 25, 24, 22, 20, 19, 17, 16, 15, 14, 13, 12, 11, 10, 9, 9, 8};
 static uint16_t       get_bits(const uint8_t *data, uint8_t *bit, uint8_t width) {
-    uint16_t value = 0;
-    for (uint8_t i = 0; i < width; ++i, ++*bit)
+          uint16_t value = 0;
+          for (uint8_t i = 0; i < width; ++i, ++*bit)
         value |= ((data[*bit / 8] >> (*bit % 8)) & 1) << i;
     return value;
 }
@@ -159,6 +169,13 @@ void sval_point_config_reload(void) {
     if (via_read_custom_config(stored, CONFIG_OFFSET, sizeof(stored)) == sizeof(stored) && stored[0] == 0x50 && crc(stored, 18) == (uint16_t)(stored[18] | stored[19] << 8)) {
         if (stored[1] == RECORD_VERSION) decode(stored + 2, true);
     }
+    gains[0] = SVAL_POINT_PAD_GAIN_DEFAULT;
+    gains[1] = SVAL_POINT_STICK_GAIN_DEFAULT;
+    uint8_t record[GAINS_SIZE];
+    if (via_read_custom_config(record, GAINS_OFFSET, sizeof(record)) == sizeof(record) && record[0] == 0x47 && record[1] == GAINS_VERSION && crc(record, 6) == (uint16_t)(record[6] | record[7] << 8) && record[2] && record[3] && !record[4] && !record[5]) {
+        gains[0] = record[2];
+        gains[1] = record[3];
+    }
     uint32_t options  = eeconfig_read_user();
     uint8_t  extra[3] = {options, options >> 8, (options >> 16) & 15};
     if (((options >> 20) & 15) == 0xA && (options >> 24) == options_crc(options)) decode_options(extra, true);
@@ -194,6 +211,12 @@ uint16_t sval_point_interval(uint8_t control) {
     uint16_t interval = sval_point_profile(control)->interval_ms;
     return interval ? interval : sval_point_action_default(sval_point_tool(control))->interval_ms;
 }
+uint8_t sval_point_gain(uint8_t device) {
+    if (!loaded) sval_point_config_reload();
+    if (device == SVAL_POINT_DEVICE_PAD) return gains[0];
+    if (device == SVAL_POINT_DEVICE_STICK) return gains[1];
+    return SVAL_POINT_GAIN_ONE;
+}
 bool sval_point_inverted(uint8_t control, uint8_t axis) {
     if (!loaded) sval_point_config_reload();
     return (inversions[control >= 1 && control <= 4 ? control - 1 : 0] & (1u << axis)) != 0;
@@ -213,9 +236,17 @@ bool sval_point_command(uint8_t *data, uint8_t length) {
     }
     uint8_t status = 0;
     if (data[1] == sval_cmd_point_tools_set) {
-        uint8_t candidate[19] = {0};
-        if (length >= 24) memcpy(candidate, data + 5, 19);
-        if (length < 24 || data[2] != SVAL_POINT_CONFIG_VERSION || !decode(candidate, false) || !decode_options(candidate + 16, false))
+        // Version 5: speeds and tools (the gains stay as they are). Version 6: then the
+        // touchpad and TrackPoint gains.
+        uint8_t candidate[21] = {0};
+        bool    v6 = data[2] == SVAL_POINT_CONFIG_VERSION, v5 = data[2] == SVAL_POINT_CONFIG_VERSION_V5;
+        uint8_t need = v6 ? 26 : 24;
+        if (length >= need) memcpy(candidate, data + 5, v6 ? 21 : 19);
+        if (!v6) {
+            candidate[19] = gains[0];
+            candidate[20] = gains[1];
+        }
+        if ((!v5 && !v6) || length < need || !decode(candidate, false) || !decode_options(candidate + 16, false) || !candidate[19] || !candidate[20])
             status = 3;
         else if ((uint16_t)(data[3] | data[4] << 8) != generation)
             status = 2;
@@ -224,18 +255,26 @@ bool sval_point_command(uint8_t *data, uint8_t length) {
         else {
             uint8_t stored[CONFIG_SIZE] = {0x50, RECORD_VERSION}, check[CONFIG_SIZE];
             memcpy(stored + 2, candidate, 16);
-            uint32_t options = options_word(candidate + 16);
-            uint16_t sum     = crc(stored, 18);
-            stored[18]       = sum;
-            stored[19]       = sum >> 8;
+            uint32_t options           = options_word(candidate + 16);
+            uint16_t sum               = crc(stored, 18);
+            stored[18]                 = sum;
+            stored[19]                 = sum >> 8;
+            uint8_t record[GAINS_SIZE] = {0x47, GAINS_VERSION, candidate[19], candidate[20]}, record_check[GAINS_SIZE];
+            sum                        = crc(record, 6);
+            record[6]                  = sum;
+            record[7]                  = sum >> 8;
             eeconfig_update_user(options);
             via_update_custom_config(stored, CONFIG_OFFSET, CONFIG_SIZE);
+            via_update_custom_config(record, GAINS_OFFSET, GAINS_SIZE);
             via_read_custom_config(check, CONFIG_OFFSET, CONFIG_SIZE);
-            if (memcmp(stored, check, sizeof(stored)) || eeconfig_read_user() != options || sval_storage_write_failed())
+            via_read_custom_config(record_check, GAINS_OFFSET, GAINS_SIZE);
+            if (memcmp(stored, check, sizeof(stored)) || memcmp(record, record_check, sizeof(record)) || eeconfig_read_user() != options || sval_storage_write_failed())
                 status = 4;
             else {
                 decode(candidate, true);
                 decode_options(candidate + 16, true);
+                gains[0] = candidate[19];
+                gains[1] = candidate[20];
                 ++generation;
                 sval_point_tuning_changed();
             }
@@ -247,5 +286,11 @@ bool sval_point_command(uint8_t *data, uint8_t length) {
     data[5] = generation >> 8;
     encode(data + 6);
     encode_options(data + 22);
+    // Version 6: the device gains after the tools (27 bytes from DF, which fits even a
+    // 32-byte report: the client wrapper leaves 27).
+    if (length >= 27) {
+        data[25] = gains[0];
+        data[26] = gains[1];
+    }
     return true;
 }

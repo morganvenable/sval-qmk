@@ -95,11 +95,11 @@ enum sval_command_id {
     // 0x2E is taken by the touch gesture experiment (experiment/cyrus-multitouch), 0x33 by
     // the one-image side command (feat/one-image-hand); 0x30-0x32 are left free.
     // Pointing tools (SVAL_POINT_CONTROLS builds), advertised by sval_flag2_pointing_tools.
-    sval_cmd_point_tools_get      = 0x34,
-    sval_cmd_point_tools_set      = 0x35,
-    sval_cmd_point_tools_status   = 0x36,
-    sval_cmd_point_tools_stop     = 0x37,
-    sval_cmd_error                = 0xFF,
+    sval_cmd_point_tools_get    = 0x34,
+    sval_cmd_point_tools_set    = 0x35,
+    sval_cmd_point_tools_status = 0x36,
+    sval_cmd_point_tools_stop   = 0x37,
+    sval_cmd_error              = 0xFF,
 };
 
 // Feature capability flags (returned in protocol info)
@@ -123,7 +123,7 @@ enum sval_feature_flags2 {
     // Bit 4 is allocated by the per-reader motion branch (0x2D reader ids).
     sval_flag2_pointing_contacts = (1 << 5), // 0x2F reports each touch contact on its pad
     // Bit 6 is allocated by the one-image side command (feat/one-image-hand, 0x33).
-    sval_flag2_pointing_tools    = (1 << 7), // 0x34-0x37 read and set the pointing tools
+    sval_flag2_pointing_tools = (1 << 7), // 0x34-0x37 read and set the pointing tools
 };
 
 // Status byte after the modifiers in the 0x16 reply (sval_flag2_modifier_state).

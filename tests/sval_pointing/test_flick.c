@@ -103,7 +103,7 @@ int main(void) {
     sval_point_stop();
     tick(100);
     uint8_t p[32] = {0xDF, sval_cmd_point_tools_get};
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     uint8_t lo = p[4], hi = p[5];
     memmove(p + 5, p + 6, 19);
     p[1] = sval_cmd_point_tools_set;
@@ -111,7 +111,7 @@ int main(void) {
     p[3] = lo;
     p[4] = hi;
     bits(p + 5, 28, 8, 100);
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(p[2] == 0);
     activate(SV_POINT_TOOL1_TOGGLE);
     before = volume_up;

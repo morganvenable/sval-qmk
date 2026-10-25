@@ -38,6 +38,11 @@ void sval_proportional_move(sval_proportional_t *s, int32_t h, int32_t v) {
         s->position[axis] = position > POSITION_MAX ? POSITION_MAX : position < -POSITION_MAX ? -POSITION_MAX : position;
     }
 }
+void sval_proportional_set(sval_proportional_t *s, int64_t h, int64_t v) {
+    const int64_t position[2] = {h, v};
+    for (uint8_t axis = 0; axis < 2; ++axis)
+        s->position[axis] = position[axis] > POSITION_MAX ? POSITION_MAX : position[axis] < -POSITION_MAX ? -POSITION_MAX : position[axis];
+}
 bool sval_proportional_displaced(const sval_proportional_t *s, uint8_t dead_zone) {
     int64_t h = s->position[0] / 256, v = s->position[1] / 256, d = (int64_t)dead_zone * 256;
     return h * h + v * v > d * d;

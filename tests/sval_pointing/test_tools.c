@@ -50,7 +50,7 @@ static void configure(uint8_t action, uint8_t reverse) {
     sval_point_stop();
     tick();
     uint8_t p[32] = {0xDF, sval_cmd_point_tools_get};
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     uint8_t lo = p[4], hi = p[5];
     memmove(p + 5, p + 6, 19);
     p[1]  = sval_cmd_point_tools_set;
@@ -58,7 +58,7 @@ static void configure(uint8_t action, uint8_t reverse) {
     p[3]  = lo;
     p[4]  = hi;
     p[21] = (p[21] & 0xE0) | action | (reverse << 3);
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(!p[2]);
     sval_point_config_reload();
     assert(sval_point_tool(1) == action);

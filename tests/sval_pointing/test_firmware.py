@@ -1,7 +1,9 @@
 """Host tests compile the actual prototype C sources; no QMK toolchain required."""
 import ctypes as C
 from pathlib import Path
+import os
 import random
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -61,6 +63,21 @@ class FirmwareTests(unittest.TestCase):
         # Hard flicks through the frame pipeline: rate limits hold, nothing after the stop.
         self.compile_run('test_catchup', ['point_output.c', 'point_motion.c', 'point_proportional.c', 'point_config.c', str(HERE / 'storage_stub.c')])
 
+    @unittest.skipUnless(os.environ.get('SVAL_BUILD_TESTS') == '1' and shutil.which('qmk'), 'set SVAL_BUILD_TESTS=1 with the QMK toolchain to build the images')
+    def test_auto_image_builds(self):
+        # The released auto-detect images (every pointing driver, the native touchpad) build
+        # for both halves with the tools on, and every module's code is in them.
+        for side in ('left', 'right'):
+            with self.subTest(side=side):
+                out = subprocess.run(['make', f'svalboard/{side}:sval', 'SVAL_POINT_CONTROLS=yes', '-j8'], cwd=ROOT, capture_output=True, text=True)
+                self.assertEqual(out.returncode, 0, out.stdout[-3000:] + out.stderr[-3000:])
+                for source in ('pointing_auto/pointing_auto.c', 'pointing_auto/trackball_pmw3360.c', 'pointing_auto/trackball_pmw3389.c', 'pointing_auto/azoteq.c', 'pointing_auto/trackpoint.c', 'azoteq/ptp.c', 'pointing/point_device.c', 'pointing/point_control.c'):
+                    self.assertIn('keyboards/svalboard/' + source, out.stdout, source)
+
+    def test_devices(self):
+        # Device gains: each device type's counts in the tools' normalized units.
+        self.compile_run('test_devices', ['point_device.c', 'point_motion.c'])
+
     def test_proportional(self):
         self.compile_run('test_proportional', ['point_proportional.c'])
 
@@ -90,12 +107,19 @@ class FirmwareTests(unittest.TestCase):
         subprocess.run([str(exe), str(HERE / 'keybard_vectors.txt')], check=True)
 
     def test_combined_adapter(self):
+        self.combined_adapter([])
+
+    def test_combined_adapter_native_touchpad(self):
+        # The same hook with the native touchpad, as the released auto-detect images build it.
+        self.combined_adapter(['-DSVAL_NATIVE_PTP', '-I' + str(SOURCE.parent / 'azoteq')])
+
+    def combined_adapter(self, flags):
         original = (ROOT / 'keyboards/svalboard/keymaps/keymap_support.c').read_text()
         original = original[original.index('#define SCROLL_FREQUENCY_MS'):original.index('void toggle_axis_scroll_lock')]
         (Path(self.temp.name) / 'adapter.inc').write_text(original)
-        exe = Path(self.temp.name) / 'adapter'
+        exe = Path(self.temp.name) / ('adapter' + ('_ptp' if flags else ''))
         subprocess.run([
-            'cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsanitize=undefined', '-DSVAL_POINT_CONTROLS', '-DAXIS_TYPE=int16_t', '-I' + self.temp.name, '-I' + str(HERE / 'stubs'), '-I' + str(SOURCE), '-I' + str(SOURCE.parent),
+            'cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-fsanitize=undefined', '-DSVAL_POINT_CONTROLS', '-DAXIS_TYPE=int16_t', *flags, '-I' + self.temp.name, '-I' + str(HERE / 'stubs'), '-I' + str(SOURCE), '-I' + str(SOURCE.parent),
             str(HERE / 'test_adapter.c'),
             str(SOURCE / 'point_motion.c'),
             str(SOURCE / 'point_proportional.c'),
@@ -104,6 +128,7 @@ class FirmwareTests(unittest.TestCase):
             str(HERE / 'storage_stub.c'),
             str(SOURCE / 'scroll_policy.c'),
             str(SOURCE.parent / 'axis_scale.c'),
+            str(SOURCE / 'point_device.c'),
             str(SOURCE.parent / 'velocity_scroll.c'), '-lm', '-o',
             str(exe)
         ],

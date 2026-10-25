@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "point_config.h"
+#include "point_device.h"
 #include "via.h"
 extern uint8_t  test_storage[VIA_EEPROM_CUSTOM_CONFIG_SIZE];
 extern uint32_t test_write_first, test_write_end;
@@ -11,8 +12,8 @@ extern bool     test_write_failed;
 extern uint32_t test_user_word;
 static bool     active;
 bool            sval_point_active(uint8_t side) {
-    (void)side;
-    return active;
+               (void)side;
+               return active;
 }
 void sval_point_status(uint8_t *data) {
     data[2] = 1;
@@ -51,8 +52,10 @@ static uint16_t crc(const uint8_t *p) {
 int main(void) {
     memset(test_storage, 0xA3, sizeof(test_storage));
     uint8_t p[32] = {0xDF, sval_cmd_point_tools_get};
-    assert(sval_point_command(p, 26));
-    assert(p[2] == 0 && p[3] == 5);
+    assert(sval_point_command(p, 27));
+    assert(p[2] == 0 && p[3] == 6);
+    // Version 6 appends the touchpad and TrackPoint gains: 2.0 each by default.
+    assert(p[25] == 32 && p[26] == 32);
     const uint8_t golden[16] = {36, 57, 73, 14, 112, 144, 228, 0, 7, 73, 14, 112, 144, 228, 0, 7};
     assert(!memcmp(p + 6, golden, 16));
     for (int i = 1; i <= 4; ++i)
@@ -60,39 +63,39 @@ int main(void) {
     make_set(p);
     bits(p + 5, 6, 6, 45);
     bits(p + 5, 12, 1, 0); // shared horizontal64, vertical32, unlinked
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(!p[2]);
     sval_point_config_reload();
     for (int i = 1; i <= 4; ++i)
         assert(sval_point_profile(i)->distance == 64 && sval_point_profile(i)->vertical_distance == 32);
     p[1] = sval_cmd_point_tools_get;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     make_set(p);
     bits(p + 5, 13, 1, 0); // individual overrides enabled
     bits(p + 5, 14, 6, 54);
     bits(p + 5, 20, 6, 54);
     bits(p + 5, 27, 1, 0); // volume own linked16-count speed
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(!p[2]);
     assert(sval_point_profile(1)->vertical_distance == 16);
     assert(sval_point_profile(2)->vertical_distance == 32);
     make_set(p);
     p[3]--;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(p[2] == 2);
     make_set(p);
     active = true;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(p[2] == 1);
     active = false;
     make_set(p);
     bits(p + 5, 20, 6, 1);
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(p[2] == 3); // inconsistent linked pair
     make_set(p);
     bits(p + 5, 13, 1, 1);
     test_write_failed = true;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(p[2] == 4);
     test_write_failed = false;
     assert(sval_point_profile(1)->distance == 16);
@@ -111,10 +114,10 @@ int main(void) {
     assert(test_storage[AT + 1] == 2); // no write on boot
     // v4 options round-trip independently, keeping a v3 speed record for rollback.
     p[1] = sval_cmd_point_tools_get;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     make_set(p);
     p[21] = (p[21] & 0xE0) | 4 | 16;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(!p[2]);
     sval_point_config_reload();
     assert(sval_point_tool(1) == SVAL_TOOL_ZOOM && sval_point_inverted(1, 1));
@@ -130,25 +133,91 @@ int main(void) {
     test_user_word = intact;
     sval_point_config_reload();
     p[1] = sval_cmd_point_tools_get;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     make_set(p);
     p[21] |= 7;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(p[2] == 0); // proportional preset fills the final 3-bit ID
     p[1] = sval_cmd_point_tools_get;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     make_set(p);
     p[23] |= 0x80;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(p[2] == 3); // reserved bits
     p[1] = sval_cmd_point_tools_get;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     make_set(p);
     sval_point_command(p, 23);
     assert(p[2] == 3); // truncated request
-    // Every write stayed inside the pointing tools' own range (via_custom_map.h).
-    assert(test_write_first >= SVAL_VIA_POINT_TOOLS_OFFSET && test_write_end <= SVAL_VIA_POINT_TOOLS_OFFSET + SVAL_VIA_POINT_TOOLS_SIZE);
+    // Every write stayed inside the pointing tools' own ranges (via_custom_map.h): the
+    // speed record and the gains record. Nothing else in the block changed.
+    assert(test_write_first >= SVAL_VIA_POINT_TOOLS_OFFSET && test_write_end <= SVAL_VIA_POINT_GAINS_OFFSET + SVAL_VIA_POINT_GAINS_SIZE);
     for (int i = 0; i < VIA_EEPROM_CUSTOM_CONFIG_SIZE; ++i)
-        if (i < AT || i >= AT + 20) assert(test_storage[i] == 0xA3);
+        if ((i < AT || i >= AT + 20) && (i < SVAL_VIA_POINT_GAINS_OFFSET || i >= SVAL_VIA_POINT_GAINS_OFFSET + 8)) assert(test_storage[i] == 0xA3);
     puts("config: axis pairs, inheritance, overrides, persistence, own storage range, CRC, stale/busy/invalid/failure guards passed");
+
+    // Version 6: the device gains (touchpad, TrackPoint) after the tools.
+    active = false;
+    p[1]   = sval_cmd_point_tools_get;
+    sval_point_command(p, 27);
+    assert(p[3] == 6 && p[25] == 32 && p[26] == 32);
+    assert(sval_point_gain(SVAL_POINT_DEVICE_PAD) == 32 && sval_point_gain(SVAL_POINT_DEVICE_STICK) == 32 && sval_point_gain(SVAL_POINT_DEVICE_BALL) == 16);
+    uint8_t speeds[16], tools[3];
+    memcpy(speeds, p + 6, 16);
+    memcpy(tools, p + 22, 3);
+    make_set(p);
+    p[2]  = 6;
+    p[24] = 48; // touchpad 3.0
+    p[25] = 8;  // TrackPoint 0.5
+    sval_point_command(p, 27);
+    assert(p[2] == 0 && p[3] == 6 && p[25] == 48 && p[26] == 8);
+    assert(!memcmp(p + 6, speeds, 16) && !memcmp(p + 22, tools, 3)); // the rest unchanged
+    sval_point_config_reload();
+    assert(sval_point_gain(SVAL_POINT_DEVICE_PAD) == 48 && sval_point_gain(SVAL_POINT_DEVICE_STICK) == 8);
+    // A version 5 SET leaves the gains alone.
+    p[1] = sval_cmd_point_tools_get;
+    sval_point_command(p, 27);
+    make_set(p);
+    sval_point_command(p, 27);
+    assert(p[2] == 0 && p[25] == 48 && p[26] == 8);
+    // A zero gain, a short version 6 request or an unknown version is refused, unsaved.
+    p[1] = sval_cmd_point_tools_get;
+    sval_point_command(p, 27);
+    make_set(p);
+    p[2]  = 6;
+    p[24] = 0;
+    p[25] = 16;
+    sval_point_command(p, 27);
+    assert(p[2] == 3 && p[25] == 48);
+    p[1] = sval_cmd_point_tools_get;
+    sval_point_command(p, 27);
+    make_set(p);
+    p[2]  = 6;
+    p[24] = 16;
+    p[25] = 16;
+    sval_point_command(p, 25);
+    assert(p[2] == 3);
+    p[1] = sval_cmd_point_tools_get;
+    sval_point_command(p, 27);
+    make_set(p);
+    p[2] = 7;
+    sval_point_command(p, 27);
+    assert(p[2] == 3);
+    // A damaged gains record reads as the defaults; the speed record is unaffected.
+    test_storage[SVAL_VIA_POINT_GAINS_OFFSET + 2] ^= 1;
+    sval_point_config_reload();
+    assert(sval_point_gain(SVAL_POINT_DEVICE_PAD) == 32 && sval_point_gain(SVAL_POINT_DEVICE_STICK) == 32);
+    p[1] = sval_cmd_point_tools_get;
+    sval_point_command(p, 27);
+    assert(!memcmp(p + 6, speeds, 16));
+    // A save refused while a tool is active writes neither record.
+    make_set(p);
+    p[2]   = 6;
+    p[24]  = 20;
+    p[25]  = 20;
+    active = true;
+    sval_point_command(p, 27);
+    assert(p[2] == 1 && p[25] == 32);
+    active = false;
+    puts("config: version 6 gains read, saved, kept by a version 5 save, validated, damaged record defaults passed");
 }

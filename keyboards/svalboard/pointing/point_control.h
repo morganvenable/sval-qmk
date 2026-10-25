@@ -2,6 +2,7 @@
 #pragma once
 #include "quantum.h"
 #include "scroll_policy.h"
+#include "point_device.h"
 
 // The whole QK_KB block (0x7E00-0x7E3F, 64 codes) is reserved for the pointing tools.
 // Layouts store the codes: new keys go in free codes, and a retired code is never reused.
@@ -37,7 +38,14 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record);
 bool sval_point_active(uint8_t side);
 bool sval_point_blocked(uint8_t side);
 // Raw sensor counts, before sniper and boost: the tools ignore both.
-void sval_point_buffer(uint8_t side, int16_t x, int16_t y, uint16_t cpi);
+void sval_point_buffer(uint8_t side, int16_t x, int16_t y, uint16_t cpi); // a trackball at cpi
+void sval_point_buffer_scaled(uint8_t side, int16_t x, int16_t y, sval_point_scale_t scale);
+// A touchpad read from its contacts: whether a finger is down on it. Lifting to reposition
+// is not motion: it never counts as a reversal and never ends a step in progress, and
+// Proportional scroll stops and starts again from where the finger lands.
+void sval_point_contact(uint8_t side, bool down);
+// Any tool on (every pointer runs it).
+bool sval_point_any_active(void);
 // The host is macOS (or iOS): Tabs, Tasks, Zoom and Undo / Redo send the Command shortcuts.
 void sval_point_host_mac(bool mac);
 void sval_point_discard_interval(void);

@@ -10,6 +10,7 @@ static const struct {
     {"board settings", SVAL_VIA_BOARD_OFFSET, SVAL_VIA_BOARD_SIZE},
     {"pointing tools", SVAL_VIA_POINT_TOOLS_OFFSET, SVAL_VIA_POINT_TOOLS_SIZE},
     {"touch gestures", SVAL_VIA_TOUCH_GESTURES_OFFSET, SVAL_VIA_TOUCH_GESTURES_SIZE},
+    {"pointing tools gains", SVAL_VIA_POINT_GAINS_OFFSET, SVAL_VIA_POINT_GAINS_SIZE},
 };
 int main(void) {
     unsigned count = sizeof(ranges) / sizeof(ranges[0]);
@@ -25,7 +26,10 @@ int main(void) {
         }
     }
     assert(SVAL_VIA_POINT_TOOLS_OFFSET == 100 && SVAL_VIA_POINT_TOOLS_SIZE == 20);
-    assert(SVAL_VIA_TOUCH_GESTURES_OFFSET >= 120 && SVAL_VIA_TOUCH_GESTURES_SIZE >= 22);
+    assert(SVAL_VIA_TOUCH_GESTURES_OFFSET == 120 && SVAL_VIA_TOUCH_GESTURES_SIZE == 24);
+    // Ranges are only ever added at the end: no existing address moves.
+    assert(SVAL_VIA_BOARD_OFFSET == 0 && SVAL_VIA_BOARD_SIZE == 100);
+    assert(SVAL_VIA_POINT_GAINS_OFFSET == 144 && SVAL_VIA_POINT_GAINS_SIZE == 8 && VIA_EEPROM_CUSTOM_CONFIG_SIZE == 152);
     // saved_values_t and its magic are checked against SVAL_VIA_BOARD_SIZE at build time.
-    puts("storage map: board, pointing tools and touch gesture ranges are inside the block and apart");
+    puts("storage map: board, pointing tools, touch gesture and gains ranges are inside the block, apart and unmoved");
 }

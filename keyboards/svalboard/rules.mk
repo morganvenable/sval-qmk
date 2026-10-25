@@ -162,5 +162,5 @@ endif
 ifeq ($(strip $(SVAL_POINT_CONTROLS)), yes)
   OPT_DEFS += -DSVAL_POINT_CONTROLS
   SRC += pointing/point_motion.c pointing/point_proportional.c pointing/point_control.c pointing/point_output.c pointing/point_config.c
-  SRC += pointing/point_transport.c
+  SRC += pointing/point_transport.c pointing/point_device.c
 endif
