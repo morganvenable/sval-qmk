@@ -2,7 +2,9 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-#define SVAL_POINT_CONFIG_VERSION 5
+// Table version 6 adds the device gains to GET and SET; SET still takes version 5.
+#define SVAL_POINT_CONFIG_VERSION 6
+#define SVAL_POINT_CONFIG_VERSION_V5 5
 #define SVAL_POINT_PROFILE_COUNT 4
 enum { SVAL_TOOL_VOLUME, SVAL_TOOL_ARROWS, SVAL_TOOL_TABS, SVAL_TOOL_TASKS, SVAL_TOOL_ZOOM, SVAL_TOOL_HISTORY, SVAL_TOOL_HISTORY_Y, SVAL_TOOL_PROPORTIONAL, SVAL_TOOL_COUNT };
 // For the proportional preset, reversal encodes dead-zone counts + 1 (0..63).
@@ -16,6 +18,9 @@ bool                        sval_point_command(uint8_t *data, uint8_t length);
 void                        sval_point_config_reload(void);
 
 uint8_t sval_point_tool(uint8_t control);
+// The device gain (x16, point_device.h) of a device type: the touchpad's and the
+// TrackPoint's are settings; a trackball's is always 1.0.
+uint8_t sval_point_gain(uint8_t device);
 // Every action has its own default step and pace (point_config.c, docs/pointing-tools.md).
 // travel_x2 is twice the step's multiple of the slot's speed: at the default speed (64
 // counts at 800 CPI, about 2 mm of ball travel) a step is 64 * travel_x2 / 2 counts.

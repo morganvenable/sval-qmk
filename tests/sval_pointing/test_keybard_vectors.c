@@ -35,7 +35,7 @@ int  main(int argc, char **argv) {
         memset(d, 0, sizeof d);
         d[0] = 0xDF;
         d[1] = sval_cmd_point_tools_set;
-        d[2] = SVAL_POINT_CONFIG_VERSION;
+        d[2] = SVAL_POINT_CONFIG_VERSION_V5; // the vectors are version 5 payloads (no gains)
         d[3] = lo;
         d[4] = hi;
         memcpy(d + 5, payload, 19);

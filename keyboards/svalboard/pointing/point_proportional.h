@@ -13,6 +13,8 @@ typedef struct {
 
 void sval_proportional_reset(sval_proportional_t *s, uint32_t now);
 void sval_proportional_move(sval_proportional_t *s, int32_t h, int32_t v);
+// Sets the position outright (a TrackPoint's deflection, Q16 reference counts).
+void sval_proportional_set(sval_proportional_t *s, int64_t h, int64_t v);
 void sval_proportional_discard_output(sval_proportional_t *s, uint32_t now);
 bool sval_proportional_displaced(const sval_proportional_t *s, uint8_t dead_zone);
 // Full 2D position is retained while axes gates OUTPUT. The dead zone is circular

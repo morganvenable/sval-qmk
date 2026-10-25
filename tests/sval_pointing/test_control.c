@@ -161,7 +161,7 @@ int main(void) {
     // Different axis distances flow through the actual controller, not just storage.
     configured         = USB_DEVICE_STATE_CONFIGURED;
     uint8_t packet[32] = {0xDF, sval_cmd_point_tools_get};
-    sval_point_command(packet, 26);
+    sval_point_command(packet, 27);
     uint8_t lo = packet[4], hi = packet[5];
     memmove(packet + 5, packet + 6, 19);
     packet[1] = sval_cmd_point_tools_set;
@@ -170,7 +170,7 @@ int main(void) {
     packet[4] = hi;
     packet[5] = (packet[5] & 63) | ((45 & 3) << 6);
     packet[6] = (packet[6] & 0xC0) | (45 >> 2) | (1 << 5);
-    sval_point_command(packet, 26);
+    sval_point_command(packet, 27);
     assert(packet[2] == 0);
     event(7, SV_POINT_TOOL2_HOLD, true);
     before = recognized;
@@ -256,7 +256,7 @@ int main(void) {
     event(14, SV_POINT_TOOL3_HOLD, true);
     uint8_t status[32] = {0xDF, sval_cmd_point_tools_status};
     sval_point_command(status, 32);
-    assert(status[2] == 1 && status[3] == 3 && status[4] == 3 && status[8] == 1);
+    assert(status[2] == 2 && status[3] == 3 && status[4] == 3 && status[8] == 1);
     event(14, 4, false);
     // A Tasks session belongs to the pointer that opened it; the other is ignored.
     event(15, SV_POINT_TOOL4_HOLD, true);

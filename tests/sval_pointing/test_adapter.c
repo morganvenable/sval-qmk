@@ -16,14 +16,14 @@ static uint16_t last_consumer;
 static int      configured = USB_DEVICE_STATE_CONFIGURED;
 static bool     connected;
 uint32_t        timer_read32(void) {
-    return clock_ms;
+           return clock_ms;
 }
 uint32_t timer_elapsed32(uint32_t t) {
     return clock_ms - t;
 }
 static uint8_t hand_sensor[2];
 uint8_t        sval_pointer_sensor_for_hand(bool left) {
-    return hand_sensor[left ? 0 : 1];
+           return hand_sensor[left ? 0 : 1];
 }
 uint16_t timer_read(void) {
     return clock_ms;
@@ -86,6 +86,34 @@ report_mouse_t pointing_device_combine_reports(report_mouse_t a, report_mouse_t 
     a.buttons |= b.buttons;
     return a;
 }
+#ifdef SVAL_NATIVE_PTP
+// The native touchpad's grab (azoteq/ptp.c), as the hook sees it.
+#    include "ptp.h"
+#    include "ptp_descriptor.h"
+static bool     ptp_grabbed, ptp_ready[2];
+static uint16_t ptp_touch[2], ptp_x[2], ptp_y[2];
+static unsigned ptp_grab_calls;
+uint16_t        sval_ptp_take_motion(uint8_t pad) {
+           (void)pad;
+           return 0;
+}
+void sval_ptp_set_grab(bool grab) {
+    ptp_grabbed = grab;
+    ++ptp_grab_calls;
+}
+bool sval_ptp_grab_ready(uint8_t pad) {
+    return ptp_ready[pad & 1];
+}
+uint16_t sval_ptp_grab_finger(uint8_t pad, uint16_t *x, uint16_t *y) {
+    if (!ptp_grabbed || !ptp_touch[pad & 1]) return 0;
+    *x = ptp_x[pad & 1];
+    *y = ptp_y[pad & 1];
+    return ptp_touch[pad & 1];
+}
+uint8_t sval_pad_hands(void) {
+    return (hand_sensor[0] == SVAL_SENSOR_AZOTEQ ? 1 : 0) | (hand_sensor[1] == SVAL_SENSOR_AZOTEQ ? 2 : 0);
+}
+#endif
 #include "adapter.inc"
 static report_mouse_t input(int lx, int ly, int rx, int ry, unsigned dt) {
     clock_ms += dt;
@@ -153,7 +181,7 @@ int main(void) {
         sval_point_task();
     }
     uint8_t packet[32] = {0xDF, sval_cmd_point_tools_get};
-    sval_point_command(packet, 26);
+    sval_point_command(packet, 27);
     uint8_t lo = packet[4], hi = packet[5];
     memmove(packet + 5, packet + 6, 19);
     packet[1]  = sval_cmd_point_tools_set;
@@ -161,7 +189,7 @@ int main(void) {
     packet[3]  = lo;
     packet[4]  = hi;
     packet[21] = (packet[21] & 0xE0) | SVAL_TOOL_PROPORTIONAL;
-    sval_point_command(packet, 26);
+    sval_point_command(packet, 27);
     assert(!packet[2]);
     process_detected_host_os_kb(OS_WINDOWS);
     global_saved_values.natural_scroll   = false;
@@ -327,7 +355,12 @@ int main(void) {
     hand_sensor[0] = SVAL_SENSOR_TRACKPOINT;
     input(0, 0, 0, 0, 600); // the module is looked up every 500 ms
     key(5, SV_POINT_TOOL2_HOLD, true);
-    input(170, 0, 0, 0, 1);
+    // A TrackPoint ignores the 1600 CPI: logical 800 CPI times its 2.0 gain, so 80 counts
+    // make the 160-count Arrows step.
+    input(79, 0, 0, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(!pending_count(0));
+    input(1, 0, 0, 0, 1);
     input(0, 0, 0, 0, 11);
     assert(pending_count(0));
     key(5, SV_POINT_TOOL2_HOLD, false);
@@ -434,7 +467,209 @@ int main(void) {
     input(0, 0, 0, 0, 10);
     puts("combined adapter: Velocity Scroll owns every pointer while held, tools included passed");
     puts("combined adapter: sniper and boost leave tool steps and Proportional scroll alone, still scale the other pointer passed");
-    puts("combined adapter: TrackPoint counts unscaled, trackball counts normalized by CPI passed");
+    // Mixed modules: a touchpad on the left, a trackball on the right, one tool on both.
+    // The pad's counts take its 2.0 gain (80 counts a 160-count Arrows step at 800 CPI),
+    // the ball's only its CPI (160). The pad's own clicks and wheel are dropped while the
+    // tool runs; the ball's report keeps its buttons.
+    sval_point_stop();
+    for (int i = 0; i < 8; ++i) {
+        ++clock_ms;
+        sval_point_task();
+    }
+    sensor_cpi                           = 800;
+    hand_sensor[0]                       = SVAL_SENSOR_AZOTEQ;
+    hand_sensor[1]                       = SVAL_SENSOR_PMW3389;
+    global_saved_values.axis_scroll_lock = false;
+    global_saved_values.left_scroll = global_saved_values.right_scroll = false;
+    input(0, 0, 0, 0, 600);
+    key(9, SV_POINT_TOOL2_HOLD, true);
+    steps = recognized;
+    input(79, 0, 0, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(recognized == steps);
+    input(1, 0, 0, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(recognized == steps + 1);
+    steps = recognized;
+    input(0, 0, 159, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(recognized == steps);
+    input(0, 0, 1, 0, 1);
+    input(0, 0, 0, 0, 11);
+    assert(recognized == steps + 1);
+    {
+        clock_ms += 1;
+        report_mouse_t pad = {.buttons = 1, .v = 3, .h = 2}, ball = {.buttons = 2};
+        r = pointing_device_task_combined_user(pad, ball);
+        assert(r.buttons == 2 && !r.h && !r.v);
+    }
+    uint8_t status[32] = {0xDF, sval_cmd_point_tools_status};
+    sval_point_command(status, 27);
+    assert(status[2] == 2 && status[21] == SVAL_POINT_DEVICE_PAD && status[22] == SVAL_POINT_DEVICE_BALL && status[23] == 0);
+    key(9, SV_POINT_TOOL2_HOLD, false);
+    {
+        // With no tool on, the pad's click goes through again.
+        clock_ms += 1;
+        report_mouse_t pad = {.buttons = 1}, ball = {0};
+        r = pointing_device_task_combined_user(pad, ball);
+        assert(r.buttons == 1);
+    }
+    hand_sensor[0] = hand_sensor[1] = SVAL_SENSOR_NONE;
+    input(0, 0, 0, 0, 600);
+    puts("combined adapter: touchpad left and trackball right run one tool, each at its own device scale; pad clicks and wheel dropped while it runs passed");
+    puts("combined adapter: TrackPoint counts at logical 800 CPI times its gain, trackball counts normalized by CPI passed");
+
+    // TrackPoint Proportional scroll (slot 1): the push itself, its counts over the last
+    // 64 ms, is the offset. A steady push scrolls at a steady speed, and letting go stops
+    // it within the window. A trackball given the same counts keeps speeding up and keeps
+    // scrolling after it stops, as an offset from the origin should.
+    {
+        int32_t speed_at[2][3];
+        for (int run = 0; run < 2; ++run) {
+            hand_sensor[0] = run ? SVAL_SENSOR_PMW3389 : SVAL_SENSOR_TRACKPOINT;
+            input(0, 0, 0, 0, 600);
+            key(10, SV_POINT_TOOL1_HOLD, true);
+            // 10 counts every 10 ms for 500 ms; the scroll over 100-250 ms and 350-500 ms.
+            speed_at[run][0] = speed_at[run][1] = 0;
+            for (int t = 1; t <= 50; ++t) {
+                r = input(10, 0, 0, 0, 10);
+                if (t > 10 && t <= 25) speed_at[run][0] += r.h;
+                if (t > 35) speed_at[run][1] += r.h;
+            }
+            for (int t = 0; t < 10; ++t)
+                input(0, 0, 0, 0, 10); // let go: 100 ms
+            speed_at[run][2] = 0;
+            for (int t = 0; t < 10; ++t)
+                speed_at[run][2] += input(0, 0, 0, 0, 10).h;
+            key(10, SV_POINT_TOOL1_HOLD, false);
+            input(0, 0, 0, 0, 10);
+        }
+        // Stick: the same speed early and late, nothing after the push.
+        assert(speed_at[0][0] > 0 && abs(speed_at[0][1] - speed_at[0][0]) * 5 <= speed_at[0][0] && speed_at[0][2] == 0);
+        // Ball: faster late than early, and still scrolling after it stops.
+        assert(speed_at[1][1] > 2 * speed_at[1][0] && speed_at[1][2] > 0);
+        hand_sensor[0] = SVAL_SENSOR_NONE;
+        input(0, 0, 0, 0, 600);
+    }
+    puts("combined adapter: TrackPoint Proportional scroll follows the push (steady speed, stops on release); trackball keeps its origin passed");
+#ifdef SVAL_NATIVE_PTP
+    // Native touchpad: while a tool runs, the firmware has the pad's contacts and the
+    // operating system's touchpad gets nothing (the grab); the pad's own mouse output is
+    // ignored. Counts: 2048 across 43 mm, so at 800 CPI 121 pad counts are 80 counts,
+    // one 160-count Arrows step at the pad's 2.0 gain.
+    {
+        hand_sensor[0] = SVAL_SENSOR_AZOTEQ;
+        hand_sensor[1] = SVAL_SENSOR_PMW3389;
+        ptp_ready[0]   = true;
+        input(0, 0, 0, 0, 600);
+        assert(!ptp_grabbed);
+        key(11, SV_POINT_TOOL2_HOLD, true);
+        input(0, 0, 0, 0, 1);
+        assert(ptp_grabbed);
+        uint32_t steps = recognized;
+        // A finger lands: never motion, and the pad's own relative output is ignored.
+        ptp_touch[0] = 7;
+        ptp_x[0]     = 1000;
+        ptp_y[0]     = 900;
+        input(500, 0, 0, 0, 1);
+        input(0, 0, 0, 0, 11);
+        assert(recognized == steps);
+        ptp_x[0] += 120; // 79.7 counts: not yet
+        input(0, 0, 0, 0, 1);
+        input(0, 0, 0, 0, 11);
+        assert(recognized == steps);
+        ptp_x[0] += 2;
+        input(0, 0, 0, 0, 1);
+        input(0, 0, 0, 0, 11);
+        assert(recognized == steps + 1);
+        uint8_t status[32] = {0xDF, sval_cmd_point_tools_status};
+        sval_point_command(status, 27);
+        assert(status[21] == SVAL_POINT_DEVICE_PAD && status[22] == SVAL_POINT_DEVICE_BALL && status[23] == 1);
+        // Lifting to reposition: part of a step, a lift longer than the 250 ms idle, a
+        // landing far to the left, the rest of the step. One step, to the right: the lift
+        // neither ended the step nor counted the jump back as a reversal.
+        steps = recognized;
+        ptp_x[0] += 100; // 66 counts, 132 of 160
+        input(0, 0, 0, 0, 1);
+        input(0, 0, 0, 0, 11);
+        ptp_touch[0] = 0;
+        for (int t = 0; t < 40; ++t)
+            input(0, 0, 0, 0, 10);
+        ptp_touch[0] = 8;
+        ptp_x[0]     = 200;
+        input(0, 0, 0, 0, 1);
+        input(0, 0, 0, 0, 11);
+        assert(recognized == steps);
+        ptp_x[0] += 50; // 33 counts more: 198 of 160
+        input(0, 0, 0, 0, 1);
+        input(0, 0, 0, 0, 11);
+        assert(recognized == steps + 1 && pointers[0].pending[0].direction > 0);
+        key(11, SV_POINT_TOOL2_HOLD, false);
+        input(0, 0, 0, 0, 1);
+        assert(!ptp_grabbed);
+        // Proportional scroll (slot 1) on the pad: anchored where the finger lands, stops
+        // when it lifts, anchored again where it lands next.
+        key(11, SV_POINT_TOOL1_HOLD, true);
+        input(0, 0, 0, 0, 1);
+        assert(ptp_grabbed);
+        ptp_touch[0] = 9;
+        ptp_x[0]     = 300;
+        input(0, 0, 0, 0, 10);
+        ptp_x[0] += 300;
+        input(0, 0, 0, 0, 10);
+        int32_t far = 0;
+        for (int t = 0; t < 10; ++t)
+            far += input(0, 0, 0, 0, 10).h;
+        assert(far > 0);
+        ptp_touch[0] = 0;
+        input(0, 0, 0, 0, 10);
+        int32_t up = 0;
+        for (int t = 0; t < 10; ++t)
+            up += input(0, 0, 0, 0, 10).h;
+        assert(up == 0);
+        ptp_touch[0]   = 10;
+        ptp_x[0]       = 1800; // lands far to the right: no offset yet
+        int32_t landed = 0;
+        for (int t = 0; t < 10; ++t)
+            landed += input(0, 0, 0, 0, 10).h;
+        assert(landed == 0);
+        ptp_x[0] -= 100; // a small move left of the new anchor
+        input(0, 0, 0, 0, 10);
+        int32_t back = 0;
+        for (int t = 0; t < 10; ++t)
+            back += input(0, 0, 0, 0, 10).h;
+        assert(back < 0 && -back < far);
+        key(11, SV_POINT_TOOL1_HOLD, false);
+        input(0, 0, 0, 0, 1);
+        assert(!ptp_grabbed);
+        // Velocity Scroll and a tool share the one grab: it stays while either wants it.
+        key(11, SV_POINT_TOOL2_HOLD, true);
+        input(0, 0, 0, 0, 1);
+        vs_keys = 1;
+        velocity_scroll_update();
+        assert(ptp_grabbed);
+        key(11, SV_POINT_TOOL2_HOLD, false);
+        input(0, 0, 0, 0, 1);
+        assert(ptp_grabbed);
+        vs_keys = 0;
+        velocity_scroll_update();
+        assert(!ptp_grabbed);
+        // A pad whose contacts don't reach the firmware (not ready) runs on its own mouse
+        // output, as in a build without the native touchpad.
+        ptp_touch[0] = 0;
+        ptp_ready[0] = false;
+        key(11, SV_POINT_TOOL2_HOLD, true);
+        steps = recognized;
+        input(80, 0, 0, 0, 1);
+        input(0, 0, 0, 0, 11);
+        assert(recognized == steps + 1);
+        key(11, SV_POINT_TOOL2_HOLD, false);
+        input(0, 0, 0, 0, 1);
+        hand_sensor[0] = hand_sensor[1] = SVAL_SENSOR_NONE;
+        input(0, 0, 0, 0, 600);
+    }
+    puts("combined adapter (native touchpad): a tool takes the pads (grab) and reads the finger; landings are not motion; lifts keep a step going and re-anchor Proportional scroll; one grab with Velocity Scroll passed");
+#endif
     puts("combined adapter: proportional hold/toggle, center, independent pointers, natural direction, shared lock sustain/breakaway and stop passed");
     puts("combined adapter: idle flush, no cursor/wheel leakage, natural scroll, shared lock/breakaway, idle timeout, host bypass passed");
 }

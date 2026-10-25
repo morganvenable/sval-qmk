@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "pointing/scroll_policy.h"
 #ifdef SVAL_POINT_CONTROLS
 #    include "pointing/point_control.h"
+#    include "pointing/point_config.h"
 #endif
 
 // in keymap.c:
@@ -220,6 +221,22 @@ bool velocity_scroll_active(void) {
     return vs.active;
 }
 
+// The pads' contacts come to the firmware (the native touchpad sends nothing) while
+// Velocity Scroll is held or a pointing tool is on with a pad on either hand. One owner
+// at a time: the operating system's touchpad, or the firmware. The tools' part is in
+// point_tools_feed() below.
+static bool point_tools_grab(void);
+static void pointing_grab_update(void) {
+    bool grab = vs.active || point_tools_grab();
+#    ifdef SVAL_NATIVE_PTP
+    static bool grabbed;
+    if (grab != grabbed) sval_ptp_set_grab(grab);
+    grabbed = grab;
+#    else
+    (void)grab;
+#    endif
+}
+
 static void velocity_scroll_update(void) {
     bool on = vs_keys || vs_dev;
     if (on == vs.active) return;
@@ -233,9 +250,7 @@ static void velocity_scroll_update(void) {
     } else {
         sval_vs_stop(&vs);
     }
-#    ifdef SVAL_NATIVE_PTP
-    sval_ptp_set_grab(on);
-#    endif
+    pointing_grab_update();
 }
 
 #    ifdef SVAL_TOUCH_DEV
@@ -292,22 +307,84 @@ static report_mouse_t velocity_scroll_report(report_mouse_t left, report_mouse_t
 }
 
 #ifdef SVAL_POINT_CONTROLS
-// The CPI the pointing tools normalize a hand's counts by, so a step takes the same travel
-// at any CPI. A trackball or trackpad moves at the CPI set for its hand (a trackpad caps it
-// at its own resolution). A TrackPoint ignores CPI and reports force rather than distance,
-// so its counts are taken as they come, as a logical 800 CPI; the tool speeds tune it.
-// Looked up every half second: a module only changes across a reset or a reconnect.
-static uint16_t point_tool_cpi(bool left, uint16_t cpi) {
-    static uint8_t  sensor[2];
+_Static_assert(SVAL_SENSOR_PMW3360 == 1 && SVAL_SENSOR_PMW3389 == 2 && SVAL_SENSOR_AZOTEQ == 5 && SVAL_SENSOR_TRACKPOINT == 6, "point_device.c uses these sensor numbers");
+// Each hand's module. Looked up every half second: a module only changes across a reset
+// or a reconnect.
+static uint8_t point_sensor[2];
+static void    point_sensors_refresh(void) {
     static uint32_t checked;
     static bool     known;
-    if (!known || timer_elapsed32(checked) > 500) {
-        sensor[0] = sval_pointer_sensor_for_hand(true);
-        sensor[1] = sval_pointer_sensor_for_hand(false);
-        checked   = timer_read32();
-        known     = true;
+    if (known && timer_elapsed32(checked) <= 500) return;
+    point_sensor[0] = sval_pointer_sensor_for_hand(true);
+    point_sensor[1] = sval_pointer_sensor_for_hand(false);
+    checked         = timer_read32();
+    known           = true;
+}
+static bool point_tools_grab(void) {
+    point_sensors_refresh();
+    return sval_point_any_active() && (point_sensor[0] == SVAL_SENSOR_AZOTEQ || point_sensor[1] == SVAL_SENSOR_AZOTEQ);
+}
+#    ifdef SVAL_NATIVE_PTP
+// A pad whose contacts come to the firmware while a tool runs: its followed finger's
+// motion, converted to counts at the hand's CPI, takes the place of the pad's own mouse
+// output in that hand's report, so the rest of the hook (the shared axis lock, the scroll
+// batch) sees it as any pointer's motion. A finger landing is never motion: the tool
+// starts again from where it lands.
+static struct {
+    uint16_t touch, x, y;
+    int32_t  remainder[2];
+} point_pad[2];
+static int16_t point_pad_counts(int32_t delta, uint16_t dpi, int32_t *remainder, uint16_t pad_counts, uint16_t pad_tenth_mm) {
+    // pad counts * dpi * 0.1 mm / (counts across the pad * 2.54 mm)
+    int64_t num = (int64_t)delta * dpi * pad_tenth_mm + *remainder, den = (int64_t)pad_counts * 254;
+    *remainder = num % den;
+    return num / den;
+}
+static bool point_pad_contacts(uint8_t hand, uint16_t dpi, report_mouse_t *r) {
+    if (point_sensor[hand] != SVAL_SENSOR_AZOTEQ || !sval_ptp_grab_ready(hand)) {
+        point_pad[hand].touch = 0;
+        return false;
     }
-    return sensor[left ? 0 : 1] == SVAL_SENSOR_TRACKPOINT ? 800 : cpi;
+    uint16_t x = 0, y = 0, touch = sval_ptp_grab_finger(hand, &x, &y);
+    r->x = r->y = 0;
+    if (touch && touch == point_pad[hand].touch) {
+        r->x = point_pad_counts((int32_t)x - point_pad[hand].x, dpi, &point_pad[hand].remainder[0], SVAL_PTP_PAD_X, 430);
+        r->y = point_pad_counts((int32_t)y - point_pad[hand].y, dpi, &point_pad[hand].remainder[1], SVAL_PTP_PAD_Y, 400);
+    } else
+        point_pad[hand].remainder[0] = point_pad[hand].remainder[1] = 0;
+    point_pad[hand].touch = touch;
+    point_pad[hand].x     = x;
+    point_pad[hand].y     = y;
+    sval_point_contact(hand, touch != 0);
+    return true;
+}
+#    endif
+// Feeds both hands to the tools: their raw counts (sniper and boost never change a tool's
+// feel), each normalized by its device type (point_device.h). While a tool runs it owns
+// every pointer: a hand's wheel output is dropped, and so are a touchpad's own clicks
+// (tap, press-and-hold), which would otherwise accept or cancel a Tasks session.
+static void point_tools_feed(report_mouse_t *left, report_mouse_t *right) {
+    point_sensors_refresh();
+    pointing_grab_update();
+    report_mouse_t *hands[2] = {left, right};
+    uint16_t        dpi[2]   = {get_left_dpi(), get_right_dpi()};
+    bool            on       = sval_point_any_active();
+    for (uint8_t hand = 0; hand < 2; ++hand) {
+        bool contacts = false;
+        if (on) {
+#    ifdef SVAL_NATIVE_PTP
+            contacts = point_pad_contacts(hand, dpi[hand], hands[hand]);
+#    endif
+            hands[hand]->h = hands[hand]->v = 0;
+            if (point_sensor[hand] == SVAL_SENSOR_AZOTEQ) hands[hand]->buttons = 0;
+        }
+        if (sval_point_blocked(hand)) hands[hand]->x = hands[hand]->y = hands[hand]->h = hands[hand]->v = 0;
+        sval_point_buffer_scaled(hand, hands[hand]->x, hands[hand]->y, sval_point_scale(point_sensor[hand], dpi[hand], contacts, sval_point_gain(SVAL_POINT_DEVICE_PAD), sval_point_gain(SVAL_POINT_DEVICE_STICK)));
+    }
+}
+#else
+static bool point_tools_grab(void) {
+    return false;
 }
 #endif
 
@@ -318,13 +395,9 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
     if (vs.active) return velocity_scroll_report(reportMouse1, reportMouse2);
 
 #ifdef SVAL_POINT_CONTROLS
-    if (sval_point_blocked(0)) reportMouse1.x = reportMouse1.y = reportMouse1.h = reportMouse1.v = 0;
-    if (sval_point_blocked(1)) reportMouse2.x = reportMouse2.y = reportMouse2.h = reportMouse2.v = 0;
     bool control_left = sval_point_active(0), control_right = sval_point_active(1);
     sval_point_policy_changed(global_saved_values.axis_scroll_lock && !is_mac);
-    // The tools take raw counts: sniper and boost never change a tool's feel.
-    sval_point_buffer(0, reportMouse1.x, reportMouse1.y, point_tool_cpi(true, get_left_dpi()));
-    sval_point_buffer(1, reportMouse2.x, reportMouse2.y, point_tool_cpi(false, get_right_dpi()));
+    point_tools_feed(&reportMouse1, &reportMouse2);
 #else
     const bool control_left = false, control_right = false;
 #endif

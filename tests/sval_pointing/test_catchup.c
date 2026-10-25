@@ -67,7 +67,7 @@ static void configure(uint8_t tool, uint8_t interval) {
     sval_point_stop();
     settle();
     uint8_t p[32] = {0xDF, sval_cmd_point_tools_get};
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     uint8_t lo = p[4], hi = p[5];
     memmove(p + 5, p + 6, 19);
     p[1] = sval_cmd_point_tools_set;
@@ -76,7 +76,7 @@ static void configure(uint8_t tool, uint8_t interval) {
     p[4] = hi;
     bits(p + 5, 28, 8, interval);
     p[21] = (p[21] & 0xE0) | tool;
-    sval_point_command(p, 26);
+    sval_point_command(p, 27);
     assert(p[2] == 0 && sval_point_tool(1) == tool);
 }
 static void frame(int x, int y) {

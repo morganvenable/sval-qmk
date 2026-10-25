@@ -4,9 +4,12 @@
 #include <limits.h>
 
 int32_t sval_point_normalize(int16_t delta, uint16_t cpi, int64_t *remainder) {
-    if (!cpi) return 0;
-    int64_t denominator = cpi;
-    int64_t numerator   = (int64_t)delta * 800 * SVAL_POINT_ONE + *remainder;
+    return sval_point_normalize_gain(delta, cpi, 16, remainder);
+}
+int32_t sval_point_normalize_gain(int16_t delta, uint16_t cpi, uint8_t gain_x16, int64_t *remainder) {
+    if (!cpi || !gain_x16) return 0;
+    int64_t denominator = (int64_t)cpi * 16;
+    int64_t numerator   = (int64_t)delta * 800 * gain_x16 * SVAL_POINT_ONE + *remainder;
     *remainder          = numerator % denominator;
     int64_t result      = numerator / denominator;
     // Bound malformed/extreme inputs; valid sensor travel is far below this.

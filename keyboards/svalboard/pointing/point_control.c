@@ -17,11 +17,15 @@ static bool is_tasks(uint8_t slot) {
     return slot && sval_point_tool(slot) == SVAL_TOOL_TASKS;
 }
 #define MOTION_SLOTS 24
+// A TrackPoint is rate controlled: how hard it is pushed is how fast it reports, and its
+// counts never come back to an origin. Proportional scroll on a stick takes the push
+// itself, its counts over the last 64 ms, as the offset (docs/pointing-tools.md).
+#define STICK_BUCKETS 8
+#define STICK_BUCKET_MS 8
+#define STICK_WINDOW_MS (STICK_BUCKETS * STICK_BUCKET_MS)
 // Only the newest held key counts: pressing another hold replaces it, and an older key that
 // is still down never comes back.
-static struct {
-    uint8_t pos, control;
-} hold;
+static struct { uint8_t pos, control; } hold;
 static bool    consumed[MATRIX_ROWS * MATRIX_COLS];
 static uint8_t toggled;
 // The rate limit is the board's: one clock for every pointer, since they share the tool.
@@ -34,8 +38,15 @@ static struct {
         uint32_t count;
         int8_t   direction;
     } pending[2];
-    uint16_t          cpi;
-    int64_t           fraction[2];
+    sval_point_scale_t scale;
+    int64_t            fraction[2];
+    // A touchpad's finger is up (contacts only), since lifted_at.
+    bool     lifted;
+    uint32_t lifted_at;
+    // A TrackPoint's deflection for Proportional scroll: its counts over the last
+    // STICK_WINDOW_MS, in STICK_BUCKETS buckets (Q16 reference counts).
+    int64_t           stick[STICK_BUCKETS][2];
+    uint32_t          stick_epoch;
     sval_point_turn_t turn[2];
     struct {
         int32_t  h, v;
@@ -45,10 +56,34 @@ static struct {
 } pointers[2];
 static sval_proportional_t proportional[2];
 static bool                is_proportional(uint8_t slot) {
-    return slot && sval_point_tool(slot) == SVAL_TOOL_PROPORTIONAL;
+                   return slot && sval_point_tool(slot) == SVAL_TOOL_PROPORTIONAL;
+}
+static void reset_stick(uint8_t side) {
+    memset(pointers[side].stick, 0, sizeof(pointers[side].stick));
+    pointers[side].stick_epoch = timer_read32() / STICK_BUCKET_MS;
 }
 static void reset_proportional(uint8_t side) {
     sval_proportional_reset(&proportional[side], timer_read32());
+    reset_stick(side);
+}
+// Moves the stick window to now (emptying the buckets it passed) and sets the
+// proportional offset to the window's sum.
+static void stick_window(uint8_t side, uint32_t now) {
+    uint32_t epoch = now / STICK_BUCKET_MS, passed = epoch - pointers[side].stick_epoch;
+    if (passed >= STICK_BUCKETS)
+        memset(pointers[side].stick, 0, sizeof(pointers[side].stick));
+    else
+        for (uint32_t k = 1; k <= passed; ++k) {
+            uint8_t bucket                  = (pointers[side].stick_epoch + k) % STICK_BUCKETS;
+            pointers[side].stick[bucket][0] = pointers[side].stick[bucket][1] = 0;
+        }
+    pointers[side].stick_epoch = epoch;
+    int64_t h = 0, v = 0;
+    for (uint8_t i = 0; i < STICK_BUCKETS; ++i) {
+        h += pointers[side].stick[i][0];
+        v += pointers[side].stick[i][1];
+    }
+    sval_proportional_set(&proportional[side], h, v);
 }
 static uint8_t  allowed_axes = SVAL_AXIS_BOTH;
 static bool     tracing, policy_enabled;
@@ -128,6 +163,9 @@ static void end_tasks(bool cancel) {
 bool sval_point_active(uint8_t side) {
     return pointers[side].control != NONE;
 }
+bool sval_point_any_active(void) {
+    return pointers[0].control != NONE || pointers[1].control != NONE;
+}
 bool sval_point_blocked(uint8_t side) {
     return sval_point_output_session() && side != session_side;
 }
@@ -187,18 +225,51 @@ bool sval_point_process(uint16_t keycode, keyrecord_t *record) {
     return true;
 }
 void sval_point_buffer(uint8_t side, int16_t x, int16_t y, uint16_t cpi) {
+    sval_point_buffer_scaled(side, x, y, (sval_point_scale_t){cpi, SVAL_POINT_GAIN_ONE, SVAL_POINT_DEVICE_BALL, false});
+}
+void sval_point_contact(uint8_t side, bool down) {
+    uint32_t now = timer_read32();
+    if (!down) {
+        if (pointers[side].lifted) return;
+        pointers[side].lifted    = true;
+        pointers[side].lifted_at = now;
+        // Proportional scroll stops with the finger up.
+        if (is_proportional(pointers[side].control)) reset_proportional(side);
+        return;
+    }
+    if (!pointers[side].lifted) return;
+    pointers[side].lifted = false;
+    // The time the finger was up never counts as idle: a step in progress carries on.
+    uint32_t up = now - pointers[side].lifted_at;
+    for (uint8_t axis = 0; axis < 2; ++axis)
+        if (pointers[side].turn[axis].moved) pointers[side].turn[axis].last_motion += up;
+    // Proportional scroll anchors where the finger lands.
+    if (is_proportional(pointers[side].control)) reset_proportional(side);
+}
+void sval_point_buffer_scaled(uint8_t side, int16_t x, int16_t y, sval_point_scale_t scale) {
     if (!sval_point_active(side) || pointers[side].inhibited) return;
+    if (!sval_point_scale_equal(pointers[side].scale, scale)) {
+        clear_motion(side);
+        reset_proportional(side);
+        pointers[side].scale  = scale;
+        pointers[side].lifted = false;
+    }
     if (is_proportional(pointers[side].control)) {
         if (sval_point_output_session()) {
             reset_proportional(side);
             return;
         }
-        if (pointers[side].cpi != cpi) {
-            clear_motion(side);
-            reset_proportional(side);
-            pointers[side].cpi = cpi;
-        }
-        sval_proportional_move(&proportional[side], sval_point_normalize(x, cpi, &pointers[side].fraction[0]), -sval_point_normalize(y, cpi, &pointers[side].fraction[1]));
+        int32_t h = sval_point_normalize_gain(x, scale.cpi, scale.gain_x16, &pointers[side].fraction[0]);
+        // Widen before negating the most negative sensor report.
+        int32_t v = -sval_point_normalize_gain(y, scale.cpi, scale.gain_x16, &pointers[side].fraction[1]);
+        if (scale.device == SVAL_POINT_DEVICE_STICK) {
+            uint32_t now = timer_read32();
+            stick_window(side, now);
+            pointers[side].stick[pointers[side].stick_epoch % STICK_BUCKETS][0] += h;
+            pointers[side].stick[pointers[side].stick_epoch % STICK_BUCKETS][1] += v;
+            stick_window(side, now);
+        } else
+            sval_proportional_move(&proportional[side], h, v);
         return;
     }
     if (!x && !y) {
@@ -211,18 +282,14 @@ void sval_point_buffer(uint8_t side, int16_t x, int16_t y, uint16_t cpi) {
         clear_motion(side);
         return;
     }
-    if (pointers[side].cpi != cpi) {
-        clear_motion(side);
-        pointers[side].cpi = cpi;
-    }
     uint8_t n = pointers[side].motion_count;
     if (n == MOTION_SLOTS) {
         ++dropped;
         return;
     }
-    pointers[side].motion[n].h = sval_point_normalize(x, cpi, &pointers[side].fraction[0]);
+    pointers[side].motion[n].h = sval_point_normalize_gain(x, scale.cpi, scale.gain_x16, &pointers[side].fraction[0]);
     // Widen before negating the most negative sensor report.
-    pointers[side].motion[n].v    = -sval_point_normalize(y, cpi, &pointers[side].fraction[1]);
+    pointers[side].motion[n].v    = -sval_point_normalize_gain(y, scale.cpi, scale.gain_x16, &pointers[side].fraction[1]);
     pointers[side].motion[n].time = timer_read32();
     ++pointers[side].motion_count;
 }
@@ -418,10 +485,12 @@ void sval_point_tuning_changed(void) {
     reset_proportional(0);
     reset_proportional(1);
 }
-// STATUS format 1. Both pointers report the same tool; byte 8 is retired (the Finer /
-// Coarser distance shift) and always reads 1, the normal step travel.
+// STATUS format 2. Both pointers report the same tool; byte 8 is retired (the Finer /
+// Coarser distance shift) and always reads 1, the normal step travel. Format 2 adds each
+// hand's device type as the tools last read it and whether a touchpad is read from its
+// contacts (bytes 21-23).
 void sval_point_status(uint8_t *data) {
-    data[2]             = 1;
+    data[2]             = 2;
     data[3]             = pointers[0].control;
     data[4]             = pointers[1].control;
     data[5]             = allowed_axes;
@@ -432,6 +501,9 @@ void sval_point_status(uint8_t *data) {
     for (uint8_t i = 0; i < 3; ++i)
         for (uint8_t b = 0; b < 4; ++b)
             data[9 + i * 4 + b] = counters[i] >> (b * 8);
+    data[21] = pointers[0].scale.device;
+    data[22] = pointers[1].scale.device;
+    data[23] = (pointers[0].scale.contacts ? 1 : 0) | (pointers[1].scale.contacts ? 2 : 0);
 }
 
 // A displaced rate control is ongoing scroll intent, including when a sensor is idle.
@@ -449,6 +521,7 @@ void sval_point_scroll(report_mouse_t *report, uint8_t axes, bool natural, uint8
             reset_proportional(side);
             continue;
         }
+        if (pointers[side].scale.device == SVAL_POINT_DEVICE_STICK) stick_window(side, timer_read32());
         const sval_point_profile_t *p = sval_point_profile(slot);
         int16_t                     out[2];
         uint8_t                     invert = (sval_point_inverted(slot, 0) ? 1 : 0) | (sval_point_inverted(slot, 1) ? 2 : 0);
