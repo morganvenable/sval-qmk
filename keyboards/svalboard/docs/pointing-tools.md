@@ -104,7 +104,7 @@ Presses are paced by the host: each press waits until USB has accepted the previ
 
 ## Protocol
 
-Advertised by GET_INFO byte 19 bit 5 (`0x20`). Commands `0x2F` GET, `0x30` SET, `0x31` STATUS and `0x32` STOP; the payloads are in [protocol.md](protocol.md#pointing-tools-experimental). `0x2E` and byte 19 bit 4 are taken by the touch gesture experiment, so these numbers were the next free ones on every branch when they were chosen.
+Advertised by GET_INFO byte 19 bit 7 (`0x80`). Commands `0x34` GET, `0x35` SET, `0x36` STATUS and `0x37` STOP; the payloads are in [protocol.md](protocol.md#pointing-tools-experimental). Upstream and the open branches own `0x2E` (touch gestures), `0x2F` (`POINTING_CONTACTS`), `0x33` (the one-image side command) and byte 19 bits 4-6, so these were the next free numbers on every branch on 2026-10-25. Builds before then used `0x2F`-`0x32` and bit 5.
 
 ### `speeds` (16 bytes)
 

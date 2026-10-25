@@ -8,6 +8,7 @@
 #include "point_control.h"
 #include "point_output.h"
 #include "axis_scale.h"
+#include "velocity_scroll.h"
 #include "point_control.c"
 static uint32_t clock_ms;
 static uint16_t sensor_cpi = 800;
@@ -418,6 +419,20 @@ int main(void) {
     sniper_hold_5 = boost_hold_5 = 0;
     update_sniper_divisor();
     update_boost_multiplier();
+    // Velocity Scroll owns every pointer while held: a tool key held with it sees no motion.
+    key(8, SV_POINT_TOOL1_HOLD, true);
+    vs_keys = 1;
+    velocity_scroll_update();
+    r = input(71, 0, 0, 0, 1);
+    assert(!r.x && !r.y);
+    vs_keys = 0;
+    velocity_scroll_update();
+    input(0, 0, 0, 0, 10);
+    r = input(0, 0, 0, 0, 10);
+    assert(!r.h && !r.v); // slot 1 is Proportional: it never saw the 71 counts
+    key(8, SV_POINT_TOOL1_HOLD, false);
+    input(0, 0, 0, 0, 10);
+    puts("combined adapter: Velocity Scroll owns every pointer while held, tools included passed");
     puts("combined adapter: sniper and boost leave tool steps and Proportional scroll alone, still scale the other pointer passed");
     puts("combined adapter: TrackPoint counts unscaled, trackball counts normalized by CPI passed");
     puts("combined adapter: proportional hold/toggle, center, independent pointers, natural direction, shared lock sustain/breakaway and stop passed");
