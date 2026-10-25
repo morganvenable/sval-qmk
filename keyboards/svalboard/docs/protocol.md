@@ -158,11 +158,11 @@ Builds made with `SVAL_POINT_CONTROLS=yes` turn pointer motion into discrete out
 
 | Command | Request after `DF cmd` | Reply after `DF cmd` |
 |---|---|---|
-| `0x34` GET | nothing | `status` `version` `generation` (u16) `speeds` (16) `tools` (3) |
-| `0x35` SET | `version` `expected generation` (u16) `speeds` (16) `tools` (3) | same as GET, after the save |
-| `0x36` STATUS | nothing | `format = 1` `left slot` `right slot` `axes` `axis lock on` `task session` `distance shift` `recognized` (u32) `admitted` (u32) `dropped` (u32) |
+| `0x34` GET | nothing | `status` `version` `generation` (u16) `speeds` (16) `tools` (3) `touchpad gain` `TrackPoint gain` |
+| `0x35` SET | `version` `expected generation` (u16) `speeds` (16) `tools` (3), then for version 6 `touchpad gain` `TrackPoint gain` | same as GET, after the save |
+| `0x36` STATUS | nothing | `format = 2` `left slot` `right slot` `axes` `axis lock on` `task session` `1` `recognized` (u32) `admitted` (u32) `dropped` (u32) `left device` `right device` `contacts` |
 | `0x37` STOP | nothing | `0` `1`; ends every tool and cancels an open task switcher |
 
-`version` is `5`. Status: `0` ok, `1` refused because a tool is active, `2` the generation changed since the host read it (another app saved), `3` invalid, `4` the save didn't read back. Every value is little-endian. A slot is `0` none or `1`-`4`; `axes` is bit 0 horizontal, bit 1 vertical; tools aren't per side, so `left slot` and `right slot` always match; `distance shift` is retired (there are no Finer and Coarser keys) and always reads `1`. The `speeds` and `tools` layouts and the tool keycodes are in [pointing-tools.md](pointing-tools.md).
+`version` is `6`; SET also takes `5`, which has no gains and leaves them as they are. Status: `0` ok, `1` refused because a tool is active, `2` the generation changed since the host read it (another app saved), `3` invalid (an unknown version, a short request, a value out of range, or a gain of `0`), `4` the save didn't read back. Every value is little-endian. A slot is `0` none or `1`-`4`; both slot bytes are the same (tools aren't per pointer); `axes` is bit 0 horizontal, bit 1 vertical; the byte after `task session` is retired (it was the Finer / Coarser distance shift) and reads `1`. A gain is `1`-`255` in sixteenths (`16` is 1.0); the defaults are `32` (2.0). A device is `0` none or not known yet, `1` trackball, `2` touchpad, `3` TrackPoint, as the tools last read that hand (set while a tool runs); `contacts` bit 0 is set when the left touchpad is read from its contacts (the native touchpad), bit 1 the right. The reply is 27 bytes from `DF`, which fits a 32-byte client-wrapped report. The `speeds` and `tools` layouts, the gains and the tool keycodes are in [pointing-tools.md](pointing-tools.md).
 
 Packet formats: [client-ID protocol](../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [layer state](../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), [command definitions](../../../modules/svalboard/core/sval.h).
