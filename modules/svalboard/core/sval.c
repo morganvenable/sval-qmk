@@ -190,7 +190,7 @@ uint8_t sval_get_feature_flags2(void) {
     flags |= sval_flag2_pointing_contacts;
 #endif
 #ifdef SVAL_POINT_CONTROLS
-    flags |= (1 << 1);
+    flags |= sval_flag2_pointing_tools;
 #endif
     return flags;
 }
@@ -448,7 +448,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
 
     uint8_t command_id = data[1];
 #ifdef SVAL_POINT_CONTROLS
-    if (command_id >= 0x2C && command_id <= 0x2F) return sval_point_command(data, length);
+    if (command_id >= sval_cmd_point_tools_get && command_id <= sval_cmd_point_tools_stop) return sval_point_command(data, length);
 #endif
 
     if (command_id >= sval_cmd_context_layer_set && command_id <= sval_cmd_context_layer_clear) {

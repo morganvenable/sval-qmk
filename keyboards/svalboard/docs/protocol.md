@@ -149,4 +149,20 @@ Each contact:
 - Coordinates are per pad, in the touchpad's own orientation (the one the operating system sees), not the merged surface: the right pad does not carry the 2048 + gap offset.
 - While the touchpad isn't reporting, or its last report is older than 150 ms (the computer stopped reading), `n` is `0`.
 
+## Pointing tools (experimental)
+
+Builds made with `SVAL_POINT_CONTROLS=yes` turn pointer motion into discrete outputs (volume, arrows, tab and task switching, zoom, undo/redo) or proportional scrolling while a tool key is held or toggled. Released firmware doesn't include them. How they behave, and how they are stored, is in [pointing-tools.md](pointing-tools.md).
+
+- Discovery: GET_INFO byte 19, bit 7 (`sval_flag2_pointing_tools`, `0x80`). Bit 4 is taken by the per-reader motion branch and the touch gesture experiment, bit 5 by `POINTING_CONTACTS`, bit 6 by the one-image side command.
+- Commands `0x34`-`0x37`. `0x2E` is taken by the touch gesture experiment, `0x2F` by `POINTING_CONTACTS`, `0x33` by the one-image side command; `0x22`-`0x25` and `0x30`-`0x32` are left alone.
+
+| Command | Request after `DF cmd` | Reply after `DF cmd` |
+|---|---|---|
+| `0x34` GET | nothing | `status` `version` `generation` (u16) `speeds` (16) `tools` (3) |
+| `0x35` SET | `version` `expected generation` (u16) `speeds` (16) `tools` (3) | same as GET, after the save |
+| `0x36` STATUS | nothing | `format = 1` `left slot` `right slot` `axes` `axis lock on` `task session` `distance shift` `recognized` (u32) `admitted` (u32) `dropped` (u32) |
+| `0x37` STOP | nothing | `0` `1`; ends every tool and cancels an open task switcher |
+
+`version` is `5`. Status: `0` ok, `1` refused because a tool is active, `2` the generation changed since the host read it (another app saved), `3` invalid, `4` the save didn't read back. Every value is little-endian. A slot is `0` none or `1`-`4`; `axes` is bit 0 horizontal, bit 1 vertical; `distance shift` is `0`-`3` (step distance ×½, ×1, ×2, ×4 from the Finer and Coarser keys). The `speeds` and `tools` layouts and the tool keycodes are in [pointing-tools.md](pointing-tools.md).
+
 Packet formats: [client-ID protocol](../../../modules/svalboard/core/docs/CLIENT_ID_PROTOCOL.md), [layer state](../../../modules/svalboard/core/docs/LAYER_STATE_PROTOCOL.md), [command definitions](../../../modules/svalboard/core/sval.h).

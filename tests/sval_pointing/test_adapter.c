@@ -1,4 +1,5 @@
 // The test runner extracts the actual combined hook and its state into this TU.
+#include "sval.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -72,8 +73,8 @@ int main(void) {
     input(120,-120,0,0,1); r=input(0,0,0,0,11); assert(r.h==10&&r.v==-10);
     // Configure slot 1 as proportional scrolling through the actual protocol.
     sval_point_stop();for(int i=0;i<8;++i){++clock_ms;sval_point_task();}
-    uint8_t packet[32]={0xDF,0x2C};sval_point_command(packet,26);
-    uint8_t lo=packet[4],hi=packet[5];memmove(packet+5,packet+6,19);packet[1]=0x2D;packet[2]=5;packet[3]=lo;packet[4]=hi;
+    uint8_t packet[32]={0xDF,sval_cmd_point_tools_get};sval_point_command(packet,26);
+    uint8_t lo=packet[4],hi=packet[5];memmove(packet+5,packet+6,19);packet[1]=sval_cmd_point_tools_set;packet[2]=5;packet[3]=lo;packet[4]=hi;
     packet[21]=(packet[21]&0xE0)|SVAL_TOOL_PROPORTIONAL;sval_point_command(packet,26);assert(!packet[2]);
     process_detected_host_os_kb(OS_WINDOWS);global_saved_values.natural_scroll=false;global_saved_values.axis_scroll_lock=false;
     global_saved_values.left_scroll=global_saved_values.right_scroll=false;

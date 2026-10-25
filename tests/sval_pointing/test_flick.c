@@ -1,3 +1,4 @@
+#include "sval.h"
 #include <assert.h>
 #include <stdio.h>
 #include "point_control.c"
@@ -26,7 +27,7 @@ int main(void){
     activate(SV_POINT_L_ARROWS_TOGGLE);motion(2*64,-2*64);tick(20);assert(right==2&&up==2);
     activate(SV_POINT_L_VOLUME_TOGGLE);before=volume_up;motion(0,-20*64);tick(2);unsigned now=volume_up;motion(0,64);tick(8);assert(volume_up==now&&volume_down==1);stopped();
     // A visible 10/sec rate cap does not create delayed motion debt.
-    sval_point_stop();tick(100);uint8_t p[32]={0xDF,0x2C};sval_point_command(p,26);uint8_t lo=p[4],hi=p[5];memmove(p+5,p+6,19);p[1]=0x2D;p[2]=5;p[3]=lo;p[4]=hi;bits(p+5,28,8,100);sval_point_command(p,26);assert(p[2]==0);
+    sval_point_stop();tick(100);uint8_t p[32]={0xDF,sval_cmd_point_tools_get};sval_point_command(p,26);uint8_t lo=p[4],hi=p[5];memmove(p+5,p+6,19);p[1]=sval_cmd_point_tools_set;p[2]=5;p[3]=lo;p[4]=hi;bits(p+5,28,8,100);sval_point_command(p,26);assert(p[2]==0);
     activate(SV_POINT_L_VOLUME_TOGGLE);before=volume_up;
     for(int i=0;i<100;++i){motion(0,-10*64);tick(5);}assert(volume_up-before==6);
     stopped();before=volume_up;tick(1000);assert(volume_up==before);
