@@ -206,9 +206,9 @@ static void sval_ptp_automouse(void) {
 // key changes nothing while the toggle is on. Precedence while it is on: it
 // owns every pointer. The cursor is frozen, Drag Scroll and the per-pointer
 // scroll modes are set aside, and sniper and boost do not scale it (its speed
-// comes from distance, not from counts). Its motion
-// never counts toward the auto-mouse threshold, and the auto-mouse layer
-// never times out while it is on. Natural scroll applies as everywhere.
+// comes from distance, not from counts). Its motion never counts toward the
+// auto-mouse threshold, and the auto-mouse layer never times out while it is
+// on. Natural scroll applies as everywhere.
 static const sval_vs_curve_t vs_ball = {SVAL_VS_BALL_DEAD_MM, SVAL_VS_BALL_GAIN, SVAL_VS_BALL_EXPONENT, SVAL_VS_MAX_NPS};
 static const sval_vs_curve_t vs_pad  = {SVAL_VS_PAD_DEAD_MM, SVAL_VS_PAD_GAIN, SVAL_VS_PAD_EXPONENT, SVAL_VS_MAX_NPS};
 static sval_vs_t             vs;
