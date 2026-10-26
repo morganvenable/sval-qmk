@@ -92,12 +92,13 @@ new contact instead of staying unseen until it lifts; a chip reset or palm
 still waits for an all-up sample. The dev command's status (v3) counts these
 lifts per pad.
 
-While Velocity Scroll is held (`SV_VELOCITY_SCROLL`, `velocity_scroll.h`), the
-firmware takes the pads from the operating system: reports stop after a
+While Velocity Scroll is on (`SV_VELOCITY_SCROLL` held, or
+`SV_VELOCITY_SCROLL_TOGGLE` tapped on; `velocity_scroll.h`), the firmware takes
+the pads from the operating system: reports stop after a
 release of every contact, and `ptp.c` follows one finger per pad for the
 scroll. A finger already down is followed at once; after it lifts, only a
 finger that lands later is, so one resting on a pad never takes over. When
-the key goes up, the pads arm again on an all-up sample, so a finger still
+it turns off, the pads arm again on an all-up sample, so a finger still
 down never moves the pointer.
 
 ## Builds

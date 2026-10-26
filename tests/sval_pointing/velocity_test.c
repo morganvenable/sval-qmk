@@ -1,5 +1,6 @@
 // Host test for velocity_scroll.c: the speed curve, the trackball offset and
-// its clamp, the touchpad's anchors and pads, axis lock, and smooth output.
+// its clamp, the touchpad's anchors and pads, axis lock, smooth output, and
+// the hold and toggle keys.
 // Run by test_detect.py.
 #include <math.h>
 #include <stdio.h>
@@ -164,7 +165,71 @@ static void test_report_state(void) {
     CHECK(x == 0.0f && y == 0.0f && s.speed_h == 0.0f && s.speed_v == 0.0f);
 }
 
+// The hold key, the toggle and the dev hold: on while any is, and only a
+// change from off to on starts it with a new anchor.
+static void test_keys(void) {
+    sval_vs_t      s;
+    sval_vs_hold_t h = {0};
+    sval_vs_stop(&s);
+    CHECK(sval_vs_apply(&s, &h) == 0 && !s.active);
+
+    // Hold: down starts, up stops; two hold keys stop on the last one up.
+    sval_vs_key(&h, false, true);
+    CHECK(sval_vs_apply(&s, &h) == 1 && s.active);
+    sval_vs_key(&h, false, true);
+    CHECK(sval_vs_apply(&s, &h) == 0);
+    sval_vs_key(&h, false, false);
+    CHECK(sval_vs_apply(&s, &h) == 0 && s.active);
+    sval_vs_key(&h, false, false);
+    CHECK(sval_vs_apply(&s, &h) == -1 && !s.active);
+    sval_vs_key(&h, false, false); // a stray release never wraps
+    CHECK(h.keys == 0 && sval_vs_apply(&s, &h) == 0);
+
+    // Toggle: a press turns it on, its release changes nothing, the next press off.
+    sval_vs_key(&h, true, true);
+    CHECK(sval_vs_apply(&s, &h) == 1 && s.active);
+    sval_vs_key(&h, true, false);
+    CHECK(sval_vs_apply(&s, &h) == 0 && s.active);
+    sval_vs_add_relative(&s, 5.0f, -3.0f, -1.0f);
+
+    // The hold key while toggled on: still on, the anchor (the offset) kept.
+    sval_vs_key(&h, false, true);
+    CHECK(sval_vs_apply(&s, &h) == 0);
+    sval_vs_key(&h, false, false);
+    CHECK(sval_vs_apply(&s, &h) == 0 && s.active);
+    CHECK(s.rel_x == 5.0f && s.rel_y == -3.0f);
+
+    sval_vs_key(&h, true, true);
+    sval_vs_key(&h, true, false);
+    CHECK(sval_vs_apply(&s, &h) == -1 && !s.active);
+
+    // Toggled off while the hold key is down: the hold keeps it on, no new anchor.
+    sval_vs_key(&h, false, true);
+    CHECK(sval_vs_apply(&s, &h) == 1);
+    sval_vs_add_relative(&s, 2.0f, 0.0f, -1.0f);
+    sval_vs_key(&h, true, true);
+    CHECK(sval_vs_apply(&s, &h) == 0);
+    sval_vs_key(&h, true, true);
+    CHECK(sval_vs_apply(&s, &h) == 0 && s.active && s.rel_x == 2.0f);
+    sval_vs_key(&h, false, false);
+    CHECK(sval_vs_apply(&s, &h) == -1 && !s.active);
+
+    // The dev hold counts the same; the toggle outlasts it.
+    h.dev = true;
+    CHECK(sval_vs_apply(&s, &h) == 1);
+    sval_vs_key(&h, true, true);
+    h.dev = false;
+    CHECK(sval_vs_apply(&s, &h) == 0 && s.active);
+    sval_vs_key(&h, true, true);
+    CHECK(sval_vs_apply(&s, &h) == -1 && !sval_vs_hold_on(&h));
+
+    // A new start after a stop anchors again.
+    sval_vs_key(&h, true, true);
+    CHECK(sval_vs_apply(&s, &h) == 1 && s.rel_x == 0.0f && s.rel_y == 0.0f);
+}
+
 int main(void) {
+    test_keys();
     test_curve();
     test_report_state();
     test_ball();

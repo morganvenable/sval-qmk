@@ -3,7 +3,10 @@
 // has moved from where it was when the key went down sets a scroll speed. The
 // board keeps scrolling at that speed while the pointer stays still, like
 // middle-click autoscroll on a desktop, but in the firmware, so it works in
-// every app.
+// every app. SV_VELOCITY_SCROLL_TOGGLE is the same without holding: a tap
+// turns it on, anchored where the pointer is then, and the next tap turns it
+// off. Below, "while the key is held" means while it is on either way, and
+// "key-down" the moment it turned on.
 //
 // The math lives here, free of QMK headers, so tests/sval_pointing builds it
 // on the host. keymaps/keymap_support.c feeds it and sends what it returns.
@@ -120,6 +123,25 @@ typedef struct {
 
 void sval_vs_start(sval_vs_t *s);
 void sval_vs_stop(sval_vs_t *s);
+
+// ------------------------------------------------------------------ keys
+// What keeps it on: SV_VELOCITY_SCROLL keys held, the toggle
+// (SV_VELOCITY_SCROLL_TOGGLE) and the dev builds' keyless hold. It is on while
+// any of them is. Only a change from off to on starts it, with a new anchor,
+// so pressing and releasing the hold key while the toggle is on changes
+// nothing.
+typedef struct {
+    uint8_t keys;    // SV_VELOCITY_SCROLL keys down
+    bool    toggled; // SV_VELOCITY_SCROLL_TOGGLE: flipped by each press
+    bool    dev;     // velocity_scroll_dev_hold (dev builds)
+} sval_vs_hold_t;
+
+bool sval_vs_hold_on(const sval_vs_hold_t *h);
+// A Velocity Scroll key went down or up; toggle: it is the toggle key.
+void sval_vs_key(sval_vs_hold_t *h, bool toggle, bool pressed);
+// Bring s in line with h: start it when h turns on, stop it when h turns off.
+// Returns 1 started, -1 stopped, 0 unchanged.
+int8_t sval_vs_apply(sval_vs_t *s, const sval_vs_hold_t *h);
 
 // A relative pointer moved this many mm (+x right, +y toward the user).
 // clamp_mm < 0: no clamp.

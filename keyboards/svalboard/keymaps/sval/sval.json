@@ -450,6 +450,11 @@
             "name": "SV_VELOCITY_SCROLL",
             "title": "Hold, then move the pointer: the farther from where it started, the faster it scrolls.",
             "shortName": "Vel\nScroll"
+        },
+        {
+            "name": "SV_VELOCITY_SCROLL_TOGGLE",
+            "title": "Tap, then move the pointer: the farther from where it started, the faster it scrolls. Tap again to stop.",
+            "shortName": "Vel\nScrollTG"
         }
     ],
     "menus": [

@@ -96,15 +96,15 @@ Each hand:
 
 ### Velocity Scroll
 
-Builds with Velocity Scroll (`SV_VELOCITY_SCROLL`) add a 24-byte block at offsets 29-52, so a host can show the key held, the offset from the anchor and the speed it sets, and draw the dead zone and the curve without knowing the build's tunables. Bytes 24-28 are left for the per-reader extension, so the two never overlap.
+Builds with Velocity Scroll (`SV_VELOCITY_SCROLL`, and its toggle `SV_VELOCITY_SCROLL_TOGGLE`) add a 24-byte block at offsets 29-52, so a host can show it on, the offset from the anchor and the speed it sets, and draw the dead zone and the curve without knowing the build's tunables. Bytes 24-28 are left for the per-reader extension, so the two never overlap.
 
 - Discovery: byte 29 reads `0x56` (`V`). Firmware without the block leaves it zero (the reply is zero-filled), and so does a client-wrapped 32-byte report, which has no room for it.
-- The block is in every reply from such a build, held or not; only the state fields are zero while the key is up.
+- The block is in every reply from such a build, on or not; only the state fields are zero while it is off.
 
 | off | size | field |
 |---|---|---|
 | 29 | 1 | `0x56`: the block is present (format 1) |
-| 30 | 1 | bit 0 Velocity Scroll is held, bit 1 a finger on a touchpad sets the offset (else the relative pointers: trackball, TrackPoint), bit 2 that touchpad is the right hand's, bit 3 the axis lock tunable is on, bits 4-5 the axis the lock picked: `1` vertical, `2` horizontal, `0` none yet |
+| 30 | 1 | bit 0 Velocity Scroll is on (its key held or its toggle on), bit 1 a finger on a touchpad sets the offset (else the relative pointers: trackball, TrackPoint), bit 2 that touchpad is the right hand's, bit 3 the axis lock tunable is on, bits 4-5 the axis the lock picked: `1` vertical, `2` horizontal, `0` none yet |
 | 31 | 2 | offset x, int16 little-endian, 0.01 mm (+right) |
 | 33 | 2 | offset y, int16, 0.01 mm (+toward the user) |
 | 35 | 2 | speed h, int16, 0.01 notch/s (+right) |

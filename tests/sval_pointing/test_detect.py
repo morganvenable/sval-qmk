@@ -81,12 +81,21 @@ class VelocityScrollTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('OK', result.stdout)
 
-    def test_keycode_is_position_30_in_both_keymaps(self):
+    def test_keycodes_are_positions_30_and_31_in_both_keymaps(self):
         for keymap in ('sval', 'blank'):
             data = json.loads((ROOT / f'keyboards/svalboard/keymaps/{keymap}/sval.json').read_text())
             names = [k['name'] for k in data['customKeycodes']]
             self.assertEqual(names.index('SV_VELOCITY_SCROLL'), 30, keymap)
+            self.assertEqual(names.index('SV_VELOCITY_SCROLL_TOGGLE'), 31, keymap)
             self.assertLessEqual(len(names), 32, keymap)  # QK_USER_31 is the last the GUI addresses
+
+    def test_toggle_key_is_handled_like_the_hold_key(self):
+        # keymap_support.c: both keys on press and release, and in the mouse layer's passthrough list.
+        source = (ROOT / 'keyboards/svalboard/keymaps/keymap_support.c').read_text(encoding='utf-8')
+        self.assertEqual(source.count('case SV_VELOCITY_SCROLL:\n            case SV_VELOCITY_SCROLL_TOGGLE:'), 2)
+        passthrough = source[source.index('#define MOUSE_PASSTHROUGH_KEYCODE'):]
+        passthrough = passthrough[:passthrough.index(')\n')]
+        self.assertIn('SV_VELOCITY_SCROLL_TOGGLE', passthrough)
 
 
 if __name__ == '__main__':

@@ -454,11 +454,11 @@ int main(void) {
     update_boost_multiplier();
     // Velocity Scroll owns every pointer while held: a tool key held with it sees no motion.
     key(8, SV_POINT_TOOL1_HOLD, true);
-    vs_keys = 1;
+    vs_hold.keys = 1;
     velocity_scroll_update();
     r = input(71, 0, 0, 0, 1);
     assert(!r.x && !r.y);
-    vs_keys = 0;
+    vs_hold.keys = 0;
     velocity_scroll_update();
     input(0, 0, 0, 0, 10);
     r = input(0, 0, 0, 0, 10);
@@ -645,13 +645,13 @@ int main(void) {
         // Velocity Scroll and a tool share the one grab: it stays while either wants it.
         key(11, SV_POINT_TOOL2_HOLD, true);
         input(0, 0, 0, 0, 1);
-        vs_keys = 1;
+        vs_hold.keys = 1;
         velocity_scroll_update();
         assert(ptp_grabbed);
         key(11, SV_POINT_TOOL2_HOLD, false);
         input(0, 0, 0, 0, 1);
         assert(ptp_grabbed);
-        vs_keys = 0;
+        vs_hold.keys = 0;
         velocity_scroll_update();
         assert(!ptp_grabbed);
         // A pad whose contacts don't reach the firmware (not ready) runs on its own mouse

@@ -30,6 +30,31 @@ void sval_vs_stop(sval_vs_t *s) {
     s->pad = SVAL_VS_NO_PAD;
 }
 
+bool sval_vs_hold_on(const sval_vs_hold_t *h) {
+    return h->keys || h->toggled || h->dev;
+}
+
+void sval_vs_key(sval_vs_hold_t *h, bool toggle, bool pressed) {
+    if (toggle) {
+        if (pressed) h->toggled = !h->toggled;
+    } else if (pressed) {
+        if (h->keys < 255) h->keys++;
+    } else if (h->keys > 0) {
+        h->keys--;
+    }
+}
+
+int8_t sval_vs_apply(sval_vs_t *s, const sval_vs_hold_t *h) {
+    bool on = sval_vs_hold_on(h);
+    if (on == s->active) return 0;
+    if (on) {
+        sval_vs_start(s);
+        return 1;
+    }
+    sval_vs_stop(s);
+    return -1;
+}
+
 static float clampf(float v, float limit) {
     if (limit < 0.0f) return v;
     return v > limit ? limit : v < -limit ? -limit : v;

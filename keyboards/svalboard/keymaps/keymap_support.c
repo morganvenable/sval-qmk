@@ -202,16 +202,17 @@ static void sval_ptp_automouse(void) {
 // ------------------------------------------------------------ Velocity Scroll
 // Hold SV_VELOCITY_SCROLL: the pointer's offset from where it was at key-down
 // sets a scroll speed (velocity_scroll.h has the design and the tunables).
-// Precedence while held: it owns every pointer. The cursor is frozen, Drag
-// Scroll and the per-pointer scroll modes are set aside, and sniper and boost
-// do not scale it (its speed comes from distance, not from counts). Its motion
+// SV_VELOCITY_SCROLL_TOGGLE does the same from one tap to the next; the hold
+// key changes nothing while the toggle is on. Precedence while it is on: it
+// owns every pointer. The cursor is frozen, Drag Scroll and the per-pointer
+// scroll modes are set aside, and sniper and boost do not scale it (its speed
+// comes from distance, not from counts). Its motion
 // never counts toward the auto-mouse threshold, and the auto-mouse layer
-// never times out while it is held. Natural scroll applies as everywhere.
+// never times out while it is on. Natural scroll applies as everywhere.
 static const sval_vs_curve_t vs_ball = {SVAL_VS_BALL_DEAD_MM, SVAL_VS_BALL_GAIN, SVAL_VS_BALL_EXPONENT, SVAL_VS_MAX_NPS};
 static const sval_vs_curve_t vs_pad  = {SVAL_VS_PAD_DEAD_MM, SVAL_VS_PAD_GAIN, SVAL_VS_PAD_EXPONENT, SVAL_VS_MAX_NPS};
 static sval_vs_t             vs;
-static uint8_t               vs_keys; // velocity scroll keys down
-static bool                  vs_dev;  // velocity_scroll_dev_hold (dev builds)
+static sval_vs_hold_t        vs_hold; // what keeps it on: keys, the toggle, the dev hold
 static uint32_t              vs_sent_at;
 #    ifdef SVAL_TOUCH_DEV
 static uint32_t vs_dev_at;
@@ -238,32 +239,29 @@ static void pointing_grab_update(void) {
 }
 
 static void velocity_scroll_update(void) {
-    bool on = vs_keys || vs_dev;
-    if (on == vs.active) return;
-    if (on) {
-        sval_vs_start(&vs);
+    int8_t change = sval_vs_apply(&vs, &vs_hold);
+    if (change == 0) return;
+    if (change > 0) {
         vs_sent_at = timer_read32();
         // Drag Scroll's pending remainder belongs to the motion before.
         scroll_timer_running = false;
         scroll_accumulator_h = scroll_accumulator_v = 0;
         m_scroll_accumulator_h = m_scroll_accumulator_v = 0;
-    } else {
-        sval_vs_stop(&vs);
     }
     pointing_grab_update();
 }
 
 #    ifdef SVAL_TOUCH_DEV
 void velocity_scroll_dev_hold(bool on) {
-    vs_dev    = on;
-    vs_dev_at = timer_read32();
+    vs_hold.dev = on;
+    vs_dev_at   = timer_read32();
     velocity_scroll_update();
 }
 #    endif
 
 static report_mouse_t velocity_scroll_report(report_mouse_t left, report_mouse_t right) {
 #    ifdef SVAL_TOUCH_DEV
-    if (vs_dev && timer_elapsed32(vs_dev_at) > 500) velocity_scroll_dev_hold(false);
+    if (vs_hold.dev && timer_elapsed32(vs_dev_at) > 500) velocity_scroll_dev_hold(false);
 #    endif
     const report_mouse_t *hands[2] = {&left, &right};
     int16_t               dpi[2]   = {get_left_dpi(), get_right_dpi()};
@@ -701,14 +699,16 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
         // Sniper toggles are instant actions, not held keys — they should not
         // affect mouse_keys_pressed or reset the timer. Only mouse movement
         // should keep the mouse layer active when a sniper toggle is used.
-        // Velocity Scroll never ends the mouse layer either, from any layer;
-        // the layer does not time out while it is held (matrix_scan_kb).
+        // Velocity Scroll and its toggle never end the mouse layer either, from
+        // any layer; the layer does not time out while it is on (matrix_scan_kb).
 #define MOUSE_PASSTHROUGH_KEYCODE (keycode == SV_SNIPER_2_TG || \
                         keycode == SV_SNIPER_3_TG || \
                         keycode == SV_SNIPER_5_TG || \
                         keycode == SV_BOOST_2_TG || \
                         keycode == SV_BOOST_3_TG || \
-                        keycode == SV_BOOST_5_TG ||                         keycode == SV_VELOCITY_SCROLL)
+                        keycode == SV_BOOST_5_TG || \
+                        keycode == SV_VELOCITY_SCROLL || \
+                        keycode == SV_VELOCITY_SCROLL_TOGGLE)
 
         uint16_t layer_keycode = keymap_key_to_keycode(MH_AUTO_BUTTONS_LAYER, record->event.key);
         if (MOUSE_PASSTHROUGH_KEYCODE) {
@@ -817,7 +817,8 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
                 scroll_hold = true;
                 return false;
             case SV_VELOCITY_SCROLL:
-                if (vs_keys < 255) vs_keys++;
+            case SV_VELOCITY_SCROLL_TOGGLE:
+                sval_vs_key(&vs_hold, keycode == SV_VELOCITY_SCROLL_TOGGLE, true);
                 velocity_scroll_update();
                 return false;
             case SV_SCROLL_TOGGLE:
@@ -915,7 +916,8 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
                 scroll_hold = false;
                 return false;
             case SV_VELOCITY_SCROLL:
-                if (vs_keys > 0) vs_keys--;
+            case SV_VELOCITY_SCROLL_TOGGLE:
+                sval_vs_key(&vs_hold, keycode == SV_VELOCITY_SCROLL_TOGGLE, false);
                 velocity_scroll_update();
                 return false;
             case SV_SCROLL_TOGGLE:
