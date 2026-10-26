@@ -72,7 +72,7 @@ Each tool key is `0x7E00 + slot * 2 + mode`: slot `0`-`3`; mode `0` hold, `1` to
 | `0x7E06` | `SV_POINT_TOOL4_HOLD` | slot 4, hold |
 | `0x7E07` | `SV_POINT_TOOL4_TOGGLE` | slot 4, toggle |
 | `0x7E08`-`0x7E0F` | | retired (the right pointer's slot keys in early test builds); do nothing |
-| `0x7E10` | `SV_POINT_STOP_ALL` | stop every tool; an open task switcher is canceled with Escape |
+| `0x7E10` | `SV_POINT_STOP_ALL` | stop every tool; an open task switcher is canceled with Escape; the Velocity Scroll toggle turns off |
 | `0x7E11` | `SV_POINT_TRACE` | print counters to the console (diagnostic; Keybard doesn't offer it) |
 | `0x7E12`-`0x7E13` | | retired (Finer and Coarser in early test builds); do nothing |
 | `0x7E14`-`0x7E3F` | | reserved for later pointing tools keys |
@@ -92,7 +92,7 @@ Earlier test builds had a set of slot keys per pointer (`SV_POINT_L_TOOL1_HOLD` 
 ## Motion
 
 - Counts are normalized before the speeds apply, by each module's device type (see [Devices](#devices)), so a step takes the same travel at any CPI. Each hand's module comes from the same detection `POINTING_HARDWARE` reports; a hand with no module simply produces no steps.
-- Velocity Scroll (`SV_VELOCITY_SCROLL`) owns every pointer while it is held, the tools included: a tool key held with it does nothing until Velocity Scroll is released.
+- Velocity Scroll (`SV_VELOCITY_SCROLL`, or `SV_VELOCITY_SCROLL_TOGGLE` tapped on) owns every pointer while it is on, the tools included: a tool key held with it does nothing until Velocity Scroll is off. Stop tools also turns the toggle off, since a toggled Velocity Scroll freezes the cursor as a tool does; a held Velocity Scroll key stays on until it is released.
 - Sniper and boost don't touch a pointer running a tool: the same travel per step, the same Proportional scroll speed, and the same motion into the axis lock. A tool's feel comes only from its slot settings. With no tool on, both pointers get sniper and boost as usual.
 - Every tool obeys the board's one free-scroll / axis-lock policy (`pointing/scroll_policy.c`), shared with wheel scrolling on both pointers. It applies while axis lock is on and the host isn't macOS.
 - While a tool is on, neither pointer moves the cursor, and the tool overrides drag-scroll; their motion still feeds the shared axis lock. Tool motion never turns on the auto-mouse layer.

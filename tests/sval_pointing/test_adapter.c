@@ -122,7 +122,7 @@ static report_mouse_t input(int lx, int ly, int rx, int ry, unsigned dt) {
 }
 static void key(uint8_t pos, uint16_t code, bool down) {
     keyrecord_t r = {.event = {.key = {.row = pos / 6, .col = pos % 6}, .pressed = down}};
-    assert(!sval_point_process(code, &r));
+    assert(!point_key_process(code, &r));
 }
 int main(void) {
     process_detected_host_os_kb(OS_WINDOWS);
@@ -465,7 +465,41 @@ int main(void) {
     assert(!r.h && !r.v); // slot 1 is Proportional: it never saw the 71 counts
     key(8, SV_POINT_TOOL1_HOLD, false);
     input(0, 0, 0, 0, 10);
+    // The Velocity Scroll toggle owns every pointer the same way; Stop tools turns it off.
+    sval_vs_key(&vs_hold, true, true);
+    velocity_scroll_update();
+    assert(vs.active);
+    r = input(71, 0, 0, 0, 1);
+    assert(!r.x && !r.y);
+    key(9, SV_POINT_STOP_ALL, true);
+    assert(!vs.active && !vs_hold.toggled);
+    key(9, SV_POINT_STOP_ALL, false);
+    r = input(5, 0, 0, 0, 1);
+    assert(r.x == 5); // the cursor moves again
+    // A held Velocity Scroll key keeps it on through Stop tools; the toggle is still cleared.
+    sval_vs_key(&vs_hold, false, true);
+    sval_vs_key(&vs_hold, true, true);
+    velocity_scroll_update();
+    key(9, SV_POINT_STOP_ALL, true);
+    key(9, SV_POINT_STOP_ALL, false);
+    assert(vs.active && !vs_hold.toggled);
+    sval_vs_key(&vs_hold, false, false);
+    velocity_scroll_update();
+    assert(!vs.active);
+    // Physical keys only: Stop tools from off the matrix (a combo) leaves the toggle on.
+    sval_vs_key(&vs_hold, true, true);
+    velocity_scroll_update();
+    keyrecord_t combo = {.event = {.key = {.row = 255, .col = 255}, .pressed = true}};
+    point_key_process(SV_POINT_STOP_ALL, &combo);
+    combo.event.pressed = false;
+    point_key_process(SV_POINT_STOP_ALL, &combo);
+    assert(vs.active && vs_hold.toggled);
+    sval_vs_key(&vs_hold, true, true);
+    velocity_scroll_update();
+    assert(!vs.active);
+    input(0, 0, 0, 0, 10);
     puts("combined adapter: Velocity Scroll owns every pointer while held, tools included passed");
+    puts("combined adapter: Stop tools turns the Velocity Scroll toggle off, not a held key, physical keys only passed");
     puts("combined adapter: sniper and boost leave tool steps and Proportional scroll alone, still scale the other pointer passed");
     // Mixed modules: a touchpad on the left, a trackball on the right, one tool on both.
     // The pad's counts take its 2.0 gain (80 counts a 160-count Arrows step at 800 CPI),
@@ -653,6 +687,13 @@ int main(void) {
         assert(ptp_grabbed);
         vs_hold.keys = 0;
         velocity_scroll_update();
+        assert(!ptp_grabbed);
+        // The toggle takes the pads too, and gives them back on Stop tools.
+        sval_vs_key(&vs_hold, true, true);
+        velocity_scroll_update();
+        assert(ptp_grabbed);
+        key(11, SV_POINT_STOP_ALL, true);
+        key(11, SV_POINT_STOP_ALL, false);
         assert(!ptp_grabbed);
         // A pad whose contacts don't reach the firmware (not ready) runs on its own mouse
         // output, as in a build without the native touchpad.

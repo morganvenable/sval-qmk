@@ -380,6 +380,16 @@ static void point_tools_feed(report_mouse_t *left, report_mouse_t *right) {
         sval_point_buffer_scaled(hand, hands[hand]->x, hands[hand]->y, sval_point_scale(point_sensor[hand], dpi[hand], contacts, sval_point_gain(SVAL_POINT_DEVICE_PAD), sval_point_gain(SVAL_POINT_DEVICE_STICK)));
     }
 }
+// The tools' keys (pre_process_record_kb). Stop tools also turns the Velocity Scroll
+// toggle off: a toggled Velocity Scroll freezes the cursor as a tool does. A held Velocity
+// Scroll key keeps it on until released. Physical keys only, as for the tools' keys.
+static bool point_key_process(uint16_t keycode, keyrecord_t *record) {
+    if (keycode == SV_POINT_STOP_ALL && record->event.pressed && record->event.key.row < MATRIX_ROWS && record->event.key.col < MATRIX_COLS && vs_hold.toggled) {
+        vs_hold.toggled = false;
+        velocity_scroll_update();
+    }
+    return sval_point_process(keycode, record);
+}
 #else
 static bool point_tools_grab(void) {
     return false;
@@ -969,6 +979,6 @@ void mouse_mode(bool on) {
 
 #ifdef SVAL_POINT_CONTROLS
 bool pre_process_record_kb(uint16_t keycode, keyrecord_t *record) {
-    return sval_point_process(keycode, record) && pre_process_record_user(keycode, record);
+    return point_key_process(keycode, record) && pre_process_record_user(keycode, record);
 }
 #endif
