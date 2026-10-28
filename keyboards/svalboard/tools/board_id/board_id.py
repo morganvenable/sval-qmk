@@ -14,9 +14,11 @@ Other commands:
     py board_id.py read            show the record of the board in BOOTSEL
     py board_id.py check FW.uf2    would this UF2 touch the record?
 
-Safety: only boards in BOOTSEL (USB 2E8A:0003) are touched, one at a time,
-each picotool call is pinned to that board's serial, and picotool is never
-given -f/-F. A board that has a record already is refused unless --force,
+Safety: only boards in BOOTSEL (USB 2E8A:0003) are touched, one at a time.
+With exactly one present, the station reads its flash unique ID with picotool
+and pins every later picotool call to it (--ser matches the flash ID; the USB
+serial Windows sees in BOOTSEL can be a generic one). picotool is never given
+-f/-F, and the deny list is checked against the flash ID. A board that has a record already is refused unless --force,
 which appends a newer record and keeps the old one. Nothing here erases flash.
 """
 import argparse
@@ -74,15 +76,33 @@ class Boards:
                 found.append(m.group(1).upper())
         return sorted(set(found))
 
+    def flash_id(self, pnp_serial):
+        """The flash unique ID of the one board in BOOTSEL, or None. picotool's
+        --ser matches this ID, not the USB serial Windows lists."""
+        if self.list() != [pnp_serial]:
+            return None  # only ever asked with exactly one board present
+        try:
+            p = subprocess.run([self.picotool_exe, "info", "-d"], capture_output=True, text=True, timeout=30)
+        except subprocess.TimeoutExpired:
+            return None
+        m = re.search(r"flash id:\s*0x([0-9A-Fa-f]{16})", p.stdout)
+        return m.group(1).upper() if m else None
+
     def picotool(self, serial, *args, timeout=60):
         cmd = [self.picotool_exe, *args, "--ser", serial]
         if any(a in ("-f", "-F", "--force", "--force-no-reboot") for a in args):
             raise RuntimeError("picotool is never forced")
+        t0 = time.monotonic()
         try:
             p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
             return 124, "picotool timed out"
-        return p.returncode, (p.stdout + p.stderr).strip()
+        out = (p.stdout + p.stderr).strip()
+        if os.environ.get("BOARD_ID_VERBOSE"):
+            said = " | ".join(l.strip() for l in re.split(r"[
+]+", out) if l.strip() and "%" not in l)
+            print(f"  [picotool {' '.join(args)} --ser {serial}] exit {p.returncode}, {time.monotonic() - t0:.2f} s: {said}")
+        return p.returncode, out
 
 
 class FakeBoards(Boards):
@@ -98,6 +118,17 @@ class FakeBoards(Boards):
             return []
         with open(path, encoding="utf-8") as f:
             return sorted({line.strip().upper() for line in f if line.strip()})
+
+    def flash_id(self, pnp_serial):
+        """pnp_ids.txt maps a USB serial to a flash ID ("PNP UID" lines); else they are the same."""
+        path = os.path.join(self.folder, "pnp_ids.txt")
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) == 2 and parts[0].upper() == pnp_serial:
+                        return parts[1].upper()
+        return pnp_serial
 
     def picotool(self, serial, *args, timeout=60):
         cmd = [sys.executable, "-I", os.path.join(HERE, "fake_picotool.py"), self.folder, *args, "--ser", serial]
@@ -142,10 +173,10 @@ def describe(rec):
             f" strap {rec.get('strap', '?')}, written {when} by {rec.get('station', '?')}")
 
 
-def process(boards, serial, batch, opts, log=print):
-    """Identify one BOOTSEL board. Returns the CSV row (dict)."""
+def process(boards, pnp, batch, opts, log=print):
+    """Identify one BOOTSEL board (pnp: the USB serial it enumerates with). Returns the CSV row (dict)."""
     models = load_models()
-    row = {"time_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "bootsel_serial": serial,
+    row = {"time_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "bootsel_serial": pnp,
            "model": batch["model"], "revision": batch["revision"], "lot": batch["lot"], "station": batch["station"], "uid": "",
            "strap": "", "strap_counts": "", "page": "", "records": "", "firmware": "", "detail": ""}
 
@@ -153,8 +184,15 @@ def process(boards, serial, batch, opts, log=print):
         row["result"], row["detail"] = result, detail
         return row
 
-    if serial in models.get("deny", {}):
-        return done("DENIED", f"{serial} is on the deny list ({models['deny'][serial]}); not touched")
+    deny = models.get("deny", {})
+    if pnp in deny:
+        return done("DENIED", f"{pnp} is on the deny list ({deny[pnp]}); not touched")
+    serial = boards.flash_id(pnp)  # every picotool call below is pinned to it
+    if not serial:
+        return done("FAIL_PICOTOOL", "could not read the board's flash ID (is exactly one board in BOOTSEL?)")
+    row["uid"] = serial
+    if serial in deny:
+        return done("DENIED", f"{serial} is on the deny list ({deny[serial]}); nothing written")
     tmp = tempfile.mkdtemp(prefix="board_id_")
     try:
         # 1. What it holds already.
@@ -183,7 +221,7 @@ def process(boards, serial, batch, opts, log=print):
         # The writer reboots the board into BOOTSEL when it is done, so picotool
         # may report the board going away; the report decides.
         time.sleep(opts.settle)
-        if not wait_for(boards, serial, True, 20):
+        if not wait_for(boards, pnp, True, 20):
             return done("FAIL_NO_REPORT", f"the board did not come back in BOOTSEL after the writer (picotool: {out})")
 
         # 3. The writer's report.
@@ -202,6 +240,8 @@ def process(boards, serial, batch, opts, log=print):
                 row["uid"], row["page"] = after["current"]["uid"], after["newest"]
             return done("FAIL_NO_REPORT", "no report from the writer" + (
                 f"; a new record is in flash: {describe(after['current'])}" if new else "; nothing was written") + f" (picotool: {out})")
+        if rep["uid"] != serial and rep["status"] not in ("NO_UID", "NOT_16MB", "BAD_PARAMS"):
+            return done("FAIL_VERIFY", f"the writer read flash ID {rep['uid']}, picotool {serial}")
         row["uid"], row["strap"] = rep["uid"], rep["strap"]
         row["strap_counts"] = "/".join(str(c) for c in rep["strap_counts"])
         row["page"] = rep["page"]
@@ -226,8 +266,6 @@ def process(boards, serial, batch, opts, log=print):
             return done("FAIL_VERIFY", f"the record read back differs: {bad or 'uid'}")
         row["records"] = after["identities"]
         notes = []
-        if re.fullmatch(r"[0-9A-F]{16}", serial) and serial != rep["uid"]:
-            notes.append(f"BOOTSEL serial {serial} is not the flash ID {rep['uid']}")
 
         # 5. Firmware, optionally.
         if opts.firmware:
@@ -379,7 +417,10 @@ def cmd_run(args):
 
 def cmd_read(args):
     boards = make_boards(args)
-    serial = one_board(boards)
+    pnp = one_board(boards)
+    serial = boards.flash_id(pnp)
+    if not serial:
+        sys.exit(f"could not read the flash ID of {pnp}")
     tmp = tempfile.mkdtemp(prefix="board_id_")
     try:
         scan, out = read_block(boards, serial, tmp)

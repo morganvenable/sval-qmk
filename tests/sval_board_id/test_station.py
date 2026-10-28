@@ -210,6 +210,28 @@ class Station(unittest.TestCase):
         self.assertEqual(self.rows()[-1]["result"], "DENIED")
         self.assertEqual(self.calls(), [])
 
+    def test_generic_usb_serial_pins_to_flash_id(self):
+        # Some boot ROMs list a generic USB serial in BOOTSEL; picotool --ser matches the flash ID.
+        self.board(present=False)
+        with open(os.path.join(self.fake, "devices.txt"), "w") as f:
+            f.write("E0C9125B0D9B\n")
+        with open(os.path.join(self.fake, "pnp_ids.txt"), "w") as f:
+            f.write("E0C9125B0D9B " + MINI + "\n")
+        self.assertEqual(self.run_once(), 0, self.out)
+        row = self.rows()[-1]
+        self.assertEqual((row["result"], row["bootsel_serial"], row["uid"]), ("PASS", "E0C9125B0D9B", MINI))
+        self.assertTrue(all(c[c.index("--ser") + 1] == MINI for c in self.calls()))
+
+    def test_deny_list_by_flash_id(self):
+        self.board(serial="E465B0621736062B", present=False)
+        with open(os.path.join(self.fake, "devices.txt"), "w") as f:
+            f.write("E0C9125B0D9B\n")
+        with open(os.path.join(self.fake, "pnp_ids.txt"), "w") as f:
+            f.write("E0C9125B0D9B E465B0621736062B\n")
+        self.assertEqual(self.run_once(), 1)
+        self.assertEqual(self.rows()[-1]["result"], "DENIED")
+        self.assertEqual(self.calls(), [])
+
     def test_two_boards_wait(self):
         self.board()
         self.board(serial="E6614103E73B5A2F")

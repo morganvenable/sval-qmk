@@ -85,4 +85,9 @@ The firmware looks at the block only when a host asks, and remembers just which 
 3. The writer checks that the flash is 16 MiB, reads the unique ID and the GP3 strap, and refuses on a strap mismatch. Otherwise it appends the record, reads it back, leaves a report in RAM and reboots into BOOTSEL.
 4. The station reads the report and the record, optionally flashes firmware, and logs a CSV line.
 
-Run `py board_id.py run --fake DIR` for a dry run against simulated boards.
+Run `py board_id.py run --fake DIR` for a dry run against simulated boards. Set `BOARD_ID_VERBOSE=1` to print every picotool call.
+
+Measured on a SvalMCUMini v1.0b0 (dry run, 2026-10-28):
+- picotool 2.1.1 `load -x` starts a RAM image by rebooting into it, not with EXEC.
+- The writer's report at `0x20010000` survives that reboot and the writer's own reboot into BOOTSEL.
+- In BOOTSEL this board's USB serial is the generic `E0C9125B0D9B`. picotool's `--ser` matches the flash unique ID instead, so the station reads that ID with `picotool info -d` while exactly one board is in BOOTSEL, then pins every call and the deny list to it.

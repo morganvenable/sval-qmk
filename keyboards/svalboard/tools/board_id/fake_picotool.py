@@ -2,7 +2,8 @@
 
     fake_picotool.py FOLDER <picotool arguments> --ser SERIAL
 
-FOLDER/devices.txt lists the serials of the boards "in BOOTSEL". Each board is
+FOLDER/devices.txt lists the USB serials of the boards "in BOOTSEL"
+(FOLDER/pnp_ids.txt can map one to a different flash ID). Each board is
 FOLDER/<SERIAL>/ with block.bin (the 64 KiB record block) and chip.bin (see
 writer/hal_host.c). Loading the ID-writer with -x runs the writer's real logic,
 built for the PC (FOLDER/writer_host or $BOARD_ID_WRITER_HOST), on that board.
@@ -41,6 +42,11 @@ def main(argv):
     args = args[:i] + args[i + 2:]
     with open(os.path.join(folder, "devices.txt"), encoding="utf-8") as f:
         present = {line.strip().upper() for line in f if line.strip()}
+    ids = os.path.join(folder, "pnp_ids.txt")  # USB serial -> flash ID; picotool --ser matches the flash ID
+    if os.path.exists(ids):
+        with open(ids, encoding="utf-8") as f:
+            pairs = [line.split() for line in f if len(line.split()) == 2]
+        present = {dict((a.upper(), b.upper()) for a, b in pairs).get(p, p) for p in present}
     dev = os.path.join(folder, serial)
     if serial.upper() not in present or not os.path.isdir(dev):
         fail(f"No accessible RP-series devices in BOOTSEL mode were found with serial number {serial}.")
