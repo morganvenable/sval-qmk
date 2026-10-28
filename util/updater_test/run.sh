@@ -175,3 +175,6 @@ if grep -rn 'UPDATE_PAIR_RECORD_OFFSET' "$kb" --include='*.c' | grep -v "$kb/upd
     echo "FAIL: UPDATE_PAIR_RECORD_OFFSET is used outside update_flash.c and update_pair.c"; exit 1
 fi
 echo "pair UF2: the no-chord relay and the record sector have one caller each"
+
+# The board record and the board ID station (docs/board-record.md).
+bash "$root/tests/sval_board_id/run.sh" "$@"

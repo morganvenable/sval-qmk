@@ -20,13 +20,13 @@ ${CC:-cc} -std=c11 -Wall -Wextra -Werror -O1 -g $san -I"$kb" \
 "$out/test_board_record" "$out/vector.bin"
 python3 -I "$tests/test_codec.py" "$out/vector.bin"
 
-make -s -C "$writer" host OUT="$out"
+make -s -C "$writer" -f writer.mk host OUT="$out"
 uf2="$kb/tools/board_id/writer.uf2"
 if command -v arm-none-eabi-gcc >/dev/null; then
-    make -s -C "$writer" OUT="$out"
+    make -s -C "$writer" -f writer.mk OUT="$out"
     arm-none-eabi-size "$out/writer.elf"
     if ! cmp -s "$out/writer.uf2" "$uf2"; then
-        echo "FAIL: tools/board_id/writer.uf2 is not the build of writer/ (make -C $writer OUT=..; copy writer.uf2)"; exit 1
+        echo "FAIL: tools/board_id/writer.uf2 is not the build of writer/ (make -C $writer -f writer.mk; copy writer.uf2)"; exit 1
     fi
     echo "writer.uf2 matches a fresh build"
 fi

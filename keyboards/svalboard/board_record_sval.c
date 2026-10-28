@@ -50,13 +50,18 @@ static int16_t find(void) {
 
 // Request:  [0xDF] [0x3A] [chunk]
 // Response: [0xDF] [0x3A] [status] [format=1] [len lo] [len hi] [chunk]
-//           [identity records] [16 bytes of the record from chunk * 16]
+//           [identity records] [flags] [16 bytes of the record from chunk * 16]
 // status 0: a record; 1: none; 2: the die is not 16 MiB, so there is no region;
-// 3: chunk past the end. Older firmware answers 0xFF in byte 1 (unknown command).
+// 3: chunk past the end. flags bit 0: the die's unique ID was compared with the
+// record's; bit 1: they match (a record copied from another board's flash would
+// not). Older firmware answers 0xFF in byte 1 (unknown command).
+#define BOARD_RECORD_SVAL_HEAD 7
 #define BOARD_RECORD_SVAL_CHUNK 16
+#define BOARD_RECORD_UID_COMPARED 0x01
+#define BOARD_RECORD_UID_MATCHES 0x02
 
 void sval_board_record_kb(uint8_t *io, uint8_t length) {
-    if (length < 6 + BOARD_RECORD_SVAL_CHUNK) return;
+    if (length < BOARD_RECORD_SVAL_HEAD + BOARD_RECORD_SVAL_CHUNK) return;
     uint8_t chunk = io[0];
     memset(io, 0, length);
     io[1] = 1;
@@ -75,11 +80,16 @@ void sval_board_record_kb(uint8_t *io, uint8_t length) {
     io[2]              = (uint8_t)len;
     io[3]              = (uint8_t)(len >> 8);
     io[5]              = (uint8_t)identities;
-    uint32_t from      = (uint32_t)chunk * BOARD_RECORD_SVAL_CHUNK;
+    identity_serial_source_t src;
+    const uint8_t           *die = identity_serial(&src);
+    if (len && die && src == IDENTITY_SERIAL_FLASH_ID) {
+        io[6] = BOARD_RECORD_UID_COMPARED | (memcmp(die, rec + 8, BOARD_RECORD_UID_BYTES) == 0 ? BOARD_RECORD_UID_MATCHES : 0);
+    }
+    uint32_t from = (uint32_t)chunk * BOARD_RECORD_SVAL_CHUNK;
     if (!len || from >= len) {
         io[0] = len ? 3 : 1;
         return;
     }
     uint32_t n = len - from < BOARD_RECORD_SVAL_CHUNK ? len - from : BOARD_RECORD_SVAL_CHUNK;
-    memcpy(io + 6, rec + from, n);
+    memcpy(io + BOARD_RECORD_SVAL_HEAD, rec + from, n);
 }
