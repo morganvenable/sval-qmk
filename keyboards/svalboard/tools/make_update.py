@@ -484,9 +484,11 @@ PAIR_RECORD_BYTES = 128
 SECTOR, PAGE = 4096, 256
 PAGES_PER_SECTOR = SECTOR // PAGE
 assert struct.calcsize(PAIR_RECORD_FMT) + 4 == PAIR_RECORD_BYTES
-# Flash the file may never write: settings, staging slot, side records,
-# build reset record, identity (update_flash.c asserts the firmware side).
-PROTECTED = {"settings": (0x160000, 0x260000), "staging slot": (0x800000, 0x960000), "side records": (0xFFB000, 0xFFD000), "build reset record": (0xFFD000, 0xFFE000), "identity": (0xFFE000, 0x1000000)}
+# Flash the file may never write: settings, staging slot, the board record,
+# side records, build reset record, identity (update_flash.c asserts the
+# firmware side).
+BOARD_RECORD = (0xF00000, 0xF10000)  # board_record.h, docs/board-record.md
+PROTECTED = {"settings": (0x160000, 0x260000), "staging slot": (0x800000, 0x960000), "board record": BOARD_RECORD, "side records": (0xFFB000, 0xFFD000), "build reset record": (0xFFD000, 0xFFE000), "identity": (0xFFE000, 0x1000000)}
 
 
 def pair_record(manifest):

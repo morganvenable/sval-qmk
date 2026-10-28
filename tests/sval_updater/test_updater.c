@@ -594,6 +594,31 @@ static bool unchanged_outside(uint32_t lo, uint32_t hi) {
     return memcmp(before, update_host_flash, lo) == 0 && memcmp(before + hi, update_host_flash + hi, sizeof(before) - hi) == 0;
 }
 
+// The board record block (board_record.h): no slot operation reaches it, even
+// called directly with its address, and the slot API cannot name it.
+static void test_board_record_untouched(void) {
+    update_flash_init();
+    memset(update_host_flash + BOARD_RECORD_BASE, 0xA5, BOARD_RECORD_SIZE);
+    static uint8_t page[UPDATE_FLASH_PAGE];
+    memset(page, 0x00, sizeof(page));
+    for (uint32_t abs = BOARD_RECORD_BASE - UPDATE_FLASH_BLOCK; abs < BOARD_RECORD_END + UPDATE_FLASH_BLOCK; abs += UPDATE_FLASH_PAGE) {
+        CHECK(!abs_in_slot(abs, UPDATE_FLASH_PAGE) || abs + UPDATE_FLASH_PAGE <= BOARD_RECORD_BASE || abs >= BOARD_RECORD_END);
+        slot_flash_op(abs, page, 0);
+        if (abs % UPDATE_FLASH_SECTOR == 0) slot_flash_op(abs, NULL, UPDATE_FLASH_SECTOR);
+        if (abs % UPDATE_FLASH_BLOCK == 0) slot_flash_op(abs, NULL, UPDATE_FLASH_BLOCK);
+    }
+    CHECK(!abs_in_slot(SVAL_UPDATE_BASE, BOARD_RECORD_END - SVAL_UPDATE_BASE)); // a range across it
+    for (uint32_t off = 0; off <= SVAL_UPDATE_SIZE; off += UPDATE_FLASH_SECTOR) {
+        if (update_slot_range_ok(off, UPDATE_FLASH_SECTOR)) CHECK(SVAL_UPDATE_BASE + off + UPDATE_FLASH_SECTOR <= BOARD_RECORD_BASE);
+    }
+    CHECK(update_flash_erase_block(BOARD_RECORD_BASE - SVAL_UPDATE_BASE) == UPDATE_INVALID);
+    CHECK(update_flash_program_page(BOARD_RECORD_BASE - SVAL_UPDATE_BASE, page) == UPDATE_INVALID);
+    bool same = true;
+    for (uint32_t i = 0; i < BOARD_RECORD_SIZE; i++) same &= update_host_flash[BOARD_RECORD_BASE + i] == 0xA5;
+    CHECK(same);
+    memset(update_host_flash + BOARD_RECORD_BASE, 0xFF, BOARD_RECORD_SIZE);
+}
+
 static void test_session(void);
 
 static void test_flash(void) {
@@ -867,6 +892,7 @@ int main(int argc, char **argv) {
     test_sha512();
     test_build_info();
     test_flash();
+    test_board_record_untouched();
     if (argc > 1) test_cross(argv[1]);
     test_session();
     test_relay();

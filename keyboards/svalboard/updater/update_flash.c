@@ -15,6 +15,7 @@
 #include "identity.h"    // IDENTITY_SECTOR_A
 #include "build_reset.h" // BUILD_RESET_SECTOR
 #include "update_pair.h" // UPDATE_PAIR_RECORD_OFFSET
+#include "board_record.h" // BOARD_RECORD_BASE, _END
 #ifdef SVAL_EITHER_HAND
 #    include "side.h" // SVAL_SIDE_SECTOR_A, _B
 #endif
@@ -57,6 +58,15 @@ _Static_assert(PAIR_SECTOR_END <= BUILD_RESET_SECTOR && PAIR_SECTOR_END <= IDENT
 _Static_assert(PAIR_SECTOR_END <= SVAL_SIDE_SECTOR_A && PAIR_SECTOR_END <= SVAL_SIDE_SECTOR_B, "the pair record is below the side records");
 #endif
 
+// The board record block (board_record.h, docs/board-record.md): the updater
+// never erases or writes it. The slot, the commit's range (the firmware area,
+// [0, SVAL_UPDATE_MAX_IMAGE)) and the pair record all end below it, and none
+// shares its 64 KiB block; slot_flash_op checks it again at run time.
+_Static_assert(SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE <= BOARD_RECORD_BASE, "the staging slot ends below the board record");
+_Static_assert(SVAL_UPDATE_MAX_IMAGE <= BOARD_RECORD_BASE, "an image (the commit's range) never reaches the board record");
+_Static_assert(PAIR_SECTOR_END <= BOARD_RECORD_BASE, "the pair record is below the board record");
+_Static_assert(((SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE - 1) & ~0xFFFFu) < BOARD_RECORD_BASE, "the slot shares no 64 KiB block with the board record");
+
 #define SLOT_END (SVAL_UPDATE_BASE + SVAL_UPDATE_SIZE)
 #define JEDEC_CAPACITY_16MB 0x18 // 2^24 bytes
 #define ERASE_BLOCK_CMD 0xD8     // 64 KiB block erase, as the SDK passes to the ROM
@@ -72,6 +82,7 @@ static uint8_t  page_buf[UPDATE_FLASH_PAGE] __attribute__((aligned(4)));
 // The absolute range check is repeated here, next to the ROM calls, so that no
 // caller mistake can reach flash outside the slot.
 static bool __no_inline_not_in_flash_func(abs_in_slot)(uint32_t abs, uint32_t len) {
+    if (abs < BOARD_RECORD_END && (uint64_t)abs + len > BOARD_RECORD_BASE) return false; // never the board record
     return abs >= SVAL_UPDATE_BASE && abs <= SLOT_END && len <= SLOT_END - abs;
 }
 

@@ -1,0 +1,15 @@
+{
+  "_comment": "Board models the station offers, with the GP3 strap class each one should read (handoff/flipfet-id). Names are exact: only names from Morgan, the schematics or the silkscreen.",
+  "models": [
+    {"model": "SvalMCUMini", "strap": "low", "revisions": ["v1.0b0"]},
+    {"model": "V3.2", "strap": "high", "revisions": []},
+    {"model": "V3.1", "strap": "high", "revisions": []},
+    {"model": "V3.0", "strap": "floating", "revisions": []},
+    {"model": "V2B", "strap": "floating", "revisions": []}
+  ],
+  "deny": {
+    "_comment": "BOOTSEL serials the station never touches, whatever the operator asks.",
+    "E465B0621736062B": "daily driver",
+    "E46498769F365934": "reserved board"
+  }
+}

@@ -93,9 +93,9 @@ enum sval_command_id {
     sval_cmd_pointing_motion      = 0x2D, // advertised by sval_flag2_pointing_motion
     sval_cmd_pointing_contacts    = 0x2F, // advertised by sval_flag2_pointing_contacts
     sval_cmd_side                 = 0x33, // advertised by sval_flag2_side (either-hand builds)
-    // 0x34-0x37 are allocated by the pointing tools branch and 0x3A by the
-    // board ID record branch.
+    // 0x34-0x37 are allocated by the pointing tools branch.
     sval_cmd_main_board    = 0x38, // advertised by sval_flag3_main_board
+    sval_cmd_board_record  = 0x3A, // advertised by sval_flag3_board_record; older firmware answers sval_cmd_error
     sval_cmd_typing_pause  = 0x3C, // advertised by sval_flag3_typing_pause
     sval_cmd_flicker_latch = 0x3D, // advertised by sval_flag3_flicker_latch
     sval_cmd_error         = 0xFF,
@@ -128,7 +128,7 @@ enum sval_feature_flags2 {
 // Third feature byte, GET_INFO byte 20. Older firmware leaves it zero.
 enum sval_feature_flags3 {
     sval_flag3_main_board = (1 << 0), // 0x38 reports each half's main board and cluster check
-    // Bit 1 is left for the board ID record branch.
+    sval_flag3_board_record  = (1 << 1), // 0x3A reads the factory board record (docs/board-record.md)
     sval_flag3_typing_pause  = (1 << 2), // 0x3C pauses keyboard output while a key tester is open
     sval_flag3_flicker_latch = (1 << 3), // 0x3D reads each switch's raw changes since the last read
 };
@@ -413,6 +413,8 @@ void sval_pointing_motion_kb(uint8_t *out, uint8_t length);
 // with the touch contacts down now. Weak no-op in the module; out[0] = 0 means
 // no data.
 void sval_pointing_contacts_kb(uint8_t *out, uint8_t length);
+// BOARD_RECORD (0x3A): io holds the request after [0xDF] [0x3A]; the reply goes in place.
+void sval_board_record_kb(uint8_t *io, uint8_t length);
 
 // SIDE (0x33, SVAL_EITHER_HAND builds only): the keyboard handles data after
 // [0xDF] [0x33] in place: [op] [status] [...].

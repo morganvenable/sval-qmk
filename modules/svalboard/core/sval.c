@@ -912,6 +912,13 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
         }
 #endif
 
+        case sval_cmd_board_record: {
+            // Request:  [0xDF] [0x3A] [chunk]
+            // Response: [0xDF] [0x3A] [status] ... (keyboards/svalboard/docs/board-record.md)
+            if (length > 2) sval_board_record_kb(&data[2], length - 2);
+            break;
+        }
+
         case sval_cmd_pointing_contacts: {
             // Request:  [0xDF] [0x2F]
             // Response: [0xDF] [0x2F] [format] [report...]
@@ -1241,6 +1248,12 @@ __attribute__((weak)) void sval_pointing_motion_kb(uint8_t *out, uint8_t length)
 __attribute__((weak)) void sval_main_board_kb(uint8_t *out, uint8_t length) {}
 
 __attribute__((weak)) void sval_pointing_contacts_kb(uint8_t *out, uint8_t length) {}
+
+// Boards without a board record report none (status 1).
+__attribute__((weak)) void sval_board_record_kb(uint8_t *io, uint8_t length) {
+    memset(io, 0, length);
+    if (length) io[0] = 1;
+}
 
 // Override via_command_kb to intercept wrapper and Sval protocol
 bool via_command_kb(uint8_t *data, uint8_t length) {
