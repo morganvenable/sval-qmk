@@ -1,5 +1,5 @@
 {
-  "_comment": "Board models the station offers, with the GP3 strap class each one should read (handoff/flipfet-id). Names are exact: only names from Morgan, the schematics or the silkscreen.",
+  "_comment": "Board models the station offers, with the GP3 strap class each one should read. Mini, V3.x: handoff/flipfet-id (netlists, Mini measured). V2B floating: svalboard-kicad netlist (GP3 to J10 pin 8 and the Q2 gate only), schematic, not measured. Names are exact: only names from Morgan, the schematics or the silkscreen.",
   "models": [
     {"model": "SvalMCUMini", "strap": "low", "revisions": ["v1.0b0"]},
     {"model": "V3.2", "strap": "high", "revisions": []},
