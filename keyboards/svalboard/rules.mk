@@ -44,6 +44,12 @@ VIA_INSECURE = yes
 
 # Note: Sval module is enabled via keymap.json with "modules": ["svalboard/core"]
 
+# Debounce (debounce_sval.c): the optical keys have nothing to bounce and pass
+# straight through; only the thumb Double Down tact switch (thumb row, COL6,
+# each half) is debounced, 5 ms per key, deferred.
+DEBOUNCE_TYPE = custom
+SRC += debounce_sval.c
+
 # On-device action-path tests; opt in with -e SVAL_KEYTEST=yes.
 ifeq ($(strip $(SVAL_KEYTEST)), yes)
   SRC += keytest.c
