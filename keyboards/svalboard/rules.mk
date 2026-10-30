@@ -57,6 +57,17 @@ ifeq ($(strip $(SVAL_KEYTEST)), yes)
   OPT_DEFS += -DSVAL_KEYTEST
 endif
 
+# Two halves on separate USB cables, bridged by a host relay (two_cable.c,
+# docs/two-cable.md). Prototype: opt in with -e SVAL_TWO_CABLE=yes; release
+# builds refuse it.
+ifeq ($(strip $(SVAL_TWO_CABLE)), yes)
+  ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
+    $(error SVAL_TWO_CABLE cannot be part of a release build)
+  endif
+  OPT_DEFS += -DSVAL_TWO_CABLE
+  SRC += two_cable.c
+endif
+
 # Timing counters (perf.c: main loop, matrix frames, pad reads, split fetches,
 # touchpad frames), read with tools/multitouch/perf.py over raw HID 0xFC. Dev
 # builds only: opt in with -e SVAL_PERF_STATS=yes; release builds refuse it.

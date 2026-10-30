@@ -9,6 +9,10 @@
 #include "timer.h"
 #include <string.h>
 
+#ifdef SVAL_TWO_CABLE
+extern bool sval_two_cable_command(uint8_t *data, uint8_t length);
+#endif
+
 #if defined(SVAL_TOUCH_DEV) || defined(SVAL_PERF_STATS)
 // Touchpad dev builds only (keyboards/svalboard/azoteq/multitouch.mk).
 extern void sval_dev_command(uint8_t *data, uint8_t length);
@@ -178,6 +182,11 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
             return true;
         }
 
+#ifdef SVAL_TWO_CABLE
+        case 0xFB: // Two halves on separate USB cables (keyboards/svalboard/two_cable.c); prototype builds only.
+            if (sval_two_cable_command(data, length)) host_raw_hid_send(data, length);
+            return true;
+#endif
         case 0xFE: {
             // VIA - strip header, let VIA process, wrap response
             // Guard against integer underflow

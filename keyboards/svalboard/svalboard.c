@@ -7,6 +7,7 @@
 #include "version.h"
 #include "layout_stamp.h"
 #include "split_common/transactions.h"
+#include "two_cable.h"
 #include <string.h>
 #include <stddef.h>
 #include QMK_KEYBOARD_H
@@ -776,6 +777,12 @@ report_mouse_t pointing_device_task_combined_kb(report_mouse_t left_report, repo
     sval_mt_remote_hint((uint8_t)(is_keyboard_left() ? right_report.boot_x : left_report.boot_x));
     left_report.boot_x = right_report.boot_x = 0;
 #endif
+#ifdef SVAL_TWO_CABLE
+    // Two cables: a follower hands its motion to the relay and moves nothing
+    // itself; the lead takes the follower's motion as the other hand's.
+    sval_two_cable_pointing(&left_report, &right_report);
+    if (sval_two_cable_follower_live()) return left_report; // zero
+#endif
     if (motion_read_once && timer_elapsed32(motion_last_read) < SVAL_HOST_ACTIVE_MS) {
         sval_motion_accumulate(&motion_acc[0], left_report.x, left_report.y, left_report.h, left_report.v, left_report.buttons);
         sval_motion_accumulate(&motion_acc[1], right_report.x, right_report.y, right_report.h, right_report.v, right_report.buttons);
@@ -893,6 +900,9 @@ void housekeeping_task_kb(void) {
 #endif
     sval_usb_wake_handler();
     if (is_keyboard_master()) sval_typing_pause_task();
+#ifdef SVAL_TWO_CABLE
+    sval_two_cable_task();
+#endif
     scanlab_housekeeping();
 #ifdef SVAL_KEYTEST
     keytest_task();
@@ -961,7 +971,8 @@ void housekeeping_task_kb(void) {
 #endif
                 sval_other_board_set(NULL);
 #ifdef SVAL_EITHER_HAND
-                sval_side_other_set(false, false, SVAL_SIDE_UNKNOWN);
+                // With no split link, a two-cable relay may stand in for it (two_cable.c).
+                if (!sval_two_cable_lead_live()) sval_side_other_set(false, false, SVAL_SIDE_UNKNOWN);
 #endif
                 is_connected = false;
             }
