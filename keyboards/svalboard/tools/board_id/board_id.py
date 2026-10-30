@@ -99,8 +99,7 @@ class Boards:
             return 124, "picotool timed out"
         out = (p.stdout + p.stderr).strip()
         if os.environ.get("BOARD_ID_VERBOSE"):
-            said = " | ".join(l.strip() for l in re.split(r"[
-]+", out) if l.strip() and "%" not in l)
+            said = " | ".join(l.strip() for l in re.split(r"[\r\n]+", out) if l.strip() and "%" not in l)
             print(f"  [picotool {' '.join(args)} --ser {serial}] exit {p.returncode}, {time.monotonic() - t0:.2f} s: {said}")
         return p.returncode, out
 
