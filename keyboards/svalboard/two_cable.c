@@ -69,6 +69,9 @@ static bool          capture_on;
 static uint32_t      capture_owner, capture_seen;
 static host_driver_t capture_driver;
 static host_driver_t *capture_saved;
+#define CAPTURE_DRAIN_MS 1000
+static bool     capture_draining;
+static uint32_t capture_drain_at;
 
 static inline uint8_t this_hand(void) {
     return is_keyboard_left() ? 0 : ROWS_PER_HAND;
@@ -127,7 +130,7 @@ static void lead_clear_rows(void) {
     in_buttons = 0;
 }
 
-static void lead_end(void) {
+static void lead_drop_keys(void) {
     lead_clear_rows(); // the next matrix_task() releases every key the relay held
     for (uint8_t r = 0; r < ROWS_PER_HAND; r++) {
         for (uint8_t c = 0; c < MATRIX_COLS; c++) {
@@ -135,6 +138,10 @@ static void lead_end(void) {
         }
         lead_inject[r] = 0;
     }
+}
+
+static void lead_end(void) {
+    lead_drop_keys();
 #ifdef SVAL_EITHER_HAND
     for (uint8_t i = 0; i < 3; i++) sval_side_other_set(false, false, SVAL_SIDE_UNKNOWN);
 #endif
@@ -145,7 +152,7 @@ static void lead_state(const uint8_t *d) {
     // d[7] seq, d[8] follower side, d[9..13] rows, d[14..17] dx dy, d[18] h, d[19] v, d[20] buttons, d[21] flags
     bool changed = false;
     for (uint8_t r = 0; r < ROWS_PER_HAND; r++) {
-        matrix_row_t row = d[9 + r];
+        matrix_row_t row = capture_draining ? 0 : d[9 + r]; // a draining capture keeps them up
         if (matrix[that_hand() + r] != row) {
             matrix[that_hand() + r] = row;
             changed = true;
@@ -265,7 +272,10 @@ static void cap_extra(report_extra_t *r) {
 static void capture_begin(uint32_t client) {
     capture_owner = client;
     capture_seen  = timer_read32();
-    if (capture_on) return;
+    if (capture_on) {
+        capture_draining = false;
+        return;
+    }
     clear_keyboard();
     capture_saved                = host_get_driver();
     capture_driver               = *capture_saved; // LEDs and raw HID stay connected
@@ -277,11 +287,22 @@ static void capture_begin(uint32_t client) {
     capture_on = true;
 }
 
+// Ending a capture first lets go of every relayed and injected key and keeps
+// capturing for a while, so a tap a release resolves (tap-hold, tap dance)
+// lands in the capture too and never on the computer.
 static void capture_end(void) {
-    if (!capture_on) return;
+    if (!capture_on || capture_draining) return;
+    if (role == ROLE_LEAD) lead_drop_keys();
+    capture_draining = true;
+    capture_drain_at = timer_read32();
+}
+
+static void capture_drain_task(void) {
+    if (!capture_draining || timer_elapsed32(capture_drain_at) < CAPTURE_DRAIN_MS) return;
     clear_keyboard(); // into the capture: the computer saw none of it
     host_set_driver(capture_saved);
-    capture_on = false;
+    capture_on       = false;
+    capture_draining = false;
 }
 
 // ---- commands and task ------------------------------------------------------------
@@ -364,6 +385,7 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
 void sval_two_cable_task(void) {
     if (reboot_pending && timer_expired32(timer_read32(), reboot_at)) soft_reset_keyboard();
     if (capture_on && timer_elapsed32(capture_seen) > CAPTURE_LEASE_MS) capture_end();
+    capture_drain_task();
     if (role == ROLE_LEAD) {
         if (timer_elapsed32(last_pkt) > LEAD_LEASE_MS) {
             lead_end();
