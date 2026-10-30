@@ -41,7 +41,7 @@ class Station(unittest.TestCase):
         self.tool = board_id
         self.batch()
 
-    def batch(self, model="SvalMCUMini", revision="v1.0b0", lot="2026-10-A"):
+    def batch(self, model="SvalMCUMini V1.0", revision="v1.0b0", lot="2026-10-A"):
         self.main("batch", "--model", model, "--revision", revision, "--lot", lot, "--station", "bench1")
 
     def main(self, *args):
@@ -102,7 +102,7 @@ class Station(unittest.TestCase):
         self.assertEqual((s["identities"], s["newest"]), (1, 0))
         cur = s["current"]
         self.assertEqual((cur["model"], cur["revision"], cur["lot"], cur["uid"], cur["strap"], cur["expected"]),
-                         ("SvalMCUMini", "v1.0b0", "2026-10-A", MINI, "low", "low"))
+                         ("SvalMCUMini V1.0", "v1.0b0", "2026-10-A", MINI, "low", "low"))
         self.assertTrue(cur["station"].startswith("bench1 board_id/"))
         row = self.rows()[-1]
         self.assertEqual((row["result"], row["uid"], row["strap"], row["page"]), ("PASS", MINI, "low", "0"))

@@ -48,7 +48,7 @@ Every record is little-endian:
 
 | Tag | Field |
 | --- | --- |
-| 1 | model (text), e.g. `SvalMCUMini` |
+| 1 | model (text), e.g. `SvalMCUMini V1.0` |
 | 2 | PCB revision (text), e.g. `v1.0b0` |
 | 3 | batch or lot (text) |
 | 4 | station name and tool version (text) |

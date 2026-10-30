@@ -51,7 +51,7 @@
 //
 // TLV tags. Text is UTF-8 with no terminator. Unknown tags are skipped, so new
 // fields need no version change; version changes only if the header does.
-#define BOARD_TAG_MODEL 0x01    // text: the board model, e.g. "SvalMCUMini"
+#define BOARD_TAG_MODEL 0x01    // text: the board model, e.g. "SvalMCUMini V1.0"
 #define BOARD_TAG_REVISION 0x02 // text: the PCB revision, e.g. "v1.0b0"
 #define BOARD_TAG_LOT 0x03      // text: the batch or lot
 #define BOARD_TAG_STATION 0x04  // text: station name and tool version
