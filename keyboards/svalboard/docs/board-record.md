@@ -61,6 +61,8 @@ Text is UTF-8 with no terminator. Readers skip tags and kinds they don't know, s
 
 ## Reading it: Sval `0x3A` BOARD_RECORD
 
+Discovery: GET_INFO byte 20 (the third feature byte), bit 1 (`sval_flag3_board_record`, `0x02`).
+
 Request: `[0xDF] [0x3A] [chunk]`
 
 Response: `[0xDF] [0x3A] [status] [format=1] [length lo] [length hi] [chunk] [identity records] [flags] [16 bytes]`

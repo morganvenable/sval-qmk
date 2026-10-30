@@ -456,9 +456,10 @@ void sval_client_packet_kb(uint32_t client_id) {
 }
 
 // GET_INFO byte 20 (the third feature byte): main board (0x38, mainboard.c),
-// typing pause (0x3C) and flicker latch (0x3D).
+// board record (0x3A, board_record_sval.c), typing pause (0x3C) and flicker
+// latch (0x3D).
 uint8_t sval_get_feature_flags3_kb(void) {
-    return sval_flag3_main_board | sval_flag3_typing_pause | sval_flag3_flicker_latch;
+    return sval_flag3_main_board | sval_flag3_board_record | sval_flag3_typing_pause | sval_flag3_flicker_latch;
 }
 
 void sval_flicker_latch_kb(uint8_t *data, uint8_t length) {

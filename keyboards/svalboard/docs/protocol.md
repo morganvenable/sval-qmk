@@ -207,11 +207,18 @@ Combos can have names on the board, like layers, tap dances and macros: one name
 - Requests and replies are those of the other label types: `DF 1C 03 <index lo> <index hi> <16 bytes, null-padded>` → `DF 1C <status>` (`0` saved, `1` invalid type or UTF-8, `2` index out of range); `DF 1D 03 <index lo> <index hi>` clears one; `DF 1B 03 <start lo> <start hi>` returns the next named combo at or after `start`.
 - The names are stored after the macro buffer, at the very end of the stored settings, with their own header. A board that updates to this firmware keeps everything it had and starts with no combo names; the macro buffer is 4104 bytes shorter (256 combos × 16 bytes, plus 8). A settings reset clears the names with everything else.
 
+## Board record
+
+`BOARD_RECORD` (`0x3A`) reads the main board's factory record: model, revision, the flash unique ID and how it was programmed. The firmware only reads it.
+
+- Discovery: GET_INFO byte 20, bit 1 (`sval_flag3_board_record`, `0x02`). Older firmware leaves it zero, and answers `0x3A` with the command byte `0xFF` (unknown command).
+- Request and reply, the record format and the flash map: [board-record.md](board-record.md).
+
 ## Typing pause
 
 `TYPING_PAUSE` (`0x3C`) stops the board's typing from reaching the computer while a host app's key tester is open. The keymap keeps running and layers work; only what would be typed is held back. The tester reads the switches with VIA's matrix state as before.
 
-- Discovery: GET_INFO byte 20 (the third feature byte), bit 2 (`sval_flag3_typing_pause`, `0x04`). Older firmware leaves it zero, and answers `0x3C` with the command byte `0xFF` (unknown command). (Byte 20 bit 0 is `MAIN_BOARD`, and bit 1 is left for the board ID record branch.)
+- Discovery: GET_INFO byte 20 (the third feature byte), bit 2 (`sval_flag3_typing_pause`, `0x04`). Older firmware leaves it zero, and answers `0x3C` with the command byte `0xFF` (unknown command). (Byte 20 bit 0 is `MAIN_BOARD`, and bit 1 is `BOARD_RECORD`, `0x3A`.)
 - Request: `DF 3C <op>`: `0` off, `1` on, `2` read the state. "On" also renews the pause, and the client that sends it owns the pause from then on. Any client may turn it off.
 - While on, the half with USB sends no keyboard or NKRO reports (letters, Tab, Enter, Esc, arrows, F-keys, GUI, Ctrl, Alt, Shift) and no consumer or system reports (media, volume, sleep). The mouse report still goes out: buttons, motion and scroll. Both halves are covered, since the half with USB sends every report.
 - Turning it on clears the modifiers, one-shot modifiers and keys, and sends an empty keyboard report first, so nothing is left held on the computer.
