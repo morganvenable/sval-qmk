@@ -52,27 +52,23 @@ static void test_hold_time(void) {
         uint8_t s = sval_pad_with_hold_ms(0, sval_pad_hold_ms[i]);
         CHECK(sval_pad_hold_time_ms(s) == sval_pad_hold_ms[i], "exact %u", sval_pad_hold_ms[i]);
         CHECK((s & ~SVAL_PAD_KNOWN) == 0, "bit 7 never set");
-        CHECK(sval_pad_hold_ms[i] >= 100, "no hold time under 100 ms");
-        if (i == 1 || i == 2) CHECK(s == 0, "300 is always written as the default byte");
-        if (i > 3) CHECK(sval_pad_hold_ms[i] > sval_pad_hold_ms[i - 1], "the table rises after the default");
-        if (i >= 3)
-            for (int j = 0; j < i; j++)
-                CHECK(sval_pad_hold_ms[i] != sval_pad_hold_ms[j], "no time twice");
+        if (i > 1) CHECK(sval_pad_hold_ms[i] > sval_pad_hold_ms[i - 1], "the table rises after the default");
+        for (int j = 0; j < i; j++)
+            CHECK(sval_pad_hold_ms[i] != sval_pad_hold_ms[j], "no time twice");
     }
-    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 0)) == 100, "0 snaps to 100");
-    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 20)) == 100, "20 snaps to 100");
-    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 125)) == 100, "a tie takes the shorter");
-    // Pre-release bytes with the 20 and 50 ms steps read as the default.
-    CHECK(sval_pad_hold_time_ms(1 << SVAL_PAD_HOLD_SHIFT) == 300, "old 20 ms step reads 300");
-    CHECK(sval_pad_hold_time_ms(2 << SVAL_PAD_HOLD_SHIFT) == 300, "old 50 ms step reads 300");
+    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 0)) == 20, "0 snaps to 20");
+    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 34)) == 20, "34 snaps to 20");
+    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 35)) == 20, "a tie takes the shorter");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 275)) == 250, "275: a tie with the default takes the shorter");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 290)) == 300, "290 snaps to the default");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 325)) == 300, "325: a tie above the default takes it");
+    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 36)) == 50, "36 snaps to 50");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 299)) == 300, "299 snaps to 300");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 65535)) == 1500, "max snaps to 1500");
-    // The default is index 0: choosing 300 is the default byte.
+    // The default is index 0: choosing 300 is the default byte, and 20, the
+    // old default, is a change like any other.
     CHECK(sval_pad_with_hold_ms(0, 300) == 0, "300 ms is the default byte");
-    CHECK(sval_pad_with_hold_ms(0, 100) != 0, "100 ms is stored as a change");
+    CHECK(sval_pad_with_hold_ms(0, 20) != 0, "20 ms is stored as a change");
     // The hold time keeps the switches, and the switches keep the hold time.
     uint8_t s = sval_pad_with(0, SVAL_PAD_TAP_OFF, false);
     s         = sval_pad_with_hold_ms(s, 500);
@@ -121,8 +117,8 @@ static void test_regs(void) {
     CHECK(regs[0] == 0x03 && regs[1] == 0x02, "two-finger off keeps scroll: %02X %02X", regs[0], regs[1]);
 
     memcpy(regs, start, sizeof(regs));
-    sval_pad_regs_apply(sval_pad_with_hold_ms(0, 100), regs);
-    CHECK(regs[6] == 0x00 && regs[7] == 0x64, "hold 100 ms: %02X %02X", regs[6], regs[7]);
+    sval_pad_regs_apply(sval_pad_with_hold_ms(0, 20), regs);
+    CHECK(regs[6] == 0x00 && regs[7] == 0x14, "hold 20 ms: %02X %02X", regs[6], regs[7]);
     memcpy(regs, start, sizeof(regs));
     sval_pad_regs_apply(sval_pad_with_hold_ms(0, 1000), regs);
     CHECK(regs[6] == 0x03 && regs[7] == 0xE8, "hold 1000 ms big-endian: %02X %02X", regs[6], regs[7]);
