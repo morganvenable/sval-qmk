@@ -53,7 +53,8 @@ static void test_hold_time(void) {
         CHECK(sval_pad_hold_time_ms(s) == sval_pad_hold_ms[i], "exact %u", sval_pad_hold_ms[i]);
         CHECK((s & ~SVAL_PAD_KNOWN) == 0, "bit 7 never set");
         if (i > 1) CHECK(sval_pad_hold_ms[i] > sval_pad_hold_ms[i - 1], "the table rises after the default");
-        for (int j = 0; j < i; j++) CHECK(sval_pad_hold_ms[i] != sval_pad_hold_ms[j], "no time twice");
+        for (int j = 0; j < i; j++)
+            CHECK(sval_pad_hold_ms[i] != sval_pad_hold_ms[j], "no time twice");
     }
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 0)) == 20, "0 snaps to 20");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 34)) == 20, "34 snaps to 20");
