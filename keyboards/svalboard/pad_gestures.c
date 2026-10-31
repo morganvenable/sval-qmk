@@ -6,7 +6,7 @@
 // writes it to the chip.
 #include "pad_gestures.h"
 
-const uint16_t sval_pad_hold_ms[SVAL_PAD_HOLD_CHOICES] = {20, 50, 100, 150, 200, 250, 300, 350, 400, 500, 600, 700, 800, 1000, 1200, 1500};
+const uint16_t sval_pad_hold_ms[SVAL_PAD_HOLD_CHOICES] = {300, 20, 50, 100, 150, 200, 250, 350, 400, 500, 600, 700, 800, 1000, 1200, 1500};
 
 bool sval_pad_tap_on(uint8_t s) {
     return !(s & SVAL_PAD_TAP_OFF);
@@ -30,11 +30,13 @@ uint8_t sval_pad_with(uint8_t s, uint8_t off_bit, bool on) {
 }
 
 uint8_t sval_pad_with_hold_ms(uint8_t s, uint16_t ms) {
+    // Nearest; a tie takes the shorter time (the table is not in order: the
+    // default comes first).
     uint8_t  best      = 0;
     uint16_t best_diff = UINT16_MAX;
     for (uint8_t i = 0; i < SVAL_PAD_HOLD_CHOICES; i++) {
         uint16_t d = ms > sval_pad_hold_ms[i] ? ms - sval_pad_hold_ms[i] : sval_pad_hold_ms[i] - ms;
-        if (d < best_diff) {
+        if (d < best_diff || (d == best_diff && sval_pad_hold_ms[i] < sval_pad_hold_ms[best])) {
             best      = i;
             best_diff = d;
         }

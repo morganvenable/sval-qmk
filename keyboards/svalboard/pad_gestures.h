@@ -4,8 +4,8 @@
 // The touchpad chip's own gestures on the mouse path (pad_gestures.c): tap to
 // click, two-finger tap for a right click, press and hold to drag, and the
 // hold time. A saved setting of one byte; 0 is the build's own defaults
-// (every Svalboard build: all three on, 20 ms), so a board that never
-// changed it runs exactly as before. Docs: docs/protocol.md "Touchpad taps".
+// (every Svalboard build: all three on, hold 300 ms), so a board that never
+// changed it runs the build's defines and nothing more is written. Docs: docs/protocol.md "Touchpad taps".
 #pragma once
 
 #include <stdbool.h>
@@ -19,7 +19,9 @@
 #define SVAL_PAD_KNOWN          0x7F // bit 7 is never set in a setting
 #define SVAL_PAD_HOLD_CHOICES   16
 
-// Hold times the setting can hold, ms. Index 0 is the build default.
+// Hold times the setting can hold, ms. Index 0 is the build default (300,
+// AZOTEQ_IQS5XX_HOLD_TIME), so a stored byte only ever records a change from
+// it; the rest rise.
 extern const uint16_t sval_pad_hold_ms[SVAL_PAD_HOLD_CHOICES];
 
 bool     sval_pad_tap_on(uint8_t s);

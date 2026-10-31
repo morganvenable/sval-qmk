@@ -1,7 +1,7 @@
 // Host tests for keyboards/svalboard/pad_gestures.c. Run by util/updater_test/run.sh.
 //
-// The touchpad tap setting: 0 is today's behavior (tap, two-finger tap and
-// press and hold on, 20 ms), each switch on its own, the hold time snapped to
+// The touchpad tap setting: 0 is the build's defaults (tap, two-finger tap
+// and press and hold on, hold 300 ms), each switch on its own, the hold time snapped to
 // its table, the stored record (never written, damaged, or left by other
 // firmware reads as the defaults), the chip's gesture register bytes, and the
 // split sync with older halves.
@@ -27,7 +27,7 @@ static void test_defaults(void) {
     CHECK(sval_pad_tap_on(0), "tap on by default");
     CHECK(sval_pad_two_finger_on(0), "two-finger tap on by default");
     CHECK(sval_pad_hold_on(0), "press and hold on by default");
-    CHECK(sval_pad_hold_time_ms(0) == 20, "hold 20 ms by default, got %u", sval_pad_hold_time_ms(0));
+    CHECK(sval_pad_hold_time_ms(0) == 300, "hold 300 ms by default, got %u", sval_pad_hold_time_ms(0));
 }
 
 static void test_switches(void) {
@@ -37,7 +37,7 @@ static void test_switches(void) {
         CHECK(sval_pad_tap_on(s) == (i != 0), "switch %d off: tap", i);
         CHECK(sval_pad_two_finger_on(s) == (i != 1), "switch %d off: two-finger", i);
         CHECK(sval_pad_hold_on(s) == (i != 2), "switch %d off: hold", i);
-        CHECK(sval_pad_hold_time_ms(s) == 20, "switch %d off keeps the hold time", i);
+        CHECK(sval_pad_hold_time_ms(s) == 300, "switch %d off keeps the hold time", i);
         CHECK(sval_pad_with(s, bits[i], true) == 0, "switch %d back on is the defaults again", i);
         CHECK(sval_pad_with(s, bits[i], false) == s, "switch %d off twice is the same", i);
     }
@@ -52,15 +52,22 @@ static void test_hold_time(void) {
         uint8_t s = sval_pad_with_hold_ms(0, sval_pad_hold_ms[i]);
         CHECK(sval_pad_hold_time_ms(s) == sval_pad_hold_ms[i], "exact %u", sval_pad_hold_ms[i]);
         CHECK((s & ~SVAL_PAD_KNOWN) == 0, "bit 7 never set");
-        if (i) CHECK(sval_pad_hold_ms[i] > sval_pad_hold_ms[i - 1], "table rises");
+        if (i > 1) CHECK(sval_pad_hold_ms[i] > sval_pad_hold_ms[i - 1], "the table rises after the default");
+        for (int j = 0; j < i; j++) CHECK(sval_pad_hold_ms[i] != sval_pad_hold_ms[j], "no time twice");
     }
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 0)) == 20, "0 snaps to 20");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 34)) == 20, "34 snaps to 20");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 35)) == 20, "a tie takes the shorter");
+    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 275)) == 250, "275: a tie with the default takes the shorter");
+    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 290)) == 300, "290 snaps to the default");
+    CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 325)) == 300, "325: a tie above the default takes it");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 36)) == 50, "36 snaps to 50");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 299)) == 300, "299 snaps to 300");
     CHECK(sval_pad_hold_time_ms(sval_pad_with_hold_ms(0, 65535)) == 1500, "max snaps to 1500");
-    CHECK(sval_pad_with_hold_ms(0, 20) == 0, "20 ms is the default byte");
+    // The default is index 0: choosing 300 is the default byte, and 20, the
+    // old default, is a change like any other.
+    CHECK(sval_pad_with_hold_ms(0, 300) == 0, "300 ms is the default byte");
+    CHECK(sval_pad_with_hold_ms(0, 20) != 0, "20 ms is stored as a change");
     // The hold time keeps the switches, and the switches keep the hold time.
     uint8_t s = sval_pad_with(0, SVAL_PAD_TAP_OFF, false);
     s         = sval_pad_with_hold_ms(s, 500);
@@ -88,8 +95,8 @@ static void test_record(void) {
 // time, tap distance, hold time, all 16-bit big-endian.
 static void test_regs(void) {
     // Example bytes after the driver's start on a Svalboard build: tap and
-    // press and hold on, two-finger tap and scroll on, hold time 20 ms.
-    const uint8_t start[SVAL_PAD_REG_BYTES] = {0x03, 0x03, 0x00, 0x96, 0x00, 0x19, 0x00, 0x14};
+    // press and hold on, two-finger tap and scroll on, hold time 300 ms.
+    const uint8_t start[SVAL_PAD_REG_BYTES] = {0x03, 0x03, 0x00, 0x96, 0x00, 0x19, 0x01, 0x2C};
     uint8_t       regs[SVAL_PAD_REG_BYTES];
 
     memcpy(regs, start, sizeof(regs));
@@ -108,6 +115,9 @@ static void test_regs(void) {
     sval_pad_regs_apply(sval_pad_with(0, SVAL_PAD_TWO_FINGER_OFF, false), regs);
     CHECK(regs[0] == 0x03 && regs[1] == 0x02, "two-finger off keeps scroll: %02X %02X", regs[0], regs[1]);
 
+    memcpy(regs, start, sizeof(regs));
+    sval_pad_regs_apply(sval_pad_with_hold_ms(0, 20), regs);
+    CHECK(regs[6] == 0x00 && regs[7] == 0x14, "hold 20 ms: %02X %02X", regs[6], regs[7]);
     memcpy(regs, start, sizeof(regs));
     sval_pad_regs_apply(sval_pad_with_hold_ms(0, 1000), regs);
     CHECK(regs[6] == 0x03 && regs[7] == 0xE8, "hold 1000 ms big-endian: %02X %02X", regs[6], regs[7]);

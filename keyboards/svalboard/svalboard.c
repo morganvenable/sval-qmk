@@ -1092,7 +1092,7 @@ enum sval_via_value_id {
     id_pad_tap        = 51, // toggle: a tap clicks (1, the default)
     id_pad_two_finger = 52, // toggle: a two-finger tap right clicks (1, the default)
     id_pad_hold       = 53, // toggle: press and hold presses the left button (1, the default)
-    id_pad_hold_ms    = 54, // u16: the hold time, ms, nearest of sval_pad_hold_ms (20, the default)
+    id_pad_hold_ms    = 54, // u16: the hold time, ms, nearest of sval_pad_hold_ms (300, the default)
 };
 
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
