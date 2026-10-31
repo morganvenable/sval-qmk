@@ -6,7 +6,10 @@
 // writes it to the chip.
 #include "pad_gestures.h"
 
-const uint16_t sval_pad_hold_ms[SVAL_PAD_HOLD_CHOICES] = {300, 20, 50, 100, 150, 200, 250, 350, 400, 500, 600, 700, 800, 1000, 1200, 1500};
+// Indices 1 and 2 held 20 and 50 ms in pre-release builds of this setting;
+// they read as the default now, and nothing writes them (a write takes the
+// first entry with the nearest time).
+const uint16_t sval_pad_hold_ms[SVAL_PAD_HOLD_CHOICES] = {300, 300, 300, 100, 150, 200, 250, 350, 400, 500, 600, 700, 800, 1000, 1200, 1500};
 
 bool sval_pad_tap_on(uint8_t s) {
     return !(s & SVAL_PAD_TAP_OFF);

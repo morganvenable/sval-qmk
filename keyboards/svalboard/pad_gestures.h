@@ -19,9 +19,10 @@
 #define SVAL_PAD_KNOWN          0x7F // bit 7 is never set in a setting
 #define SVAL_PAD_HOLD_CHOICES   16
 
-// Hold times the setting can hold, ms. Index 0 is the build default (300,
-// AZOTEQ_IQS5XX_HOLD_TIME), so a stored byte only ever records a change from
-// it; the rest rise.
+// Hold times the setting can hold, ms, 100 to 1500. Index 0 is the build
+// default (300, AZOTEQ_IQS5XX_HOLD_TIME), so a stored byte only ever records
+// a change from it. Indices 1 and 2 (20 and 50 ms in pre-release builds) read
+// as the default; from index 3 the times rise.
 extern const uint16_t sval_pad_hold_ms[SVAL_PAD_HOLD_CHOICES];
 
 bool     sval_pad_tap_on(uint8_t s);
