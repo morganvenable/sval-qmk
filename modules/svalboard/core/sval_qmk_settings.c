@@ -699,7 +699,7 @@ uint8_t sval_oneshot_tap_toggle(void) {
 }
 
 void sval_qmk_settings_set_one_shot(uint16_t timeout, uint8_t tap_toggle) {
-    settings.osk_timeout = timeout;
+    settings.osk_timeout    = timeout;
     settings.osk_tap_toggle = SVAL_AT_MOST(tap_toggle, SVAL_TAP_COUNT_MAX);
     sval_qmk_settings_save();
 }
