@@ -668,6 +668,9 @@ void sval_pointing_modes(sval_pointing_modes_t *m) {
     m->axis_state      = axis_lock ? (uint8_t)axis_scroll_mode : 0; // FREE 0, LOCKED_V 1, LOCKED_H 2
     m->left_scroll     = hand_scrolling(0);
     m->right_scroll    = hand_scrolling(1);
+    // The factors in force, so a host shows the real one (0x2D bytes 53-55).
+    m->sniper_div      = any_sniper_active() ? sniper_div_now : 1;
+    m->boost_mult      = any_boost_active() ? boost_mult_now : 1;
     m->left_automouse  = global_saved_values.left_automouse;
     m->right_automouse = global_saved_values.right_automouse;
     // Velocity Scroll: its state, and the curves so a host can draw them.

@@ -910,6 +910,32 @@ static void test_fluid(void) {
     printf("  keys fluid with motion: every mode, both pads, one or two fingers, on/off/on/off mid-stroke: the speed changes from the next sample, no jump, no stall (%d hand-backs, one first-frame sample each)\n", hb);
 }
 
+// Repeated boost strokes over the split link, lifting for one sample between
+// strokes: each stroke's first report is at the finger's real position.
+static void test_repeated_strokes_remote(void) {
+    for (int frame = 0; frame < 2; frame++) {
+        usb_half();
+        sval_ptp_set_scale(3, 1, frame);
+        for (int k = 0; k < 6; k++) {
+            set_peer(true, 600, 800);
+            run(8);
+            uint8_t  id;
+            uint16_t x;
+            assert(os_contact(0, &id, &x) && x == 600);
+            for (int i = 1; i <= 10; i++) {
+                set_peer(true, (uint16_t)(600 + 20 * i), 800);
+                run(8);
+            }
+            assert(os_contact(0, &id, &x) && x == 600 + 3 * 200);
+            set_peer(false, 0, 0);
+            run(8);
+        }
+        sval_ptp_set_scale(1, 1, false);
+        run(40);
+    }
+    puts("  repeated boost strokes over the split link, one sample apart: each starts at the real position");
+}
+
 int main(void) {
     puts("native PTP split and contact path tests:");
     test_other_half();
@@ -924,6 +950,7 @@ int main(void) {
     test_palm_latch();
     test_key_with_finger_down();
     test_fluid();
+    test_repeated_strokes_remote();
     puts("native PTP split and contact path: all passed");
     return 0;
 }

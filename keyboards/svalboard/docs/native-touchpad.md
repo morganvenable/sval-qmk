@@ -146,21 +146,27 @@ pad is the chip's mouse and the keys work on it as always.
   reported, so nothing already down jumps (the spacing at the press is kept;
   the motion after it is scaled).
 
+A scaled point that reaches the surface's edge slides along it: that axis
+stops at the edge and is anchored there, so the other axis keeps moving and
+turning back moves at once. Every stroke's first finger starts at its own real
+position. The host app's contacts (0x2F) always show where each finger really
+is, on its own pad, never the scaled or offset position the OS gets.
+
 In every mode, a press or release mid-stroke changes the speed from the next
 sample: the transition sample still uses the old factor, then every contact
 is anchored where it was just reported. No lift is needed, nothing jumps, and
 nothing stalls.
-- **Surface: Large.** The touchpad tells the OS its surface is three times the
-  standard one on each axis (13716 x 5376 counts, 288 x 120 mm) at the same
-  counts per mm, with the real pads, gap included, in its center, so pointer
-  speed and the OS's gesture distances stay the same and boost by scaling has
-  room to travel. This one is stored (two bytes after the touchpad mode's
-  record) and picks the descriptor at boot, so it applies after a restart
-  (action 5) or a replug. The host app's contacts (0x2F) stay on the pads'
-  own coordinates. The pad type is 2 (external buttons, not a clickpad), so
-  Windows has no corner or bottom-edge button zone to move; Microsoft's
-  device integration guide gives a minimum size (32 x 64 mm) and a
-  recommended one (about 65 x 105 mm), and no maximum.
+- **Surface: Large.** The touchpad tells the OS its surface is seven times the
+  standard one on each axis (32004 x 12544 counts, 672 x 280 mm, within the
+  descriptor's signed 16-bit maxima) at the same counts per mm, with the real
+  pads, gap included, in its center, so pointer speed and the OS's gesture
+  distances stay the same and boost by scaling has room to travel. This one
+  is stored (two bytes after the touchpad mode's record) and picks the
+  descriptor at boot, so it applies after a restart (action 5) or a replug.
+  The pad type is 2 (external buttons, not a clickpad), so Windows has no
+  corner or bottom-edge button zone to move; Microsoft's device integration
+  guide gives a minimum size (32 x 64 mm) and a recommended one (about 65 x
+  105 mm), and no maximum.
 
 The grab has one holder bit per reason (`SVAL_PTP_GRAB_VS`, `_SCROLL`,
 `_POINT`; `sval_ptp_set_grab`), worked out again every pointing task from the

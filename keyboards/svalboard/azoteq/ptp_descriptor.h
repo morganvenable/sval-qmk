@@ -133,16 +133,19 @@
 #define SVAL_PTP_FINGER SVAL_PTP_FINGER_SIZED(SVAL_PTP_XMAX, SVAL_PTP_PXMAX, SVAL_PTP_YMAX, SVAL_PTP_PYMAX)
 #define SVAL_PTP_REPORT_DESCRIPTOR SVAL_PTP_REPORT_DESCRIPTOR_SIZED(SVAL_PTP_XMAX, SVAL_PTP_PXMAX, SVAL_PTP_YMAX, SVAL_PTP_PYMAX)
 
-// The large surface (prototype, dev builds): three times the standard one on
+// The large surface (prototype, dev builds): seven times the standard one on
 // each axis at the same counts per mm, so pointer speed and the OS's gesture
-// distances are unchanged; the real surface sits in its center. Room for
-// boost by position scaling to travel.
-#define SVAL_PTP_LARGE_XOFF (SVAL_PTP_XMAX + 1)
-#define SVAL_PTP_LARGE_YOFF (SVAL_PTP_YMAX + 1)
-#define SVAL_PTP_LARGE_XMAX (3 * (SVAL_PTP_XMAX + 1) - 1)
-#define SVAL_PTP_LARGE_YMAX (3 * (SVAL_PTP_YMAX + 1) - 1)
-#define SVAL_PTP_LARGE_PXMAX (3 * SVAL_PTP_PXMAX)
-#define SVAL_PTP_LARGE_PYMAX (3 * SVAL_PTP_PYMAX)
+// distances are unchanged; the real surface sits in its center, three
+// surfaces in from each edge. Room for boost by position scaling to travel.
+// 7 x 4572 = 32004 counts: the largest odd multiple under the signed 16-bit
+// logical maximum (32767).
+#define SVAL_PTP_LARGE_TIMES 7
+#define SVAL_PTP_LARGE_XOFF (((SVAL_PTP_LARGE_TIMES - 1) / 2) * (SVAL_PTP_XMAX + 1))
+#define SVAL_PTP_LARGE_YOFF (((SVAL_PTP_LARGE_TIMES - 1) / 2) * (SVAL_PTP_YMAX + 1))
+#define SVAL_PTP_LARGE_XMAX (SVAL_PTP_LARGE_TIMES * (SVAL_PTP_XMAX + 1) - 1)
+#define SVAL_PTP_LARGE_YMAX (SVAL_PTP_LARGE_TIMES * (SVAL_PTP_YMAX + 1) - 1)
+#define SVAL_PTP_LARGE_PXMAX (SVAL_PTP_LARGE_TIMES * SVAL_PTP_PXMAX)
+#define SVAL_PTP_LARGE_PYMAX (SVAL_PTP_LARGE_TIMES * SVAL_PTP_PYMAX)
 #if SVAL_PTP_LARGE_XMAX > 32767 || SVAL_PTP_LARGE_PXMAX > 32767
 #    error "the large surface must fit a signed 16-bit logical and physical maximum"
 #endif

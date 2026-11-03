@@ -997,13 +997,23 @@ static void test_scale(void) {
     FEED(1, {0, 3, 1600, 950});
     run(5000);
     assert(new_reports() == 1 && x_of(last(), 0) == R + 1800 && y_of(last(), 0) == 1050);
-    // It is clamped to the whole surface, both pads and the gap.
-    FEED(1, {0, 3, 2047, 1791});
+    // At the edge of the whole surface (both pads and the gap) it slides:
+    // X stops at the edge while Y keeps moving, and turning back moves at once.
+    FEED(1, {0, 3, 1900, 1000});
     run(5000);
-    assert(new_reports() == 1 && x_of(last(), 0) == SVAL_PTP_XMAX && y_of(last(), 0) == SVAL_PTP_YMAX);
-    FEED(1, {0, 3, 0, 0});
+    assert(new_reports() == 1 && x_of(last(), 0) == SVAL_PTP_XMAX && y_of(last(), 0) == 1200);
+    FEED(1, {0, 3, 1950, 1100});
     run(5000);
-    assert(new_reports() == 1 && x_of(last(), 0) == 0 && y_of(last(), 0) == 0);
+    assert(new_reports() == 1 && x_of(last(), 0) == SVAL_PTP_XMAX && y_of(last(), 0) == 1500); // Y still x3
+    FEED(1, {0, 3, 1940, 1100});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == SVAL_PTP_XMAX - 30); // back 10: 30 at once, no dead travel
+    up(1);
+    run(5000);
+    new_reports();
+    FEED(1, {0, 3, 1500, 900}); // a new stroke: at its real position
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == R + 1500 && y_of(last(), 0) == 900);
     FEED(1, {0, 3, 1600, 950});
     run(5000);
     assert(new_reports() == 1 && x_of(last(), 0) == R + 1800);
@@ -1092,6 +1102,59 @@ static void test_frame(void) {
     up(0);
     run(5000);
     puts("  frame: every contact scaled from the press; a landing finger enters by the first finger's map; release and press re-anchor, no jump");
+}
+
+// Repeated boost strokes: every stroke's first finger starts at its own real
+// position, whatever the stroke before did, so strokes never drift to an edge.
+static void test_repeated_strokes(void) {
+    for (int frame = 0; frame < 2; frame++) {
+        start(frame ? "strokes-frame" : "strokes-scaling");
+        sval_ptp_set_scale(3, 1, frame);
+        for (int k = 0; k < 6; k++) {
+            uint8_t life = (uint8_t)(10 + k);
+            FEED(0, {0, life, 600, 600});
+            run(5000);
+            new_reports();
+            assert(x_of(last(), 0) == 600 && y_of(last(), 0) == 600); // the real position
+            for (int i = 1; i <= 10; i++) {
+                FEED(0, {0, life, (uint16_t)(600 + 20 * i), 600});
+                run(5000);
+            }
+            new_reports();
+            assert(x_of(last(), 0) == 600 + 3 * 200); // x3 from there
+            up(0);
+            run(5000);
+            run(5000);
+        }
+        sval_ptp_set_scale(1, 1, false);
+    }
+    puts("  repeated boost strokes: each starts at the finger's real position (Scaling and Frame)");
+}
+
+// The host app's view (0x2F) shows where the finger really is, on the pad it
+// touches, never the scaled position the OS gets: boost x3 in Frame, a finger
+// moving toward the inner edge of the left pad.
+static void test_view_true_position(void) {
+    start("view-true");
+    sval_ptp_set_scale(3, 1, true);
+    uint8_t o[SVAL_PTP_CONTACTS_LEN];
+    for (int i = 0; i <= 12; i++) {
+        uint16_t x = (uint16_t)(1400 + 50 * i); // up to 2000, near the inner edge
+        FEED(0, {0, 1, x, 900});
+        run(5000);
+        sval_ptp_contacts(o, sizeof(o));
+        assert(o[3] == 1);
+        uint32_t w = o[5] | (uint32_t)o[6] << 8 | (uint32_t)o[7] << 16;
+        assert(!(o[4] & 0x40));    // the left pad
+        assert((w & 0xFFF) == x);  // its real position
+        assert(((w >> 12) & 0xFFF) == 900);
+    }
+    new_reports();
+    assert(x_of(last(), 0) == 1400 + 3 * 600); // while the OS has it past the gap, on the right pad's part
+    sval_ptp_set_scale(1, 1, false);
+    up(0);
+    run(5000);
+    puts("  view (0x2F): the finger where it really is, on its own pad, while the OS gets the scaled position");
 }
 
 #ifdef SVAL_TOUCH_DEV
@@ -1307,6 +1370,8 @@ int main(int argc, char **argv) {
     test_grab_holders();
     test_scale();
     test_frame();
+    test_repeated_strokes();
+    test_view_true_position();
 #ifdef SVAL_TOUCH_DEV
     test_large_surface();
 #endif

@@ -896,10 +896,13 @@ static uint16_t clamp_to(int32_t v, int32_t max) {
 
 // Where the contact's map puts the OS position (x, y), with the factor in
 // force for it.
-static void map_point(const contact_t *c, int32_t x, int32_t y, uint16_t num, uint16_t den, uint16_t *rx, uint16_t *ry) {
+// Returns bit 0 / bit 1 when X / Y was clamped to the surface's edge.
+static uint8_t map_point(const contact_t *c, int32_t x, int32_t y, uint16_t num, uint16_t den, uint16_t *rx, uint16_t *ry) {
     if (!c->scaling) num = den = 1;
-    *rx = clamp_to((int32_t)c->bx + (x - c->ax) * num / den, surf_xmax);
-    *ry = clamp_to((int32_t)c->by + (y - c->ay) * num / den, surf_ymax);
+    int32_t px = (int32_t)c->bx + (x - c->ax) * num / den, py = (int32_t)c->by + (y - c->ay) * num / den;
+    *rx        = clamp_to(px, surf_xmax);
+    *ry        = clamp_to(py, surf_ymax);
+    return (px != *rx ? 1 : 0) | (py != *ry ? 2 : 0);
 }
 
 static void anchor(contact_t *c, int32_t x, int32_t y, bool scaling) {
@@ -943,7 +946,17 @@ static void scale_update(void) {
             anchor(c, x, y, on && (scale_frame || live == 1));
             continue;
         }
-        map_point(c, x, y, applied_num, applied_den, &c->rx, &c->ry);
+        uint8_t edge_hit = map_point(c, x, y, applied_num, applied_den, &c->rx, &c->ry);
+        // At an edge it slides: that axis is anchored where it stopped, so the
+        // other axis keeps moving and turning back moves at once (no dead travel).
+        if (edge_hit & 1) {
+            c->ax = (uint16_t)x;
+            c->bx = c->rx;
+        }
+        if (edge_hit & 2) {
+            c->ay = (uint16_t)y;
+            c->by = c->ry;
+        }
         if (c->lift) continue; // its release goes where it was last reported
         bool want = on && (scale_frame || (live == 1 && (c->scaling || edge)));
         if (want != c->scaling || (want && changed)) anchor(c, x, y, want);
@@ -1395,8 +1408,18 @@ uint8_t sval_ptp_contacts(uint8_t *o, uint8_t length) {
     uint8_t taken = 0;
     for (uint8_t i = 0; i < n; i++) {
         const uint8_t *s = r + 1 + 6 * i;
-        // On the standard surface's coordinates whatever the OS sees.
+        // Where the finger really is, on its own pad: never the scaled or
+        // offset position the OS gets. A contact already gone from the pool
+        // falls back to the OS position on the standard surface.
         int32_t x = (int32_t)ptp_get16(s + 2) - surf_xoff, y = (int32_t)ptp_get16(s + 4) - surf_yoff;
+        for (uint8_t k = 0; k < POOL; k++) {
+            const contact_t *c = &pool[k];
+            if (c->state == C_ACTIVE && c->cid == (s[1] & 15)) {
+                x = c->x;
+                y = c->y;
+                break;
+            }
+        }
         if (put_contact(o + 4 + 4 * taken, (s[1] & 15) | ((s[0] & 2) ? 0x10 : 0) | ((s[0] & 1) ? 0x20 : 0), clamp_to(x, SVAL_PTP_XMAX), clamp_to(y, SVAL_PTP_YMAX))) taken++;
     }
     // Fingers down that the touchpad leaves out (more than SVAL_PTP_MAX_CONTACTS
