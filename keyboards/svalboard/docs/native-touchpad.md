@@ -189,6 +189,23 @@ to 63: version 1, scroll, sniper, boost, surface stored, surface in force,
 supported (bit 0 scroll Takeover, 1 sniper and boost Takeover, 2 their
 Scaling, 3 the large surface, 4 their Frame), and the grab's holders.
 
+## The split link's receive (dev builds, prototype)
+
+Failed split transactions (the gaps on the other half's pad, and lost motion
+from a trackball on the half without USB) are overflows of the USB half's
+8-byte PIO receive FIFO: the bytes of a reply are drained by the main thread,
+one interrupt and wake per byte, and an interrupt handler (USB up to about 300
+us, measured with `SVAL_IRQ_TIMING`) can hold it off past the 80 us those 8
+bytes take at 1 Mbaud. The state machine then stalls and misses bits, and the
+transaction fails (often after the 20 ms receive timeout).
+
+`SVAL_SPLIT_DMA=yes` (dev builds) drains the USB half's receive FIFO by DMA
+into a ring, so no wake per byte is needed, fails a receive at once on a
+framing error, and gives QMK's per-scan transactions (and the pad snapshot
+fetch) a 3 ms deadline while the other RPCs, the updater's relay among them,
+keep 20 ms. The half without USB keeps the interrupt receive. Dev diagnostics:
+0xFC op 0x42 actions 7 (split counters, both halves) and 8 (interrupt timing).
+
 ## Builds
 
 | Flag | Where | Effect |

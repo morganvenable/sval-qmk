@@ -334,7 +334,22 @@ bool sval_mt_rpc(uint8_t in_len, const uint8_t *in, uint8_t out_len, uint8_t *ou
     return false;
 }
 
+#if defined(SVAL_SPLIT_DMA)
+extern volatile bool sval_serial_short_rpc; // platforms/chibios/drivers/serial_protocol.c
+#endif
+static bool remote_rpc_exec(const uint8_t *req, uint8_t req_len, uint8_t *reply);
 static bool remote_rpc(const uint8_t *req, uint8_t req_len, uint8_t *reply) {
+#if defined(SVAL_SPLIT_DMA)
+    // The other half answers a snapshot from a copy: the short deadline.
+    sval_serial_short_rpc = true;
+    bool ok               = remote_rpc_exec(req, req_len, reply);
+    sval_serial_short_rpc = false;
+    return ok;
+#else
+    return remote_rpc_exec(req, req_len, reply);
+#endif
+}
+static bool remote_rpc_exec(const uint8_t *req, uint8_t req_len, uint8_t *reply) {
     if (mt_updater_busy() || !is_transport_connected()) return false;
 #ifdef SVAL_PERF_STATS
     uint8_t perf_prev = sval_perf_enter(SVAL_PERF_GAP_FETCH);
@@ -470,6 +485,38 @@ void    sval_pad_proto_block(uint8_t *o);                         // keymaps/key
 void    sval_pad_proto_debug(uint8_t *o);                         // keymaps/keymap_support.c
 void sval_mt_command(uint8_t *data, uint8_t length) {
     uint8_t action = data[7], wanted = data[8], status = 0;
+    if (action == 8) {
+        // Interrupt timing (SVAL_IRQ_TIMING): up to 14 handlers that ran, as
+        // [exception number][max us u16 LE] from data[11]; data[10] how many;
+        // data[53..54] the DMA receive's longest wait-loop gap (us).
+        memset(data + 6, 0, length - 6);
+        data[6] = 0xC2;
+        data[9] = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128;
+#    if defined(SVAL_IRQ_TIMING)
+        extern volatile uint16_t sval_irq_max_us[48];
+        extern volatile uint32_t sval_irq_count[48];
+        uint8_t                  n = 0;
+        if (wanted == 1) { // data[8] 1: start a new window
+            for (uint8_t v = 0; v < 48; v++) sval_irq_max_us[v] = 0, sval_irq_count[v] = 0;
+#        if defined(SVAL_SPLIT_DMA)
+            extern volatile uint16_t sval_rx_spin_gap_max_us;
+            sval_rx_spin_gap_max_us = 0;
+#        endif
+        }
+        for (uint8_t v = 0; v < 48 && n < 14; v++) {
+            if (!sval_irq_count[v]) continue;
+            data[11 + 3 * n] = v;
+            put16(data + 12 + 3 * n, sval_irq_max_us[v]);
+            n++;
+        }
+        data[10] = n;
+#    endif
+#    if defined(SVAL_SPLIT_DMA)
+        extern volatile uint16_t sval_rx_spin_gap_max_us;
+        put16(data + 53, sval_rx_spin_gap_max_us);
+#    endif
+        return;
+    }
     if (action == 7) {
         // Split-link counters: [10..17] this half's (sval_serial_dbg), [18..21]
         // its slave-side ones, [22..23] failed count, [24..27] failed us sum,

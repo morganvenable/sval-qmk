@@ -36,6 +36,13 @@ ifeq ($(strip $(SVAL_NATIVE_PTP)),yes)
     ifeq ($(strip $(SVAL_SPLIT_ABORT)),yes)
       OPT_DEFS += -DSVAL_SPLIT_ABORT
     endif
+    ifeq ($(strip $(SVAL_SPLIT_DMA)),yes)
+      OPT_DEFS += -DSVAL_SPLIT_DMA
+    endif
+    ifeq ($(strip $(SVAL_IRQ_TIMING)),yes)
+      OPT_DEFS += -DSVAL_IRQ_TIMING
+      SRC += irq_timing.c
+    endif
     ifeq ($(strip $(SVAL_SPLIT_SLEWSLOW)),yes)
       OPT_DEFS += -DSVAL_SPLIT_SLEWSLOW
     endif

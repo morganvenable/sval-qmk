@@ -732,16 +732,31 @@
 /**
  * @brief   ISR enter hook.
  */
+#if defined(SVAL_IRQ_TIMING)
+/* Svalboard dev builds: interrupt handler timing (keyboards/svalboard/irq_timing.c). */
+#define CH_CFG_IRQ_PROLOGUE_HOOK() {                                        \
+  extern void sval_irq_enter(void);                                         \
+  sval_irq_enter();                                                         \
+}
+#else
 #define CH_CFG_IRQ_PROLOGUE_HOOK() {                                        \
   /* IRQ prologue code here.*/                                              \
 }
+#endif
 
 /**
  * @brief   ISR exit hook.
  */
+#if defined(SVAL_IRQ_TIMING)
+#define CH_CFG_IRQ_EPILOGUE_HOOK() {                                        \
+  extern void sval_irq_leave(void);                                         \
+  sval_irq_leave();                                                         \
+}
+#else
 #define CH_CFG_IRQ_EPILOGUE_HOOK() {                                        \
   /* IRQ epilogue code here.*/                                              \
 }
+#endif
 
 /**
  * @brief   Idle thread enter hook.

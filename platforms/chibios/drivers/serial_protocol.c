@@ -138,7 +138,29 @@ static inline bool react_to_transaction(void) {
  * @param index Transaction Table index of the transaction to start.
  * @return bool Indicates success of transaction.
  */
+#if defined(SVAL_SPLIT_DMA)
+// Svalboard: QMK's own per-scan transactions (matrix, pointing, layers and
+// the rest: their slave side copies a buffer) get a short deadline, so a
+// failure costs about 3 ms instead of 20; the RPC transactions keep the full
+// one, because their slave callbacks can take time (the updater's relay,
+// settings writes). A caller may ask for the short one for an RPC it knows is
+// quick (the touchpad's snapshot fetch, sval_serial_short_rpc).
+#    include "transaction_id_define.h"
+void          serial_transport_set_timeout_ms(uint32_t ms); // serial_vendor.c
+void          serial_transport_rx_idle(void);               // serial_vendor.c: stop the receive DMA
+volatile bool sval_serial_short_rpc;
+#    ifndef SERIAL_USART_TIMEOUT
+#        define SERIAL_USART_TIMEOUT 20 // as serial_usart.h
+#    endif
+#    ifndef SVAL_SPLIT_SHORT_TIMEOUT_MS
+#        define SVAL_SPLIT_SHORT_TIMEOUT_MS 3
+#    endif
+#endif
 bool soft_serial_transaction(int index) {
+#if defined(SVAL_SPLIT_DMA)
+    bool rpc = index >= PUT_RPC_INFO && index <= GET_RPC_RESP_DATA;
+    serial_transport_set_timeout_ms(!rpc || sval_serial_short_rpc ? SVAL_SPLIT_SHORT_TIMEOUT_MS : SERIAL_USART_TIMEOUT);
+#endif
     /* Clear the receive queue, to start with a clean slate.
      * Parts of failed transactions or spurious bytes could still be in it. */
     serial_transport_driver_clear();
@@ -146,6 +168,9 @@ bool soft_serial_transaction(int index) {
 #ifdef SVAL_TOUCH_DEV
     uint32_t t0 = timer_hw->timerawl;
     bool     ok = initiate_transaction((uint8_t)index);
+#    if defined(SVAL_SPLIT_DMA)
+    serial_transport_rx_idle();
+#    endif
     uint32_t us = timer_hw->timerawl - t0;
     if (sval_serial_rx_stalled()) {
         if (ok)
@@ -163,7 +188,13 @@ bool soft_serial_transaction(int index) {
     }
     return ok;
 #else
+#    if defined(SVAL_SPLIT_DMA)
+    bool ok = initiate_transaction((uint8_t)index);
+    serial_transport_rx_idle();
+    return ok;
+#    else
     return initiate_transaction((uint8_t)index);
+#    endif
 #endif
 }
 

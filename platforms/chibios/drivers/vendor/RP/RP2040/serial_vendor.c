@@ -93,6 +93,28 @@ static const pio_program_t uart_rx_program = {
 };
 
 thread_reference_t rx_thread        = NULL;
+
+#if defined(SVAL_SPLIT_DMA)
+// The master's receive by DMA (Svalboard): the RX state machine's FIFO is
+// drained by a DMA channel into a 256-byte ring as each byte arrives, so no
+// interrupt or thread wake is needed per byte, and an interrupt or thread
+// that is late no longer overflows the 8-byte FIFO (which lost bits and
+// failed the transaction). The receive waits for its bytes with its own
+// deadline. The slave keeps the interrupt receive: its high-priority thread
+// drains in time, and it waits for a transaction with no deadline.
+#    include "hardware/structs/timer.h"
+static bool                    rx_dma_on = false;
+static const rp_dma_channel_t* rx_dma;
+static uint8_t                 rx_ring[256] __attribute__((aligned(256)));
+static uint32_t                rx_ring_read; // bytes taken since the channel started
+#    define RX_DMA_COUNT 0xFFFFFFFFu
+static volatile bool rx_dma_error = false; // a framing or break error since the receive started
+#endif
+// The receive deadline in force (Svalboard: per transaction, serial_protocol.c).
+static uint32_t rx_timeout_ms = SERIAL_USART_TIMEOUT;
+void            serial_transport_set_timeout_ms(uint32_t ms) {
+    rx_timeout_ms = ms ? ms : SERIAL_USART_TIMEOUT;
+}
 #ifdef SVAL_SPLIT_ABORT
 // A framing or break error since the receive started: the byte is lost, so
 // the receive fails at once instead of waiting out the timeout.
@@ -134,6 +156,9 @@ void pio_serve_interrupt(void) {
 #endif
 #ifdef SVAL_SPLIT_ABORT
         sval_rx_error = true; // seen by the receive loop even when no thread waits
+#endif
+#if defined(SVAL_SPLIT_DMA)
+        rx_dma_error = true;
 #endif
 
         osalSysLockFromISR();
@@ -196,7 +221,41 @@ static inline void leave_rx_state(void) {}
 /**
  * @brief Clear the FIFO of the RX state machine.
  */
+#if defined(SVAL_SPLIT_DMA)
+static void rx_dma_start(void) {
+    dmaChannelDisableX(rx_dma);
+    while (!pio_sm_is_rx_fifo_empty(pio, rx_state_machine)) {
+        pio_sm_clear_fifos(pio, rx_state_machine);
+    }
+    dmaChannelSetSourceX(rx_dma, (uint32_t)&pio->rxf[rx_state_machine] + 3U); // the byte in bits 31:24
+    dmaChannelSetDestinationX(rx_dma, (uint32_t)rx_ring);
+    dmaChannelSetCounterX(rx_dma, RX_DMA_COUNT);
+    uint32_t dreq = (pio == pio0 ? 4U : 12U) + (uint32_t)rx_state_machine; // DREQ_PIOx_RXn
+    dmaChannelSetModeX(rx_dma, DMA_CTRL_TRIG_DATA_SIZE_BYTE | DMA_CTRL_TRIG_INCR_WRITE | DMA_CTRL_TRIG_RING_SEL | DMA_CTRL_TRIG_RING_SIZE(8U) | DMA_CTRL_TRIG_TREQ_SEL(dreq) | DMA_CTRL_TRIG_PRIORITY(1U));
+    rx_ring_read = 0;
+    rx_dma_error = false;
+    dmaChannelEnableX(rx_dma);
+}
+#endif
+
+// Between transactions the channel is stopped: the updater refuses to
+// program or commit flash while any DMA channel is busy (update_split.c,
+// update_commit.c), so a channel left running would block every update of
+// this half. A transaction starts it (serial_transport_driver_clear) and
+// stops it when done (serial_transport_rx_idle, serial_protocol.c).
+void serial_transport_rx_idle(void) {
+#if defined(SVAL_SPLIT_DMA)
+    if (rx_dma_on) dmaChannelDisableX(rx_dma);
+#endif
+}
+
 inline void serial_transport_driver_clear(void) {
+#if defined(SVAL_SPLIT_DMA)
+    if (rx_dma_on) {
+        rx_dma_start();
+        return;
+    }
+#endif
     osalSysLock();
     while (!pio_sm_is_rx_fifo_empty(pio, rx_state_machine)) {
         pio_sm_clear_fifos(pio, rx_state_machine);
@@ -285,7 +344,35 @@ bool sval_serial_rx_stalled(void) {
     return s;
 }
 #endif
+#if defined(SVAL_SPLIT_DMA)
+#    ifdef SVAL_TOUCH_DEV
+volatile uint16_t sval_rx_spin_gap_max_us; // longest the waiting loop went without running
+#    endif
+static bool receive_dma(uint8_t* destination, const size_t size, bool forever) {
+    size_t   read  = 0U;
+    uint32_t start = timer_hw->timerawl, last = start;
+    while (true) {
+        uint32_t written = RX_DMA_COUNT - rx_dma->channel->TRANS_COUNT;
+        while (rx_ring_read < written && read < size) {
+            *destination++ = rx_ring[rx_ring_read++ & 0xFFU];
+            read++;
+        }
+        if (read == size) return true;
+        if (rx_dma_error) return false; // a byte was lost: fail now, not at the deadline
+        uint32_t now = timer_hw->timerawl;
+#    ifdef SVAL_TOUCH_DEV
+        if (now - last > sval_rx_spin_gap_max_us) sval_rx_spin_gap_max_us = (uint16_t)((now - last) > 0xFFFF ? 0xFFFF : (now - last));
+#    endif
+        last = now;
+        if (!forever && now - start > rx_timeout_ms * 1000U) return false;
+    }
+}
+#endif
+
 static inline bool receive_impl(uint8_t* destination, const size_t size, sysinterval_t timeout) {
+#if defined(SVAL_SPLIT_DMA)
+    if (rx_dma_on) return receive_dma(destination, size, timeout == TIME_INFINITE);
+#endif
     size_t read = 0U;
 #ifdef SVAL_SPLIT_ABORT
     sval_rx_error = false;
@@ -326,7 +413,7 @@ static inline bool receive_impl(uint8_t* destination, const size_t size, sysinte
  * @return false Receive failed, e.g. by timeout.
  */
 inline bool serial_transport_receive(uint8_t* destination, const size_t size) {
-    return receive_impl(destination, size, TIME_MS2I(SERIAL_USART_TIMEOUT));
+    return receive_impl(destination, size, TIME_MS2I(rx_timeout_ms));
 }
 
 /**
@@ -508,6 +595,12 @@ void serial_transport_repin(pin_t tx_pin, pin_t rx_pin) {
     palSetLineMode(tx_pin, PAL_MODE_INPUT_PULLUP);
     pio_tx_init(tx_pin);
     pio_rx_init(rx_pin);
+#    if defined(SVAL_SPLIT_DMA)
+    if (rx_dma_on) {
+        rx_dma_start();
+        serial_transport_rx_idle();
+    }
+#    endif
 }
 #endif
 
@@ -530,6 +623,14 @@ void serial_transport_driver_master_init(void) {
     pio_init(rx_pin, tx_pin);
 #else
     pio_init(tx_pin, rx_pin);
+#endif
+#if defined(SVAL_SPLIT_DMA)
+    if (!rx_dma) rx_dma = dmaChannelAlloc(RP_DMA_CHANNEL_ID_ANY, 1U, NULL, NULL);
+    if (rx_dma) {
+        rx_dma_on = true;
+        rx_dma_start();
+        serial_transport_rx_idle(); // started by each transaction
+    }
 #endif
 }
 
