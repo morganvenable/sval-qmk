@@ -115,6 +115,17 @@ pad is the chip's mouse and the keys work on it as always.
   scroll, at the hand's DPI, with the scroll divisor, natural scroll and axis
   lock a trackball hand gets. The hand's saved scroll setting does not apply
   to a pad (the OS owned it); only the keys do.
+- **Sniper and boost: Takeover.** While any sniper or boost key is on (hold
+  or toggle) and its selector is Takeover, the firmware takes the pads the
+  same way and drives the cursor from one finger through the firmware mouse
+  path: the hand's DPI, then the sniper divisor and the boost multiplier, as
+  on a trackball. While the firmware holds the pads the OS gets nothing from
+  them: no taps or tap-and-drag, no two-finger scroll, pinch or swipes, no
+  palm or edge handling, and no OS pointer acceleration (the firmware motion
+  goes out as a mouse, so the OS mouse speed and "enhance pointer precision"
+  apply instead of the touchpad's curve). A second finger is ignored. When
+  the key is let go, the pads come back on an all-up sample: lift the finger
+  before the OS sees the pad again.
 
 The grab has one holder bit per reason (`SVAL_PTP_GRAB_VS`, `_SCROLL`,
 `_POINT`; `sval_ptp_set_grab`), worked out again every pointing task from the

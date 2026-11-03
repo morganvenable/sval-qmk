@@ -115,7 +115,7 @@ bool sniper_toggle_2 = false;
 bool sniper_toggle_3 = false;
 bool sniper_toggle_5 = false;
 
-#define any_sniper_active() (sniper_hold_2 + sniper_toggle_2 + \
+#define any_sniper_active() (sniper_hold_2 + sniper_toggle_2 + PAD_DEV_SNIPER + \
     sniper_hold_3 + sniper_toggle_3 + sniper_hold_5 + sniper_toggle_5 > 0)
 
 axis_scale_t boost_x = {1, 1, 0};
@@ -131,7 +131,7 @@ bool boost_toggle_2 = false;
 bool boost_toggle_3 = false;
 bool boost_toggle_5 = false;
 
-#define any_boost_active() (boost_hold_2 + boost_toggle_2 + \
+#define any_boost_active() (boost_hold_2 + boost_toggle_2 + PAD_DEV_BOOST + \
     boost_hold_3 + boost_toggle_3 + boost_hold_5 + boost_toggle_5 > 0)
 
 static bool scroll_hold    = false,
@@ -142,21 +142,29 @@ static bool scroll_hold    = false,
 // While the OS owns a pad (native touchpad, Input Mode 3), Takeover has the
 // firmware take it from the OS, as Velocity Scroll does, whenever the mode's
 // keys are on: one finger then drives the firmware's own scroll or pointer,
-// with the settings a trackball hand gets. Off leaves the pad to the OS.
+// with the settings a trackball hand gets (DPI, then sniper and boost). Off
+// leaves the pad to the OS.
 enum { SVAL_PAD_MODE_OFF, SVAL_PAD_MODE_TAKEOVER, SVAL_PAD_MODE_SCALING };
 static uint8_t pad_mode_scroll = SVAL_PAD_MODE_OFF;
+static uint8_t pad_mode_sniper = SVAL_PAD_MODE_OFF;
+static uint8_t pad_mode_boost  = SVAL_PAD_MODE_OFF;
 static bool    pad_driven[2]; // this report, the hand's motion is its grabbed finger's
 static sval_pad_follow_t pad_follow[2];
 #    ifdef SVAL_TOUCH_DEV
 // Raw HID 0xFC op 0x42 action 4 (multitouch.c): the keys held with no key, for
-// keyless test boards. Bit 0 scroll hold. Lets go 500 ms after the last repeat.
+// keyless test boards. Bit 0 scroll hold, bit 1 a /2 sniper hold, bit 2 a x2
+// boost hold. Lets go 500 ms after the last repeat.
 static uint8_t  pad_dev_keys;
 static uint32_t pad_dev_at;
 #        define PAD_DEV_SCROLL (pad_dev_keys & 1)
+#        define PAD_DEV_SNIPER ((pad_dev_keys >> 1) & 1)
+#        define PAD_DEV_BOOST ((pad_dev_keys >> 2) & 1)
 #    endif
 #endif
 #ifndef PAD_DEV_SCROLL
 #    define PAD_DEV_SCROLL 0
+#    define PAD_DEV_SNIPER 0
+#    define PAD_DEV_BOOST 0
 #endif
 
 // A hand's motion is scroll: its saved scroll setting, flipped by the hold
@@ -260,7 +268,7 @@ void update_axis_scroll_mode(int32_t h, int32_t v) {
 
 void update_sniper_divisor(void) {
     uint8_t div = 1;
-    for (uint8_t i = 0; i < sniper_hold_2 + sniper_toggle_2; i++) div *= 2;
+    for (uint8_t i = 0; i < sniper_hold_2 + sniper_toggle_2 + PAD_DEV_SNIPER; i++) div *= 2;
     for (uint8_t i = 0; i < sniper_hold_3 + sniper_toggle_3; i++) div *= 3;
     for (uint8_t i = 0; i < sniper_hold_5 + sniper_toggle_5; i++) div *= 5;
     set_div_axis(&sniper_x, div);
@@ -271,7 +279,7 @@ void update_sniper_divisor(void) {
 
 void update_boost_multiplier(void) {
     uint16_t mult = 1;
-    for (uint8_t i = 0; i < boost_hold_2 + boost_toggle_2; i++) mult *= 2;
+    for (uint8_t i = 0; i < boost_hold_2 + boost_toggle_2 + PAD_DEV_BOOST; i++) mult *= 2;
     for (uint8_t i = 0; i < boost_hold_3 + boost_toggle_3; i++) mult *= 3;
     for (uint8_t i = 0; i < boost_hold_5 + boost_toggle_5; i++) mult *= 5;
     if (mult > 255) mult = 255;
@@ -398,12 +406,25 @@ static report_mouse_t velocity_scroll_report(report_mouse_t left, report_mouse_t
 // key, a toggle or a mode change takes effect at once, and a holder never
 // outlives its reason. Releasing is ptp.c's: reports come back on an all-up
 // sample, so a finger still down never moves the OS pointer.
+#    ifdef SVAL_TOUCH_DEV
+static void pad_dev_keys_set(uint8_t keys) {
+    keys &= 7;
+    pad_dev_at = timer_read32();
+    if (keys == pad_dev_keys) return;
+    pad_dev_keys = keys;
+    update_sniper_divisor();
+    update_boost_multiplier();
+}
+#    endif
+
 static void pad_modes_sync(void) {
 #    ifdef SVAL_TOUCH_DEV
-    if (pad_dev_keys && timer_elapsed32(pad_dev_at) > 500) pad_dev_keys = 0;
+    if (pad_dev_keys && timer_elapsed32(pad_dev_at) > 500) pad_dev_keys_set(0);
 #    endif
     bool scroll_key = (scroll_hold || PAD_DEV_SCROLL) != scroll_toggle;
     sval_ptp_set_grab(SVAL_PTP_GRAB_SCROLL, pad_mode_scroll == SVAL_PAD_MODE_TAKEOVER && scroll_key);
+    bool point = (pad_mode_sniper == SVAL_PAD_MODE_TAKEOVER && any_sniper_active()) || (pad_mode_boost == SVAL_PAD_MODE_TAKEOVER && any_boost_active());
+    sval_ptp_set_grab(SVAL_PTP_GRAB_POINT, point);
 }
 
 // A pad the firmware holds for a pointer mode, while the OS would otherwise
@@ -436,14 +457,15 @@ static void pad_drive(report_mouse_t *left, report_mouse_t *right) {
 // unknown action or a value out of range; nothing changes).
 uint8_t sval_pad_proto_command(uint8_t action, const uint8_t *a) {
     if (action == 4) {
-        pad_dev_keys = a[0] & 1;
-        pad_dev_at   = timer_read32();
+        pad_dev_keys_set(a[0]);
         return 0;
     }
     if (action != 3) return 2;
     if (a[0] == 0) return 0;
-    if (a[0] != 1 || a[1] > SVAL_PAD_MODE_TAKEOVER || a[2] != 0 || a[3] != 0 || a[4] != 0) return 2;
+    if (a[0] != 1 || a[1] > SVAL_PAD_MODE_TAKEOVER || a[2] > SVAL_PAD_MODE_TAKEOVER || a[3] > SVAL_PAD_MODE_TAKEOVER || a[4] != 0) return 2;
     pad_mode_scroll = a[1];
+    pad_mode_sniper = a[2];
+    pad_mode_boost  = a[3];
     return 0;
 }
 
@@ -453,11 +475,11 @@ uint8_t sval_pad_proto_command(uint8_t action, const uint8_t *a) {
 void sval_pad_proto_block(uint8_t *o) {
     o[0] = 1;
     o[1] = pad_mode_scroll;
-    o[2] = 0;
-    o[3] = 0;
+    o[2] = pad_mode_sniper;
+    o[3] = pad_mode_boost;
     o[4] = 0;
     o[5] = 0;
-    o[6] = 1;
+    o[6] = 1 | 2;
     o[7] = sval_ptp_grab_holders();
 }
 #    endif
