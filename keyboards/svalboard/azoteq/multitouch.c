@@ -459,6 +459,8 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
         data[9] = 1 | 2 | 4 | 8 | 16 | 32; // bit 5: action 6
         sval_pad_proto_debug(data + 10);
         sval_ptp_debug(data + 24);
+        extern volatile uint8_t sval_serial_dbg[8]; // platforms/chibios/drivers/serial_protocol.c
+        for (uint8_t i = 0; i < 8; i++) data[26 + i] = sval_serial_dbg[i];
         put16(data + 62, (uint16_t)timer_read32());
         return;
     }

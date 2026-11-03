@@ -8,6 +8,24 @@
 #include "synchronization_util.h"
 
 static inline bool initiate_transaction(uint8_t transaction_id);
+
+#ifdef SVAL_TOUCH_DEV
+#    include "transaction_id_define.h"
+// Svalboard dev builds: where master transactions fail (wrapping counters),
+// read by the touchpad dev status (keyboards/svalboard/azoteq/multitouch.c):
+// 0 handshake not sent, 1 no handshake back, 2 a wrong handshake, 3 buffer
+// not sent, 4 buffer not received, 5 PIO framing/break errors, 6 failed
+// transactions that are RPC ones, 7 the last failed transaction ID.
+volatile uint8_t sval_serial_dbg[8];
+static void sval_serial_fail(uint8_t stage, uint8_t id) {
+    sval_serial_dbg[stage]++;
+    if (id >= PUT_RPC_INFO && id <= GET_RPC_RESP_DATA) sval_serial_dbg[6]++;
+    sval_serial_dbg[7] = id;
+}
+#    define SVAL_SERIAL_FAIL(stage, id) sval_serial_fail((stage), (id))
+#else
+#    define SVAL_SERIAL_FAIL(stage, id)
+#endif
 static inline bool react_to_transaction(void);
 
 /**
@@ -124,6 +142,7 @@ static inline bool initiate_transaction(uint8_t transaction_id) {
     /* Send transaction table index to the slave, which doubles as basic handshake token. */
     if (unlikely(!serial_transport_send(&transaction_id, sizeof(transaction_id)))) {
         serial_dprintf("SPLIT: sending handshake failed\n");
+        SVAL_SERIAL_FAIL(0, transaction_id);
         return false;
     }
 
@@ -135,6 +154,7 @@ static inline bool initiate_transaction(uint8_t transaction_id) {
      */
     if (unlikely(!serial_transport_receive(&transaction_id_shake, sizeof(transaction_id_shake)) || (transaction_id_shake != (transaction_id ^ NUM_TOTAL_TRANSACTIONS)))) {
         serial_dprintf("SPLIT: receiving handshake failed\n");
+        SVAL_SERIAL_FAIL(transaction_id_shake == 0xFF ? 1 : 2, transaction_id);
         return false;
     }
 
@@ -142,6 +162,7 @@ static inline bool initiate_transaction(uint8_t transaction_id) {
     if (transaction->initiator2target_buffer_size) {
         if (unlikely(!serial_transport_send(split_trans_initiator2target_buffer(transaction), transaction->initiator2target_buffer_size))) {
             serial_dprintf("SPLIT: sending buffer failed\n");
+            SVAL_SERIAL_FAIL(3, transaction_id);
             return false;
         }
     }
@@ -150,6 +171,7 @@ static inline bool initiate_transaction(uint8_t transaction_id) {
     if (transaction->target2initiator_buffer_size) {
         if (unlikely(!serial_transport_receive(split_trans_target2initiator_buffer(transaction), transaction->target2initiator_buffer_size))) {
             serial_dprintf("SPLIT: receiving buffer failed\n");
+            SVAL_SERIAL_FAIL(4, transaction_id);
             return false;
         }
     }

@@ -36,6 +36,7 @@ uint8_t        sval_pad_proto_command(uint8_t action, const uint8_t *a) {
     proto_arg    = a[0];
     return action == 3 || action == 4 ? 0 : 2;
 }
+volatile uint8_t sval_serial_dbg[8];
 void sval_pad_proto_debug(uint8_t *o) {
     o[0] = 0xD0;
 }

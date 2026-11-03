@@ -123,6 +123,10 @@ void pio_serve_interrupt(void) {
     // IRQ 0 is set on framing or break errors by the rx state machine
     if (pio_interrupt_get(pio, 0UL)) {
         pio_interrupt_clear(pio, 0UL);
+#ifdef SVAL_TOUCH_DEV
+        extern volatile uint8_t sval_serial_dbg[8];
+        sval_serial_dbg[5]++;
+#endif
 
         osalSysLockFromISR();
         osalThreadResumeI(&rx_thread, MSG_PIO_ERROR);
