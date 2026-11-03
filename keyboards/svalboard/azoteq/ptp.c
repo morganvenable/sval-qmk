@@ -375,11 +375,15 @@ typedef struct {
     uint16_t sx, sy; // the position last sent with Tip = 1: a release goes there
     uint32_t order;
     // Position scaling (sval_ptp_set_scale): the position reported, rx/ry, is
-    // the anchor bx/by plus the travel since ax/ay times the factor while
-    // scaling, and x/y plus a frozen offset ox/oy after.
+    // the anchor bx/by plus the travel since ax/ay (the OS's coordinates)
+    // times the factor while scaling, 1x otherwise.
     bool     scaling, seen;
     uint16_t rx, ry, ax, ay, bx, by;
-    int16_t  ox, oy;
+    // Handed back by the grab with the finger down (sval_ptp_set_grab): if it
+    // lifts soon after, its lift goes out with Confidence clear, so the OS
+    // never reads the hand-back as a tap.
+    bool     handback;
+    uint32_t born_us;
 } contact_t;
 // Worst case: 5 reported contacts lifting while the endpoint is busy, 5 new
 // candidates waiting for their slots, and every other chip slot of both pads.
@@ -395,6 +399,7 @@ typedef struct {
     bool     fresh;     // a sample changed this pad since the last frame
     bool     has_valid; // valid_us holds a time
     bool     resume;    // lifted because its samples stopped: arm on the next valid sample, finger down or not
+    bool     handback;  // with resume: the grab let go; its fingers come back as contacts that never tap
     uint16_t stale_ms;  // lift after this long without a valid sample (0: SVAL_PTP_STALE_MS)
     uint32_t epoch;
     uint32_t sample_us; // when the sample behind `fresh` was read
@@ -422,9 +427,24 @@ typedef struct {
     uint8_t  skip[5]; // lifetime ID + 1 per slot of fingers not to take (0: none)
     uint16_t touch;   // serial of the finger followed
     uint16_t x, y;    // its position on this pad, in the touchpad's orientation
+    uint16_t x0, y0;  // where it was one sample before it was taken (or where it landed)
 } grab_t;
+// Each pad's previous valid sample, so a finger already down when the grab
+// takes it starts from where it was a sample ago: its motion in that sample
+// is not lost.
+typedef struct {
+    uint8_t  mask, life[5];
+    uint16_t x[5], y[5];
+} prev_sample_t;
+static prev_sample_t prev_sample[2];
+// Each pad's last plain sample as it came, so the grab's hand-back can give
+// the OS a finger still down in the same pass instead of a sample later.
+static uint8_t  last_frame[2][56];
+static uint32_t last_frame_us[2];
+static bool     last_frame_ok[2];
 static bool     grabbed;
 static uint8_t  grab_holders; // SVAL_PTP_GRAB_*: who holds the pads
+static bool     handback_pending;
 static grab_t   grab[2];
 static uint16_t grab_serial;
 
@@ -453,12 +473,31 @@ static void grab_feed(uint8_t pad, uint8_t mask, const uint8_t *f) {
         g->slot  = slot;
         g->life  = f[16 + 8 * slot];
         g->touch = ++grab_serial ? grab_serial : ++grab_serial;
+        uint16_t x, y;
+        map_xy(pad, f + 16 + 8 * slot, &x, &y);
+        const prev_sample_t *p = &prev_sample[pad];
+        bool                 was = (p->mask & (1u << slot)) && p->life[slot] == g->life;
+        g->x0                    = was ? p->x[slot] : (uint16_t)(x - pad * SVAL_PTP_PAD_STRIDE);
+        g->y0                    = was ? p->y[slot] : y;
     }
     if (g->down) {
         uint16_t x, y;
         map_xy(pad, f + 16 + 8 * g->slot, &x, &y);
         g->x = x - pad * SVAL_PTP_PAD_STRIDE;
         g->y = y;
+    }
+}
+
+static void prev_sample_store(uint8_t pad, uint8_t mask, const uint8_t *f) {
+    prev_sample_t *p = &prev_sample[pad];
+    p->mask          = mask;
+    for (uint8_t slot = 0; slot < 5; slot++) {
+        if (!(mask & (1u << slot))) continue;
+        uint16_t x, y;
+        map_xy(pad, f + 16 + 8 * slot, &x, &y);
+        p->life[slot] = f[16 + 8 * slot];
+        p->x[slot]    = x - pad * SVAL_PTP_PAD_STRIDE;
+        p->y[slot]    = y;
     }
 }
 static uint8_t  last_report[SVAL_PTP_INPUT_SIZE] = {SVAL_PTP_REPORT_ID_INPUT};
@@ -546,6 +585,7 @@ static uint8_t take_xid(void) {
 }
 
 static void end_contact(contact_t *c) {
+    if (c->handback && ptp_now_us() - c->born_us < SVAL_PTP_HANDBACK_TAP_MS * 1000u) c->conf = false;
     if (c->state == C_ACTIVE || c->state == C_CANDIDATE) {
         c->lift = true;
         dirty   = true;
@@ -641,11 +681,20 @@ void sval_ptp_feed(const uint8_t *f, uint32_t sample_us) {
     // The chip answered: whatever it said, the pad is alive.
     p->valid_us  = sample_us;
     p->has_valid = true;
+    bool handback = false; // this sample arms the pad as the grab hands it back
     if (grabbed) {
         if (flags & 0x0B)
             grab[pad].down = false; // reset, palm or too many fingers: that finger is done
         else
             grab_feed(pad, mask, f);
+    }
+    prev_sample_store(pad, (flags & 0x0B) ? 0 : mask, f);
+    if (f != last_frame[pad]) {
+        last_frame_ok[pad] = !(flags & 0x1B);
+        if (last_frame_ok[pad]) {
+            memcpy(last_frame[pad], f, sizeof(last_frame[pad]));
+            last_frame_us[pad] = sample_us;
+        }
     }
     if (flags & 0x08) { // chip reset or recalibration
         lift_pad(pad);
@@ -675,6 +724,8 @@ void sval_ptp_feed(const uint8_t *f, uint32_t sample_us) {
         if (mask != 0 && !p->resume) return;
         p->armed  = true;
         p->resume = false;
+        handback  = p->handback;
+        p->handback = false;
         if (mask == 0) return;
     }
     p->resume = false;
@@ -737,9 +788,11 @@ void sval_ptp_feed(const uint8_t *f, uint32_t sample_us) {
         c->life  = s[0];
         c->x     = x;
         c->y     = y;
-        c->conf  = !palm_area;
-        c->order = ++arrival;
-        dirty    = true;
+        c->conf     = !palm_area;
+        c->order    = ++arrival;
+        c->handback = handback;
+        c->born_us  = sample_us;
+        dirty       = true;
     }
     // This pad's sample goes into the next frame, stamped with its read time.
     if (dirty) {
@@ -814,47 +867,60 @@ static void admit(void) {
 }
 
 // ------------------------------------------------------- position scaling
-// Sniper and boost by scaling (keymaps/keymap_support.c): the OS keeps the
-// pads, and while exactly one contact is down it is reported at its anchor
-// plus its travel since then times num/den, clamped to the whole surface.
-// The anchor is where it was when scaling began: when the factor turned on
-// with it the only contact down, or where it landed while the factor was on.
-// When the factor ends or another finger lands, its offset from the real
-// position is frozen until it lifts: no snap back, no lift and re-touch.
+// Sniper and boost while the OS keeps the pads (keymaps/keymap_support.c).
+// Every contact is reported at its anchor B plus its travel since A, times
+// the factor while it is scaled and 1x otherwise. Every change re-anchors
+// it where it was just reported, so the speed changes from the next frame
+// with no jump, no stall and no lift:
+// - Scaling: while exactly one contact is down it is scaled; it starts when
+//   it lands alone or the key comes on (again) with it alone, and a second
+//   finger or the key's end puts it back to 1x at its offset.
+// - Frame: every contact is scaled while the key is on. A finger that lands
+//   enters the frame where the first finger's map puts it, so the fingers'
+//   reported spacing stays consistent; a press or a release re-anchors every
+//   contact where it is, so nothing already down jumps.
+// Positions are clamped to the surface the OS sees.
 static uint16_t scale_num = 1, scale_den = 1;     // wanted
 static uint16_t applied_num = 1, applied_den = 1; // in force in the last frame
+static bool     scale_frame;                      // Frame instead of Scaling
 
-void sval_ptp_set_scale(uint16_t num, uint16_t den) {
-    scale_num = num ? num : 1;
-    scale_den = den ? den : 1;
+void sval_ptp_set_scale(uint16_t num, uint16_t den, bool frame) {
+    scale_num   = num ? num : 1;
+    scale_den   = den ? den : 1;
+    scale_frame = frame;
 }
 
 static uint16_t clamp_to(int32_t v, int32_t max) {
     return v < 0 ? 0 : v > max ? (uint16_t)max : (uint16_t)v;
 }
 
-// Positions here are the OS's: the contact's real position plus the surface
-// offset (0, or the large surface's margin), clamped to the surface.
-static void scale_point(contact_t *c, uint16_t num, uint16_t den) {
-    int32_t x = (int32_t)c->x + surf_xoff, y = (int32_t)c->y + surf_yoff, px, py;
-    if (c->scaling) {
-        px = c->bx + (x - c->ax) * num / den;
-        py = c->by + (y - c->ay) * num / den;
-    } else {
-        px = x + c->ox;
-        py = y + c->oy;
-    }
-    c->rx = clamp_to(px, surf_xmax);
-    c->ry = clamp_to(py, surf_ymax);
+// Where the contact's map puts the OS position (x, y), with the factor in
+// force for it.
+static void map_point(const contact_t *c, int32_t x, int32_t y, uint16_t num, uint16_t den, uint16_t *rx, uint16_t *ry) {
+    if (!c->scaling) num = den = 1;
+    *rx = clamp_to((int32_t)c->bx + (x - c->ax) * num / den, surf_xmax);
+    *ry = clamp_to((int32_t)c->by + (y - c->ay) * num / den, surf_ymax);
 }
 
-// Before each frame is built: every reported contact's position, then the
-// transitions. Each transition anchors at the position just reported, so
-// nothing jumps.
+static void anchor(contact_t *c, int32_t x, int32_t y, bool scaling) {
+    c->ax      = (uint16_t)x;
+    c->ay      = (uint16_t)y;
+    c->bx      = c->rx;
+    c->by      = c->ry;
+    c->scaling = scaling;
+}
+
+// Before each frame is built: every reported contact's position with the
+// rule in force until now, then the transitions, each anchored there.
 static void scale_update(void) {
-    uint8_t live = 0;
-    for (uint8_t i = 0; i < POOL; i++)
-        if ((pool[i].state == C_ACTIVE || pool[i].state == C_CANDIDATE) && !pool[i].lift) live++;
+    uint8_t    live  = 0;
+    contact_t *pivot = NULL; // the first finger: the oldest contact already placed
+    for (uint8_t i = 0; i < POOL; i++) {
+        contact_t *c = &pool[i];
+        if ((c->state != C_ACTIVE && c->state != C_CANDIDATE) || c->lift) continue;
+        live++;
+        if (c->state == C_ACTIVE && c->seen && (!pivot || c->order < pivot->order)) pivot = c;
+    }
     bool on      = scale_num != scale_den;
     bool was_on  = applied_num != applied_den;
     bool edge    = on && !was_on;
@@ -862,22 +928,25 @@ static void scale_update(void) {
     for (uint8_t i = 0; i < POOL; i++) {
         contact_t *c = &pool[i];
         if (c->state != C_ACTIVE) continue;
-        scale_point(c, applied_num, applied_den);
-        if (c->lift) continue; // its release goes where it was last reported
-        if (c->scaling && (!on || live > 1)) {
-            c->scaling = false;
-            c->ox      = (int16_t)((int32_t)c->rx - c->x - surf_xoff);
-            c->oy      = (int16_t)((int32_t)c->ry - c->y - surf_yoff);
-        } else if (on && live == 1 && (c->scaling ? changed : (!c->seen || edge))) {
-            // Start (it landed alone, or the factor came on with it alone),
-            // or a new factor while scaling: anchor where it is reported now.
-            c->scaling = true;
-            c->ax      = c->x + surf_xoff;
-            c->ay      = c->y + surf_yoff;
-            c->bx      = c->rx;
-            c->by      = c->ry;
+        int32_t x = (int32_t)c->x + surf_xoff, y = (int32_t)c->y + surf_yoff;
+        if (!c->seen) {
+            // A new contact: at its real position, or in Frame where the first
+            // finger's map puts it.
+            c->seen = true;
+            if (scale_frame && pivot)
+                map_point(pivot, x, y, applied_num, applied_den, &c->rx, &c->ry);
+            else {
+                c->rx = clamp_to(x, surf_xmax);
+                c->ry = clamp_to(y, surf_ymax);
+            }
+            if (c->lift) continue;
+            anchor(c, x, y, on && (scale_frame || live == 1));
+            continue;
         }
-        c->seen = true;
+        map_point(c, x, y, applied_num, applied_den, &c->rx, &c->ry);
+        if (c->lift) continue; // its release goes where it was last reported
+        bool want = on && (scale_frame || (live == 1 && (c->scaling || edge)));
+        if (want != c->scaling || (want && changed)) anchor(c, x, y, want);
     }
     applied_num = scale_num;
     applied_den = scale_den;
@@ -1078,9 +1147,29 @@ void sval_ptp_task(void) {
             else
                 clear_all();
         } else {
+            // The grab takes the pads: the OS sees every finger lift with
+            // Confidence clear, so a finger that just landed is never a tap.
+            if (grabbed)
+                for (uint8_t i = 0; i < POOL; i++)
+                    if (pool[i].state == C_ACTIVE) pool[i].conf = false;
             start_release(now);
         }
         output = out;
+    }
+    // The grab let go: a finger still down comes back to the OS at once, as
+    // a new contact where it is (sval_ptp_set_grab).
+    if (handback_pending && !release_pending) {
+        handback_pending = false;
+        if (output)
+            for (uint8_t i = 0; i < 2; i++) {
+                if (!pads[i].present || pads[i].armed) continue;
+                // Only a pad whose last, recent sample has a finger down: it
+                // comes back in the next frame. Any other pad arms as always,
+                // on an all-up sample (a later tap there is a tap).
+                if (!last_frame_ok[i] || now - last_frame_us[i] >= SVAL_PTP_STALE_MS * 1000u || !(last_frame[i][3] & 0x1F)) continue;
+                pads[i].resume = pads[i].handback = true;
+                sval_ptp_feed(last_frame[i], last_frame_us[i]);
+            }
     }
     if (hold && !mode3 && all_up()) hold = false;
     // A Button Switch change while reporting re-sends the buttons byte, so a
@@ -1145,6 +1234,8 @@ void sval_ptp_set_grab(uint8_t holder, bool g) {
         grab_reset(0);
         grab_reset(1);
     }
+    if (!h && grabbed) handback_pending = true; // the last holder let go
+    if (h) handback_pending = false;
     grab_holders = h;
     grabbed      = h != 0;
 }
@@ -1163,6 +1254,12 @@ uint16_t sval_ptp_grab_finger(uint8_t pad, uint16_t *x, uint16_t *y) {
     *x = g->x;
     *y = g->y;
     return g->touch;
+}
+
+void sval_ptp_grab_origin(uint8_t pad, uint16_t *x0, uint16_t *y0) {
+    const grab_t *g = &grab[pad & 1];
+    *x0             = g->x0;
+    *y0             = g->y0;
 }
 
 // The host asked for touchpad mode (Input Mode 3) and the touchpad mode
@@ -1386,12 +1483,16 @@ void sval_ptp_test_reset(void) {
     pad_used[0] = pad_used[1] = 0;
     arrival                   = 0;
     native = paused = mode3 = output = hold = release_pending = dirty = ever_sent = scan_started = busy_streak = false;
-    grabbed      = false;
-    grab_holders = 0;
+    grabbed          = false;
+    grab_holders     = 0;
+    handback_pending = false;
     scale_num = scale_den = applied_num = applied_den = 1;
+    scale_frame                                      = false;
     grab_serial  = 0;
     grab_reset(0);
     grab_reset(1);
+    memset(prev_sample, 0, sizeof(prev_sample));
+    memset(last_frame_ok, 0, sizeof(last_frame_ok));
     release_at = last_sent = scan_clock = scan_rem = frames_sent = send_busy = busy_since = 0;
     cid_busy = xid_busy = scan = host_silent = merge_waits = pool_full = 0;
     cid_next = key_buttons = sent_buttons = pad_mask = 0;

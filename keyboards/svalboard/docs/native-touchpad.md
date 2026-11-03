@@ -97,9 +97,13 @@ While Velocity Scroll is on (`SV_VELOCITY_SCROLL` held, or
 the pads from the operating system: reports stop after a
 release of every contact, and `ptp.c` follows one finger per pad for the
 scroll. A finger already down is followed at once; after it lifts, only a
-finger that lands later is, so one resting on a pad never takes over. When
-it turns off, the pads arm again on an all-up sample, so a finger still
-down never moves the pointer.
+finger that lands later is, so one resting on a pad never takes over. The OS
+sees the fingers lift with Confidence clear, so a finger that had just
+landed is never read as a tap. When it turns off, a finger still down goes
+back to the OS at once, as a new contact where it is (its last sample is fed
+again in the same pass); if it lifts within 300 ms
+(`SVAL_PTP_HANDBACK_TAP_MS`) its lift goes out with Confidence clear, so the
+hand-back is never a tap either.
 
 ### Pointer modes on a pad (prototype, dev builds)
 
@@ -120,23 +124,32 @@ pad is the chip's mouse and the keys work on it as always.
   same way and drives the cursor from one finger through the firmware mouse
   path: the hand's DPI, then the sniper divisor and the boost multiplier, as
   on a trackball. While the firmware holds the pads the OS gets nothing from
-  them: no taps or tap-and-drag, no two-finger scroll, pinch or swipes, no
-  palm or edge handling, and no OS pointer acceleration (the firmware motion
+  them: no taps or tap-and-drag, no two-finger scroll, pinch or swipes,
+  and no OS pointer acceleration (the firmware motion
   goes out as a mouse, so the OS mouse speed and "enhance pointer precision"
   apply instead of the touchpad's curve). A second finger is ignored. When
-  the key is let go, the pads come back on an all-up sample: lift the finger
-  before the OS sees the pad again.
+  the key is let go, the finger goes back to the OS at once, as above: the
+  cursor keeps moving, with one sample of the new contact's touch-down.
 - **Sniper and boost: Scaling.** The OS keeps the pads (taps, gestures and
   its curve stay). While the key is on and exactly one contact is down, that
   contact is reported at its anchor plus its travel since then, times the
   factor (sniper 1/divisor, boost multiplier; both multiply), clamped to the
-  whole surface the OS sees (both pads and the gap). The anchor is where the
-  finger was when the key came on with it the only contact down, or where it
-  landed while the key was on. When the key is let go or a second finger
-  lands, the contact keeps its offset from the real position until it lifts:
-  no snap back, and no lift and re-touch (which the OS could read as a tap).
-  Every change takes effect from the next frame, anchored where the contact
-  was last reported, so nothing jumps.
+  whole surface the OS sees (both pads and the gap). It starts when the key
+  comes on (again) with the contact alone, or when a finger lands alone while
+  the key is on. When the key is let go or a second finger lands, the contact
+  goes on at 1x from where it is, keeping its offset: no snap back, and no
+  lift and re-touch (which the OS could read as a tap).
+- **Sniper and boost: Frame.** The same, for every contact: while the key is
+  on, every contact's travel is scaled. A finger that lands enters the frame
+  where the first finger's map puts it, so the fingers' reported spacing stays
+  consistent. A press or release re-anchors every contact where it is
+  reported, so nothing already down jumps (the spacing at the press is kept;
+  the motion after it is scaled).
+
+In every mode, a press or release mid-stroke changes the speed from the next
+sample: the transition sample still uses the old factor, then every contact
+is anchored where it was just reported. No lift is needed, nothing jumps, and
+nothing stalls.
 - **Surface: Large.** The touchpad tells the OS its surface is three times the
   standard one on each axis (13716 x 5376 counts, 288 x 120 mm) at the same
   counts per mm, with the real pads, gap included, in its center, so pointer
@@ -154,18 +167,21 @@ The grab has one holder bit per reason (`SVAL_PTP_GRAB_VS`, `_SCROLL`,
 modes and the keys, so the pads go back only when the last reason ends, and
 the finger followed stays the same from one holder to the next.
 `pad_follow.c` turns the followed finger into counts, as the pad's own mouse
-output scales them; a new finger starts where it lands. Velocity Scroll still
+output scales them. A finger already down when the grab takes it starts from
+where it was a sample before (`sval_ptp_grab_origin`), so that sample's motion
+is not lost; one that lands starts where it lands. Velocity Scroll still
 has precedence while it is on.
 
 Selectors and test holds go over the dev command (raw HID 0xFC op 0x42):
 action 3 gets or sets the modes and the surface ([8] 0 get, 1 set; [9]
-scroll, [10] sniper, [11] boost, [12] surface), action 4 holds their keys on a
+scroll 0 Off 1 Takeover, [10] sniper and [11] boost 0 Off 1 Takeover 2 Scaling
+3 Frame, [12] surface), action 4 holds their keys on a
 keyless board ([8] bit 0 scroll, 1 sniper /2, 2 boost x2; lapses 500 ms after
 the last repeat; `tools/multitouch/pad_hold.py`), action 5 restarts the board
 200 ms after its reply, and every reply carries the modes' block at bytes 56
 to 63: version 1, scroll, sniper, boost, surface stored, surface in force,
 supported (bit 0 scroll Takeover, 1 sniper and boost Takeover, 2 their
-Scaling, 3 the large surface), and the grab's holders.
+Scaling, 3 the large surface, 4 their Frame), and the grab's holders.
 
 ## Builds
 

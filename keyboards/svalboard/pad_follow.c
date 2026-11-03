@@ -17,14 +17,17 @@ static int16_t scale(int32_t d, uint32_t num, uint32_t den, int32_t *rem) {
     return (int16_t)q;
 }
 
-void sval_pad_follow(sval_pad_follow_t *f, uint16_t touch, uint16_t x, uint16_t y, uint16_t dpi, int16_t *dx, int16_t *dy) {
+void sval_pad_follow(sval_pad_follow_t *f, uint16_t touch, uint16_t x, uint16_t y, uint16_t x0, uint16_t y0, uint16_t dpi, int16_t *dx, int16_t *dy) {
     *dx = *dy = 0;
-    if (!touch || touch != f->touch) {
-        f->touch = touch;
-        f->x     = x;
-        f->y     = y;
-        f->rem_x = f->rem_y = 0;
+    if (!touch) {
+        f->touch = 0;
         return;
+    }
+    if (touch != f->touch) { // a new finger: its motion starts at its origin
+        f->touch = touch;
+        f->x     = x0;
+        f->y     = y0;
+        f->rem_x = f->rem_y = 0;
     }
     int32_t mx = (int32_t)x - f->x, my = (int32_t)y - f->y;
     f->x = x;

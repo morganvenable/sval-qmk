@@ -48,6 +48,11 @@ enum sval_touch_owner {
 #ifndef SVAL_PTP_MERGE_US
 #    define SVAL_PTP_MERGE_US (SVAL_PTP_PAD_PERIOD_MS * 1000u)
 #endif
+// A finger handed back by the grab (Velocity Scroll, Takeover) that lifts
+// within this long goes out with Confidence clear: never a tap.
+#ifndef SVAL_PTP_HANDBACK_TAP_MS
+#    define SVAL_PTP_HANDBACK_TAP_MS 300
+#endif
 #ifndef SVAL_PTP_KEEPALIVE_MS
 #    define SVAL_PTP_KEEPALIVE_MS 50 // repeat while down (Linux releases after 100 ms)
 #endif
@@ -133,9 +138,10 @@ void     sval_ptp_set_grab(uint8_t holder, bool grab);
 uint8_t  sval_ptp_grab_holders(void);
 
 // --- position scaling: sniper and boost while the OS keeps the pads (keymap_support.c) ---
-// num/den 1/1 is off. While on and exactly one contact is down, it is reported
-// at its anchor plus its travel times num/den; ptp.c has the rules.
-void sval_ptp_set_scale(uint16_t num, uint16_t den);
+// num/den 1/1 is off. Scaling (frame false): while on and exactly one contact
+// is down, its travel is scaled by num/den. Frame: every contact's is. Every
+// change takes effect from the next frame with no jump; ptp.c has the rules.
+void sval_ptp_set_scale(uint16_t num, uint16_t den, bool frame);
 
 // --- the surface the OS sees (prototype, dev builds; svalboard.c at boot) ---
 // Large: three times the standard surface on each axis at the same counts per
@@ -148,6 +154,9 @@ bool     sval_ptp_grab_ready(uint8_t pad); // this pad's contact frames arrive h
 // its position on the pad (x 0..SVAL_PTP_PAD_X-1, y 0..SVAL_PTP_PAD_Y-1, in the
 // touchpad's orientation). 0: none.
 uint16_t sval_ptp_grab_finger(uint8_t pad, uint16_t *x, uint16_t *y);
+// Where the followed finger was one sample before it was taken (a finger
+// already down), or where it landed: the start of its motion.
+void sval_ptp_grab_origin(uint8_t pad, uint16_t *x0, uint16_t *y0);
 
 // --- contacts (multitouch.c) ---
 // One version-1 56-byte pad frame: pad, flags, mask, seq, size, time, epoch,
