@@ -25,6 +25,23 @@ ifeq ($(strip $(SVAL_NATIVE_PTP)),yes)
       $(error SVAL_TOUCH_DEV cannot be part of a release build)
     endif
     OPT_DEFS += -DSVAL_TOUCH_DEV
+    # Split-link diagnostics (dev builds only): another baud rate, another
+    # receive timeout, and aborting a receive at once on a framing error.
+    ifneq ($(strip $(SVAL_SPLIT_BAUD)),)
+      OPT_DEFS += -DSVAL_SPLIT_BAUD=$(strip $(SVAL_SPLIT_BAUD))
+    endif
+    ifneq ($(strip $(SVAL_SPLIT_TIMEOUT_MS)),)
+      OPT_DEFS += -DSERIAL_USART_TIMEOUT=$(strip $(SVAL_SPLIT_TIMEOUT_MS))
+    endif
+    ifeq ($(strip $(SVAL_SPLIT_ABORT)),yes)
+      OPT_DEFS += -DSVAL_SPLIT_ABORT
+    endif
+    ifeq ($(strip $(SVAL_SPLIT_SLEWSLOW)),yes)
+      OPT_DEFS += -DSVAL_SPLIT_SLEWSLOW
+    endif
+    ifneq ($(strip $(SVAL_SPLIT_DRIVE)),)
+      OPT_DEFS += -DSVAL_SPLIT_DRIVE=$(strip $(SVAL_SPLIT_DRIVE))
+    endif
   endif
 else
   ifeq ($(strip $(SVAL_TOUCH_DEV)),yes)

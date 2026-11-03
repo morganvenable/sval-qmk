@@ -280,7 +280,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define USB_MAX_POWER_CONSUMPTION 500
 #define USB_SUSPEND_WAKEUP_DELAY 500
-#define SERIAL_USART_SPEED 1000000
+#ifdef SVAL_SPLIT_BAUD
+#    define SERIAL_USART_SPEED SVAL_SPLIT_BAUD // dev diagnostics only (azoteq/multitouch.mk)
+#else
+#    define SERIAL_USART_SPEED 1000000
+#endif
 
 #define MOUSE_EXTENDED_REPORT
 #define SPLIT_POINTING_ENABLE

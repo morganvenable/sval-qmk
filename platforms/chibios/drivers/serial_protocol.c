@@ -17,6 +17,18 @@ static inline bool initiate_transaction(uint8_t transaction_id);
 // not sent, 4 buffer not received, 5 PIO framing/break errors, 6 failed
 // transactions that are RPC ones, 7 the last failed transaction ID.
 volatile uint8_t sval_serial_dbg[8];
+// The time master transactions take, from the 1 MHz timer: failed ones (count,
+// sum, and a histogram <0.5, <2, <8, <16, <24, >=24 ms), and the longest good one.
+#    include "hardware/structs/timer.h"
+volatile uint16_t sval_serial_fail_n;
+volatile uint32_t sval_serial_fail_us, sval_serial_ok_max_us;
+volatile uint8_t  sval_serial_fail_hist[6];
+// The slave's side: 0 bad transaction ID, 1 handshake not sent, 2 buffer not
+// received, 3 buffer not sent (wrapping).
+volatile uint8_t sval_serial_slave_dbg[4];
+// Transactions after which the receive FIFO had overflowed (RXSTALL), ok or failed.
+volatile uint16_t sval_rx_stall_ok, sval_rx_stall_fail;
+bool              sval_serial_rx_stalled(void); // serial_vendor.c
 static void sval_serial_fail(uint8_t stage, uint8_t id) {
     sval_serial_dbg[stage]++;
     if (id >= PUT_RPC_INFO && id <= GET_RPC_RESP_DATA) sval_serial_dbg[6]++;
@@ -66,6 +78,11 @@ void soft_serial_initiator_init(void) {
 /**
  * @brief React to transactions started by the master.
  */
+#ifdef SVAL_TOUCH_DEV
+#    define SVAL_SLAVE_FAIL(i) (sval_serial_slave_dbg[i]++)
+#else
+#    define SVAL_SLAVE_FAIL(i)
+#endif
 static inline bool react_to_transaction(void) {
     uint8_t transaction_id = 0;
     /* Wait until there is a transaction for us. */
@@ -75,6 +92,7 @@ static inline bool react_to_transaction(void) {
 
     /* Sanity check that we are actually responding to a valid transaction. */
     if (unlikely(transaction_id >= NUM_TOTAL_TRANSACTIONS)) {
+        SVAL_SLAVE_FAIL(0);
         return false;
     }
 
@@ -86,12 +104,14 @@ static inline bool react_to_transaction(void) {
      to signal that the slave is ready to receive possible transaction buffers  */
     transaction_id ^= NUM_TOTAL_TRANSACTIONS;
     if (unlikely(!serial_transport_send(&transaction_id, sizeof(transaction_id)))) {
+        SVAL_SLAVE_FAIL(1);
         return false;
     }
 
     /* Receive transaction buffer from the master. If this transaction requires it.*/
     if (transaction->initiator2target_buffer_size) {
         if (unlikely(!serial_transport_receive(split_trans_initiator2target_buffer(transaction), transaction->initiator2target_buffer_size))) {
+            SVAL_SLAVE_FAIL(2);
             return false;
         }
     }
@@ -104,6 +124,7 @@ static inline bool react_to_transaction(void) {
     /* Send transaction buffer to the master. If this transaction requires it. */
     if (transaction->target2initiator_buffer_size) {
         if (unlikely(!serial_transport_send(split_trans_target2initiator_buffer(transaction), transaction->target2initiator_buffer_size))) {
+            SVAL_SLAVE_FAIL(3);
             return false;
         }
     }
@@ -122,7 +143,28 @@ bool soft_serial_transaction(int index) {
      * Parts of failed transactions or spurious bytes could still be in it. */
     serial_transport_driver_clear();
 
+#ifdef SVAL_TOUCH_DEV
+    uint32_t t0 = timer_hw->timerawl;
+    bool     ok = initiate_transaction((uint8_t)index);
+    uint32_t us = timer_hw->timerawl - t0;
+    if (sval_serial_rx_stalled()) {
+        if (ok)
+            sval_rx_stall_ok++;
+        else
+            sval_rx_stall_fail++;
+    }
+    if (ok) {
+        if (us > sval_serial_ok_max_us) sval_serial_ok_max_us = us;
+    } else {
+        sval_serial_fail_n++;
+        sval_serial_fail_us += us;
+        uint8_t b = us < 500 ? 0 : us < 2000 ? 1 : us < 8000 ? 2 : us < 16000 ? 3 : us < 24000 ? 4 : 5;
+        sval_serial_fail_hist[b]++;
+    }
+    return ok;
+#else
     return initiate_transaction((uint8_t)index);
+#endif
 }
 
 /**

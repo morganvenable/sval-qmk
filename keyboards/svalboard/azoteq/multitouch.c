@@ -300,7 +300,28 @@ static void unpack_snapshot(const uint8_t *r, uint8_t pad, uint8_t *frame) {
 // Half without USB: a request from the USB half (svalboard.c routes the ops
 // here from the Scan Lab RPC). Runs in the split transport's callback: no I2C,
 // no waiting. True when the op was one of these.
+#ifdef SVAL_TOUCH_DEV
+extern volatile uint8_t  sval_serial_dbg[8];
+extern volatile uint8_t  sval_serial_slave_dbg[4];
+extern volatile uint16_t sval_serial_fail_n;
+extern volatile uint32_t sval_serial_fail_us, sval_serial_ok_max_us;
+extern volatile uint8_t  sval_serial_fail_hist[6];
+extern volatile uint16_t sval_rx_stall_ok, sval_rx_stall_fail, sval_rx_full;
+uint8_t                  sval_clock_mhz(void); // power.c
+#    define SVAL_MT_RPC_SERIAL 0xAC                // dev builds: this half's split counters
+#endif
+
 bool sval_mt_rpc(uint8_t in_len, const uint8_t *in, uint8_t out_len, uint8_t *out) {
+#ifdef SVAL_TOUCH_DEV
+    if (in_len >= 1 && in[0] == SVAL_MT_RPC_SERIAL && out_len >= 16) {
+        memset(out, 0, out_len);
+        out[0] = SVAL_MT_RPC_SERIAL;
+        for (uint8_t i = 0; i < 8; i++) out[1 + i] = sval_serial_dbg[i];
+        for (uint8_t i = 0; i < 4; i++) out[9 + i] = sval_serial_slave_dbg[i];
+        out[13] = sval_clock_mhz();
+        return true;
+    }
+#endif
     if (in_len < 2 || out_len < SVAL_MT_RPC_REPLY) return false;
     if (in[0] == SVAL_MT_RPC_SNAPSHOT) {
         if (in[1] & 1) { // the USB half reads the news counter
@@ -449,6 +470,33 @@ void    sval_pad_proto_block(uint8_t *o);                         // keymaps/key
 void    sval_pad_proto_debug(uint8_t *o);                         // keymaps/keymap_support.c
 void sval_mt_command(uint8_t *data, uint8_t length) {
     uint8_t action = data[7], wanted = data[8], status = 0;
+    if (action == 7) {
+        // Split-link counters: [10..17] this half's (sval_serial_dbg), [18..21]
+        // its slave-side ones, [22..23] failed count, [24..27] failed us sum,
+        // [28..33] failure-time histogram, [34..37] longest good transaction us,
+        // [38] this half's clock MHz, [40] 1 when the other half answered, then
+        // its [41..48] sval_serial_dbg, [49..52] slave-side, [53] clock MHz.
+        memset(data + 6, 0, length - 6);
+        data[6] = 0xC2;
+        data[8] = touch_owner;
+        data[9] = 1 | 2 | 4 | 8 | 16 | 32 | 64; // bit 6: action 7
+        for (uint8_t i = 0; i < 8; i++) data[10 + i] = sval_serial_dbg[i];
+        for (uint8_t i = 0; i < 4; i++) data[18 + i] = sval_serial_slave_dbg[i];
+        put16(data + 22, sval_serial_fail_n);
+        put32(data + 24, sval_serial_fail_us);
+        for (uint8_t i = 0; i < 6; i++) data[28 + i] = sval_serial_fail_hist[i];
+        put32(data + 34, sval_serial_ok_max_us);
+        data[38] = sval_clock_mhz();
+        put16(data + 54, sval_rx_stall_ok); // [54..59] receive FIFO overflow evidence (this half)
+        put16(data + 56, sval_rx_stall_fail);
+        put16(data + 58, sval_rx_full);
+        uint8_t req[2] = {SVAL_MT_RPC_SERIAL, 0}, reply[SVAL_MT_RPC_REPLY] = {0};
+        if (remote_rpc(req, sizeof(req), reply) && reply[0] == SVAL_MT_RPC_SERIAL) {
+            data[40] = 1;
+            memcpy(data + 41, reply + 1, 13);
+        }
+        return;
+    }
     if (action == 6) {
         // The capture tool's status: [10..23] the key path (keymap_support.c),
         // [24..25] ptp.c's holders and state, [34..61] 14 bytes per pad,

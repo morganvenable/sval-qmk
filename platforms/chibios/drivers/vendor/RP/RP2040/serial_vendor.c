@@ -93,6 +93,11 @@ static const pio_program_t uart_rx_program = {
 };
 
 thread_reference_t rx_thread        = NULL;
+#ifdef SVAL_SPLIT_ABORT
+// A framing or break error since the receive started: the byte is lost, so
+// the receive fails at once instead of waiting out the timeout.
+static volatile bool sval_rx_error = false;
+#endif
 static int         rx_state_machine = -1;
 
 thread_reference_t tx_thread        = NULL;
@@ -126,6 +131,9 @@ void pio_serve_interrupt(void) {
 #ifdef SVAL_TOUCH_DEV
         extern volatile uint8_t sval_serial_dbg[8];
         sval_serial_dbg[5]++;
+#endif
+#ifdef SVAL_SPLIT_ABORT
+        sval_rx_error = true; // seen by the receive loop even when no thread waits
 #endif
 
         osalSysLockFromISR();
@@ -267,14 +275,33 @@ static inline msg_t sync_rx(sysinterval_t timeout) {
     return msg;
 }
 
+#ifdef SVAL_TOUCH_DEV
+volatile uint16_t sval_rx_full; // the receive loop woke to a full FIFO (8 bytes waiting)
+// The receive state machine stalled on a full FIFO since the last call (sticky RXSTALL).
+bool sval_serial_rx_stalled(void) {
+    uint32_t bit = 1u << (PIO_FDEBUG_RXSTALL_LSB + rx_state_machine);
+    bool     s   = pio->fdebug & bit;
+    if (s) pio->fdebug = bit; // write 1 to clear
+    return s;
+}
+#endif
 static inline bool receive_impl(uint8_t* destination, const size_t size, sysinterval_t timeout) {
     size_t read = 0U;
+#ifdef SVAL_SPLIT_ABORT
+    sval_rx_error = false;
+#endif
 
     while (read < size) {
+#ifdef SVAL_SPLIT_ABORT
+        if (sval_rx_error) return false;
+#endif
         msg_t msg = sync_rx(timeout);
         if (msg < MSG_OK) {
             return false;
         }
+#ifdef SVAL_TOUCH_DEV
+        if (pio_sm_get_rx_fifo_level(pio, rx_state_machine) >= 8) sval_rx_full++;
+#endif
         osalSysLock();
         while (true) {
             if (pio_sm_is_rx_fifo_empty(pio, rx_state_machine)) {
@@ -326,8 +353,20 @@ static inline void pio_tx_init(pin_t tx_pin) {
 #if defined(SERIAL_USART_FULL_DUPLEX)
     // clang-format off
     iomode_t tx_pin_mode = PAL_RP_GPIO_OE |
+#    ifdef SVAL_SPLIT_SLEWSLOW
+                           0 | // slow slew: SLEWFAST clear
+#    else
                            PAL_RP_PAD_SLEWFAST |
+#    endif
+#    if defined(SVAL_SPLIT_DRIVE) && SVAL_SPLIT_DRIVE == 12
+                           PAL_RP_PAD_DRIVE12 |
+#    elif defined(SVAL_SPLIT_DRIVE) && SVAL_SPLIT_DRIVE == 8
+                           PAL_RP_PAD_DRIVE8 |
+#    elif defined(SVAL_SPLIT_DRIVE) && SVAL_SPLIT_DRIVE == 2
+                           PAL_RP_PAD_DRIVE2 |
+#    else
                            PAL_RP_PAD_DRIVE4 |
+#    endif
                            (pio_idx == 0 ? PAL_MODE_ALTERNATE_PIO0 : PAL_MODE_ALTERNATE_PIO1);
     // clang-format on
     pio_sm_set_pins_with_mask(pio, tx_state_machine, 1U << tx_pin, 1U << tx_pin);

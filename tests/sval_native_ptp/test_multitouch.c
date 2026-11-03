@@ -36,7 +36,15 @@ uint8_t        sval_pad_proto_command(uint8_t action, const uint8_t *a) {
     proto_arg    = a[0];
     return action == 3 || action == 4 ? 0 : 2;
 }
-volatile uint8_t sval_serial_dbg[8];
+volatile uint8_t  sval_serial_dbg[8];
+volatile uint8_t  sval_serial_slave_dbg[4];
+volatile uint16_t sval_serial_fail_n;
+volatile uint32_t sval_serial_fail_us, sval_serial_ok_max_us;
+volatile uint8_t  sval_serial_fail_hist[6];
+volatile uint16_t sval_rx_stall_ok, sval_rx_stall_fail, sval_rx_full;
+uint8_t sval_clock_mhz(void) {
+    return 125;
+}
 void sval_pad_proto_debug(uint8_t *o) {
     o[0] = 0xD0;
 }
