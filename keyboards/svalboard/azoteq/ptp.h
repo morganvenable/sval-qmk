@@ -157,6 +157,7 @@ uint16_t sval_ptp_grab_finger(uint8_t pad, uint16_t *x, uint16_t *y);
 // Where the followed finger was one sample before it was taken (a finger
 // already down), or where it landed: the start of its motion.
 void sval_ptp_grab_origin(uint8_t pad, uint16_t *x0, uint16_t *y0);
+void sval_ptp_debug(uint8_t *o); // dev builds: the capture tool's status (multitouch.c)
 
 // --- contacts (multitouch.c) ---
 // One version-1 56-byte pad frame: pad, flags, mask, seq, size, time, epoch,

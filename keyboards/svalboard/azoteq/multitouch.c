@@ -446,8 +446,22 @@ static void poll_remote(void) {
 void    velocity_scroll_dev_hold(bool on);                        // keymaps/keymap_support.c
 uint8_t sval_pad_proto_command(uint8_t action, const uint8_t *a); // keymaps/keymap_support.c
 void    sval_pad_proto_block(uint8_t *o);                         // keymaps/keymap_support.c
+void    sval_pad_proto_debug(uint8_t *o);                         // keymaps/keymap_support.c
 void sval_mt_command(uint8_t *data, uint8_t length) {
     uint8_t action = data[7], wanted = data[8], status = 0;
+    if (action == 6) {
+        // The capture tool's status: [10..23] the key path (keymap_support.c),
+        // [24..25] ptp.c's holders and state, [34..61] 14 bytes per pad,
+        // [62..63] the time in ms (low 16 bits).
+        memset(data + 6, 0, length - 6);
+        data[6] = 0xC2;
+        data[8] = touch_owner;
+        data[9] = 1 | 2 | 4 | 8 | 16 | 32; // bit 5: action 6
+        sval_pad_proto_debug(data + 10);
+        sval_ptp_debug(data + 24);
+        put16(data + 62, (uint16_t)timer_read32());
+        return;
+    }
     if (action >= 3) {
         status = sval_pad_proto_command(action, data + 8);
     } else if (action == 2) {
@@ -464,7 +478,7 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
     data[6] = 0xC2;
     data[7] = status;
     data[8] = touch_owner;
-    data[9] = 1 | 2 | 4 | 8 | 16; // bit 0 native touchpad built, bit 1 status v2 (pads, link), bit 2 v3 (lost fingers), bit 3 action 2, bit 4 actions 3 and 4
+    data[9] = 1 | 2 | 4 | 8 | 16 | 32; // bit 0 native touchpad built, bit 1 status v2 (pads, link), bit 2 v3 (lost fingers), bit 3 action 2, bit 4 actions 3 and 4, bit 5 action 6
     sval_ptp_status(data + 10);
     uint8_t *o = data + 10 + SVAL_PTP_STATUS_SIZE;
     put32(o, samples);

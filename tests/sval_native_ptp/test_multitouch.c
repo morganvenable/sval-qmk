@@ -36,6 +36,9 @@ uint8_t        sval_pad_proto_command(uint8_t action, const uint8_t *a) {
     proto_arg    = a[0];
     return action == 3 || action == 4 ? 0 : 2;
 }
+void sval_pad_proto_debug(uint8_t *o) {
+    o[0] = 0xD0;
+}
 void sval_pad_proto_block(uint8_t *o) {
     for (int i = 0; i < 8; i++) o[i] = (uint8_t)(0xB0 + i);
 }

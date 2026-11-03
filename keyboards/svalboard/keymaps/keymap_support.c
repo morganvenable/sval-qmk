@@ -429,6 +429,11 @@ static void pad_dev_keys_set(uint8_t keys) {
 }
 #    endif
 
+#    ifdef SVAL_TOUCH_DEV
+static bool    dbg_scroll_req, dbg_point_req;
+static int16_t dbg_dx[2], dbg_dy[2]; // motion put out from grabbed fingers, wrapping
+#    endif
+
 static void pad_modes_sync(void) {
 #    ifdef SVAL_TOUCH_DEV
     if (pad_reboot_at && timer_elapsed32(pad_reboot_at) > 200) soft_reset_keyboard();
@@ -438,6 +443,10 @@ static void pad_modes_sync(void) {
     sval_ptp_set_grab(SVAL_PTP_GRAB_SCROLL, pad_mode_scroll == SVAL_PAD_MODE_TAKEOVER && scroll_key);
     bool point = (pad_mode_sniper == SVAL_PAD_MODE_TAKEOVER && any_sniper_active()) || (pad_mode_boost == SVAL_PAD_MODE_TAKEOVER && any_boost_active());
     sval_ptp_set_grab(SVAL_PTP_GRAB_POINT, point);
+#    ifdef SVAL_TOUCH_DEV
+    dbg_scroll_req = pad_mode_scroll == SVAL_PAD_MODE_TAKEOVER && scroll_key;
+    dbg_point_req  = point;
+#    endif
     // Scaling and Frame: the OS keeps the pads, the contacts' travel is scaled.
     bool     boost_scaled  = pad_mode_boost >= SVAL_PAD_MODE_SCALING && any_boost_active();
     bool     sniper_scaled = pad_mode_sniper >= SVAL_PAD_MODE_SCALING && any_sniper_active();
@@ -474,6 +483,10 @@ static void pad_drive(report_mouse_t *left, report_mouse_t *right) {
 #    endif
         if (!pad_driven[hand]) continue;
         hands[hand]->x = dx;
+#    ifdef SVAL_TOUCH_DEV
+        dbg_dx[hand] = (int16_t)(dbg_dx[hand] + dx);
+        dbg_dy[hand] = (int16_t)(dbg_dy[hand] + dy);
+#    endif
         hands[hand]->y = dy;
     }
 }
@@ -500,6 +513,25 @@ uint8_t sval_pad_proto_command(uint8_t action, const uint8_t *a) {
     pad_mode_boost  = a[3];
     sval_proto_surface_store(a[4]); // applies at the next boot
     return 0;
+}
+
+// The capture tool's status (action 6, multitouch.c): o[0] key bits (0
+// sniper on, 1 boost on, 2 scroll key, 3 pointer holder asked, 4 scroll
+// holder asked, 5/6 left/right pad driven, 7 scaling on), o[1] sniper
+// divisor, o[2] boost multiplier, o[3] selectors, o[6..13] the motion put
+// out from grabbed fingers (left x, y, right x, y; int16, wrapping).
+void sval_pad_proto_debug(uint8_t *o) {
+    bool scroll_key = (scroll_hold || PAD_DEV_SCROLL) != scroll_toggle;
+    o[0]            = (any_sniper_active() ? 1 : 0) | (any_boost_active() ? 2 : 0) | (scroll_key ? 4 : 0) | (dbg_point_req ? 8 : 0) | (dbg_scroll_req ? 16 : 0) | (pad_driven[0] ? 32 : 0) | (pad_driven[1] ? 64 : 0);
+    o[1]            = (uint8_t)sniper_div_now;
+    o[2]            = (uint8_t)boost_mult_now;
+    o[3]            = (uint8_t)(pad_mode_scroll | pad_mode_sniper << 2 | pad_mode_boost << 4);
+    for (uint8_t h = 0; h < 2; h++) {
+        o[6 + 4 * h] = (uint8_t)dbg_dx[h];
+        o[7 + 4 * h] = (uint8_t)((uint16_t)dbg_dx[h] >> 8);
+        o[8 + 4 * h] = (uint8_t)dbg_dy[h];
+        o[9 + 4 * h] = (uint8_t)((uint16_t)dbg_dy[h] >> 8);
+    }
 }
 
 // The reply block (8 bytes): version 1, scroll, sniper, boost, surface stored,

@@ -665,9 +665,18 @@ static contact_t *find_contact(uint8_t pad, uint8_t slot, uint8_t life) {
     return NULL;
 }
 
+#ifdef SVAL_TOUCH_DEV
+static uint16_t dbg_fed[2];
+static uint8_t  dbg_mask[2];
+#endif
+
 void sval_ptp_feed(const uint8_t *f, uint32_t sample_us) {
     if (f[0] != 1) return;
     uint8_t      pad = f[1] ? 1 : 0, flags = f[2] & 0x7F, mask = f[3] & 0x1F;
+#ifdef SVAL_TOUCH_DEV
+    dbg_fed[pad]++;
+    dbg_mask[pad] = mask | (flags << 5);
+#endif
     uint32_t     epoch = ptp_get32(f + 12);
     pad_state_t *p     = &pads[pad];
     if (!p->present) return; // a hand without a pad never reports
@@ -1268,6 +1277,37 @@ uint16_t sval_ptp_grab_finger(uint8_t pad, uint16_t *x, uint16_t *y) {
     *y = g->y;
     return g->touch;
 }
+
+#ifdef SVAL_TOUCH_DEV
+// Dev status for the capture tool (0xFC op 0x42 action 6, multitouch.c):
+// o[0] holders, o[1] state bits, then 14 bytes per pad from o[10].
+void sval_ptp_debug(uint8_t *o) {
+    o[0] = grab_holders;
+    o[1] = (output ? 1 : 0) | (mode3 ? 2 : 0) | (hold ? 4 : 0) | (release_pending ? 8 : 0) | (grabbed ? 16 : 0) | (paused ? 32 : 0) | (native ? 64 : 0) | (handback_pending ? 128 : 0);
+    uint32_t now = ptp_now_us();
+    for (uint8_t pad = 0; pad < 2; pad++) {
+        uint8_t           *q = o + 10 + 14 * pad;
+        const pad_state_t *p = &pads[pad];
+        const grab_t      *g = &grab[pad];
+        q[0]                 = (p->present ? 1 : 0) | (p->known ? 2 : 0) | (p->up ? 4 : 0) | (p->armed ? 8 : 0) | (p->resume ? 16 : 0) | (p->handback ? 32 : 0) | (p->fresh ? 64 : 0) | (p->has_valid ? 128 : 0);
+        q[1]                 = dbg_mask[pad];
+        ptp_put16(q + 2, dbg_fed[pad]);
+        uint32_t age = p->has_valid ? (now - p->valid_us) / 1000u : 255;
+        q[4]         = age > 255 ? 255 : (uint8_t)age;
+        ptp_put16(q + 5, g->down ? g->touch : 0);
+        ptp_put16(q + 7, g->x);
+        ptp_put16(q + 9, g->y);
+        q[11]     = (g->down ? 0x80 : 0) | g->slot;
+        q[12]     = pad_used[pad];
+        uint8_t n = 0;
+        for (uint8_t k = 0; k < last_report[33] && k < 5; k++) {
+            uint16_t x = ptp_get16(last_report + 3 + 6 * k);
+            if ((last_report[1 + 6 * k] & 2) && ((x >= surf_xoff + SVAL_PTP_PAD_STRIDE) == (pad == 1))) n++;
+        }
+        q[13] = n;
+    }
+}
+#endif
 
 void sval_ptp_grab_origin(uint8_t pad, uint16_t *x0, uint16_t *y0) {
     const grab_t *g = &grab[pad & 1];
