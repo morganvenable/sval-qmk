@@ -30,6 +30,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #    include "../azoteq/ptp_descriptor.h"
 #    include "../azoteq/multitouch.h"
 #    include "pad_follow.h"
+#    ifdef SVAL_EITHER_HAND
+#        include "side.h"
+#    endif
 #endif
 
 // in keymap.c:
@@ -457,6 +460,10 @@ static void pad_drive(report_mouse_t *left, report_mouse_t *right) {
         // Mac, in built-in gestures, or with the touchpad off, the pad is the
         // chip's mouse and the keys work on it as they always have.
         pad_driven[hand] = ours && sval_mt_suppress_hand(hand);
+#    ifdef SVAL_EITHER_HAND
+        // As the hand's own report (svalboard.c): nothing from a hand whose side is not sound.
+        if (!sval_side_row_allowed(hand ? MATRIX_ROWS / 2 : 0)) pad_driven[hand] = false;
+#    endif
         if (!pad_driven[hand]) continue;
         hands[hand]->x = dx;
         hands[hand]->y = dy;
