@@ -136,6 +136,13 @@ uint8_t  sval_ptp_grab_holders(void);
 // num/den 1/1 is off. While on and exactly one contact is down, it is reported
 // at its anchor plus its travel times num/den; ptp.c has the rules.
 void sval_ptp_set_scale(uint16_t num, uint16_t den);
+
+// --- the surface the OS sees (prototype, dev builds; svalboard.c at boot) ---
+// Large: three times the standard surface on each axis at the same counts per
+// mm, the real pads in its center. Set before USB starts; the descriptor is
+// chosen from it (usb_ptp.h, sval_ptp_report_descriptor).
+void sval_ptp_set_large_surface(bool large);
+bool sval_ptp_large_surface(void);
 bool     sval_ptp_grab_ready(uint8_t pad); // this pad's contact frames arrive here
 // The followed finger: its touch serial (never 0; a new one per finger), and
 // its position on the pad (x 0..SVAL_PTP_PAD_X-1, y 0..SVAL_PTP_PAD_Y-1, in the

@@ -112,7 +112,11 @@ static void well_formed(const uint8_t *r) {
             assert(r[1 + 6 * i + b] == 0);
     for (int i = 0; i < r[33]; i++) {
         assert((flags_of(r, i) & ~3) == 0 && id_of(r, i) < 16);
+#ifdef SVAL_TOUCH_DEV
+        assert(x_of(r, i) <= SVAL_PTP_LARGE_XMAX && y_of(r, i) <= SVAL_PTP_LARGE_YMAX);
+#else
         assert(x_of(r, i) <= SVAL_PTP_XMAX && y_of(r, i) <= SVAL_PTP_YMAX);
+#endif
         for (int j = 0; j < i; j++)
             assert(id_of(r, i) != id_of(r, j));
     }
@@ -1013,6 +1017,66 @@ static void test_scale(void) {
     puts("  scale: one contact scaled from its anchor; frozen offset on a second finger or the end; clamped to the surface");
 }
 
+#ifdef SVAL_TOUCH_DEV
+// The large surface (dev builds): the same descriptor but for the maxima, the
+// real pads in its center, scaling clamped to it, the grab and the host
+// app's contacts still on the pads' own coordinates.
+static void test_large_surface(void) {
+    static const uint8_t std_desc[] = {SVAL_PTP_REPORT_DESCRIPTOR};
+    static const uint8_t big_desc[] = {SVAL_PTP_REPORT_DESCRIPTOR_LARGE};
+    assert(sizeof(std_desc) == sizeof(big_desc));
+    unsigned diff = 0;
+    for (unsigned i = 0; i < sizeof(std_desc); i++) {
+        if (std_desc[i] == big_desc[i]) continue;
+        diff++;
+        assert(i >= 2 && (big_desc[i - 1] == 0x26 || big_desc[i - 1] == 0x46 || big_desc[i - 2] == 0x26 || big_desc[i - 2] == 0x46));
+    }
+    assert(diff > 0 && diff <= 5 * 4 * 2);
+    // Same counts per mm on both axes.
+    assert((uint32_t)(SVAL_PTP_LARGE_XMAX + 1) * SVAL_PTP_PXMAX == (uint32_t)(SVAL_PTP_XMAX + 1) * SVAL_PTP_LARGE_PXMAX);
+    assert((uint32_t)(SVAL_PTP_LARGE_YMAX + 1) * SVAL_PTP_PYMAX == (uint32_t)(SVAL_PTP_YMAX + 1) * SVAL_PTP_LARGE_PYMAX);
+
+    start("large");
+    sval_ptp_set_large_surface(true);
+    FEED(0, {0, 1, 100, 200});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == SVAL_PTP_LARGE_XOFF + 100 && y_of(last(), 0) == SVAL_PTP_LARGE_YOFF + 200);
+    uint8_t o[SVAL_PTP_CONTACTS_LEN];
+    sval_ptp_contacts(o, sizeof(o));
+    assert(o[3] == 1 && (ptp_get16(o + 5) & 0xFFF) == 100); // the host app: the pad's own coordinates
+    up(0);
+    run(5000);
+    new_reports();
+    // Boost x3 from the right pad's right edge: room to travel past the pads.
+    sval_ptp_set_scale(3, 1);
+    FEED(1, {0, 2, 1800, 900});
+    run(5000);
+    FEED(1, {0, 2, 2000, 1500});
+    run(5000);
+    new_reports();
+    assert(x_of(last(), 0) == SVAL_PTP_LARGE_XOFF + SVAL_PTP_PAD_STRIDE + 1800 + 600 && y_of(last(), 0) == SVAL_PTP_LARGE_YOFF + 900 + 1800);
+    // Frozen offset when it ends, in the OS's coordinates.
+    sval_ptp_set_scale(1, 1);
+    FEED(1, {0, 2, 2000, 1500});
+    run(5000);
+    FEED(1, {0, 2, 1000, 1500});
+    run(5000);
+    new_reports();
+    assert(x_of(last(), 0) == SVAL_PTP_LARGE_XOFF + SVAL_PTP_PAD_STRIDE + 1400);
+    up(1);
+    run(5000);
+    // The grab still follows the pad's own coordinates.
+    uint16_t x, y;
+    sval_ptp_set_grab(SVAL_PTP_GRAB_POINT, true);
+    FEED(0, {0, 3, 50, 60});
+    assert(sval_ptp_grab_finger(0, &x, &y) && x == 50 && y == 60);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_POINT, false);
+    up(0);
+    sval_ptp_set_large_surface(false);
+    puts("  large surface: maxima only, same counts per mm, pads centered; scaling clamps to it; grab and host contacts on pad coordinates");
+}
+#endif
+
 // Sval POINTING_CONTACTS (0x2F): every contact the computer has, back on its
 // own pad in that pad's counts.
 typedef struct {
@@ -1165,6 +1229,9 @@ int main(int argc, char **argv) {
     test_grab();
     test_grab_holders();
     test_scale();
+#ifdef SVAL_TOUCH_DEV
+    test_large_surface();
+#endif
     test_host_contacts();
     test_host_contacts_six();
     fresh("end");

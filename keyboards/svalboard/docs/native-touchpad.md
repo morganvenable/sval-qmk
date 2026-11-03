@@ -137,6 +137,17 @@ pad is the chip's mouse and the keys work on it as always.
   no snap back, and no lift and re-touch (which the OS could read as a tap).
   Every change takes effect from the next frame, anchored where the contact
   was last reported, so nothing jumps.
+- **Surface: Large.** The touchpad tells the OS its surface is three times the
+  standard one on each axis (13716 x 5376 counts, 288 x 120 mm) at the same
+  counts per mm, with the real pads, gap included, in its center, so pointer
+  speed and the OS's gesture distances stay the same and boost by scaling has
+  room to travel. This one is stored (two bytes after the touchpad mode's
+  record) and picks the descriptor at boot, so it applies after a restart
+  (action 5) or a replug. The host app's contacts (0x2F) stay on the pads'
+  own coordinates. The pad type is 2 (external buttons, not a clickpad), so
+  Windows has no corner or bottom-edge button zone to move; Microsoft's
+  device integration guide gives a minimum size (32 x 64 mm) and a
+  recommended one (about 65 x 105 mm), and no maximum.
 
 The grab has one holder bit per reason (`SVAL_PTP_GRAB_VS`, `_SCROLL`,
 `_POINT`; `sval_ptp_set_grab`), worked out again every pointing task from the
@@ -147,9 +158,14 @@ output scales them; a new finger starts where it lands. Velocity Scroll still
 has precedence while it is on.
 
 Selectors and test holds go over the dev command (raw HID 0xFC op 0x42):
-action 3 gets or sets the modes, action 4 holds their keys on a keyless board
-(`tools/multitouch/pad_hold.py`), and every reply carries the modes' block at
-bytes 56 to 63.
+action 3 gets or sets the modes and the surface ([8] 0 get, 1 set; [9]
+scroll, [10] sniper, [11] boost, [12] surface), action 4 holds their keys on a
+keyless board ([8] bit 0 scroll, 1 sniper /2, 2 boost x2; lapses 500 ms after
+the last repeat; `tools/multitouch/pad_hold.py`), action 5 restarts the board
+200 ms after its reply, and every reply carries the modes' block at bytes 56
+to 63: version 1, scroll, sniper, boost, surface stored, surface in force,
+supported (bit 0 scroll Takeover, 1 sniper and boost Takeover, 2 their
+Scaling, 3 the large surface), and the grab's holders.
 
 ## Builds
 

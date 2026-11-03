@@ -26,6 +26,42 @@
 #    include "usb_ptp.h"
 const uint8_t SvalPtpReport[SVAL_PTP_REPORT_DESCRIPTOR_SIZE] = {SVAL_PTP_REPORT_DESCRIPTOR};
 _Static_assert(sizeof((const uint8_t[]){SVAL_PTP_REPORT_DESCRIPTOR}) == SVAL_PTP_REPORT_DESCRIPTOR_SIZE, "usb_ptp.h: descriptor size");
+#    ifdef SVAL_TOUCH_DEV
+// The large surface (prototype): the same descriptor with larger maxima, the
+// same length, chosen once at boot (sval_ptp_set_large_surface).
+const uint8_t SvalPtpReportLarge[SVAL_PTP_REPORT_DESCRIPTOR_SIZE] = {SVAL_PTP_REPORT_DESCRIPTOR_LARGE};
+_Static_assert(sizeof((const uint8_t[]){SVAL_PTP_REPORT_DESCRIPTOR_LARGE}) == SVAL_PTP_REPORT_DESCRIPTOR_SIZE, "usb_ptp.h: large descriptor size");
+#    endif
+#endif
+
+// The surface the OS sees: the standard one, or (dev builds) the large one
+// with the real surface in its center. Set before USB starts, never after.
+static bool     surface_large;
+static uint16_t surf_xoff, surf_yoff, surf_xmax = SVAL_PTP_XMAX, surf_ymax = SVAL_PTP_YMAX;
+
+void sval_ptp_set_large_surface(bool large) {
+#ifdef SVAL_TOUCH_DEV
+    surface_large = large;
+    surf_xoff     = large ? SVAL_PTP_LARGE_XOFF : 0;
+    surf_yoff     = large ? SVAL_PTP_LARGE_YOFF : 0;
+    surf_xmax     = large ? SVAL_PTP_LARGE_XMAX : SVAL_PTP_XMAX;
+    surf_ymax     = large ? SVAL_PTP_LARGE_YMAX : SVAL_PTP_YMAX;
+#else
+    (void)large;
+#endif
+}
+
+bool sval_ptp_large_surface(void) {
+    return surface_large;
+}
+
+#ifndef SVAL_PTP_HOST_TEST
+const uint8_t *sval_ptp_report_descriptor(void) {
+#    ifdef SVAL_TOUCH_DEV
+    if (surface_large) return SvalPtpReportLarge;
+#    endif
+    return SvalPtpReport;
+}
 #endif
 
 #ifndef SVAL_PTP_HOST_TEST
@@ -797,17 +833,19 @@ static uint16_t clamp_to(int32_t v, int32_t max) {
     return v < 0 ? 0 : v > max ? (uint16_t)max : (uint16_t)v;
 }
 
+// Positions here are the OS's: the contact's real position plus the surface
+// offset (0, or the large surface's margin), clamped to the surface.
 static void scale_point(contact_t *c, uint16_t num, uint16_t den) {
-    int32_t px, py;
+    int32_t x = (int32_t)c->x + surf_xoff, y = (int32_t)c->y + surf_yoff, px, py;
     if (c->scaling) {
-        px = c->bx + ((int32_t)c->x - c->ax) * num / den;
-        py = c->by + ((int32_t)c->y - c->ay) * num / den;
+        px = c->bx + (x - c->ax) * num / den;
+        py = c->by + (y - c->ay) * num / den;
     } else {
-        px = (int32_t)c->x + c->ox;
-        py = (int32_t)c->y + c->oy;
+        px = x + c->ox;
+        py = y + c->oy;
     }
-    c->rx = clamp_to(px, SVAL_PTP_XMAX);
-    c->ry = clamp_to(py, SVAL_PTP_YMAX);
+    c->rx = clamp_to(px, surf_xmax);
+    c->ry = clamp_to(py, surf_ymax);
 }
 
 // Before each frame is built: every reported contact's position, then the
@@ -828,14 +866,14 @@ static void scale_update(void) {
         if (c->lift) continue; // its release goes where it was last reported
         if (c->scaling && (!on || live > 1)) {
             c->scaling = false;
-            c->ox      = (int16_t)((int32_t)c->rx - c->x);
-            c->oy      = (int16_t)((int32_t)c->ry - c->y);
+            c->ox      = (int16_t)((int32_t)c->rx - c->x - surf_xoff);
+            c->oy      = (int16_t)((int32_t)c->ry - c->y - surf_yoff);
         } else if (on && live == 1 && (c->scaling ? changed : (!c->seen || edge))) {
             // Start (it landed alone, or the factor came on with it alone),
             // or a new factor while scaling: anchor where it is reported now.
             c->scaling = true;
-            c->ax      = c->x;
-            c->ay      = c->y;
+            c->ax      = c->x + surf_xoff;
+            c->ay      = c->y + surf_yoff;
             c->bx      = c->rx;
             c->by      = c->ry;
         }
@@ -1260,7 +1298,9 @@ uint8_t sval_ptp_contacts(uint8_t *o, uint8_t length) {
     uint8_t taken = 0;
     for (uint8_t i = 0; i < n; i++) {
         const uint8_t *s = r + 1 + 6 * i;
-        if (put_contact(o + 4 + 4 * taken, (s[1] & 15) | ((s[0] & 2) ? 0x10 : 0) | ((s[0] & 1) ? 0x20 : 0), ptp_get16(s + 2), ptp_get16(s + 4))) taken++;
+        // On the standard surface's coordinates whatever the OS sees.
+        int32_t x = (int32_t)ptp_get16(s + 2) - surf_xoff, y = (int32_t)ptp_get16(s + 4) - surf_yoff;
+        if (put_contact(o + 4 + 4 * taken, (s[1] & 15) | ((s[0] & 2) ? 0x10 : 0) | ((s[0] & 1) ? 0x20 : 0), clamp_to(x, SVAL_PTP_XMAX), clamp_to(y, SVAL_PTP_YMAX))) taken++;
     }
     // Fingers down that the touchpad leaves out (more than SVAL_PTP_MAX_CONTACTS
     // at once), at their live positions, so a host app shows every finger.

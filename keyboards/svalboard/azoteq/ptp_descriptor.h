@@ -36,7 +36,7 @@
 #define SVAL_PTP_LE16(v) ((v)&0xFF), (((v) >> 8) & 0xFF)
 
 // 71 bytes per finger: Confidence, Tip, 6 pad bits, Contact ID, X, Y.
-#define SVAL_PTP_FINGER                                                            \
+#define SVAL_PTP_FINGER_SIZED(XM, PXM, YM, PYM)                                                        \
     0x05, 0x0D,                              /* Usage Page (Digitizers)         */ \
         0x09, 0x22,                          /* Usage (Finger)                  */ \
         0xA1, 0x02,                          /* Collection (Logical)            */ \
@@ -55,23 +55,23 @@
         0x65, 0x11,                          /*   Unit (SI Linear, cm)          */ \
         0x35, 0x00,                          /*   Physical min 0                */ \
         0x75, 0x10,                          /*   16 bits                       */ \
-        0x26, SVAL_PTP_LE16(SVAL_PTP_XMAX),  /*   Logical max XMAX              */ \
-        0x46, SVAL_PTP_LE16(SVAL_PTP_PXMAX), /*   Physical max                  */ \
+        0x26, SVAL_PTP_LE16(XM),  /*   Logical max X             */ \
+        0x46, SVAL_PTP_LE16(PXM), /*   Physical max X                */ \
         0x09, 0x30,                          /*   Usage (X)                     */ \
         0x81, 0x02,                          /*   Input                         */ \
-        0x26, SVAL_PTP_LE16(SVAL_PTP_YMAX),  /*   Logical max YMAX              */ \
-        0x46, SVAL_PTP_LE16(SVAL_PTP_PYMAX), /*   Physical max                  */ \
+        0x26, SVAL_PTP_LE16(YM),  /*   Logical max Y             */ \
+        0x46, SVAL_PTP_LE16(PYM), /*   Physical max Y                */ \
         0x09, 0x31,                          /*   Usage (Y)                     */ \
         0x81, 0x02,                          /*   Input                         */ \
         0x55, 0x00, 0x65, 0x00, 0x45, 0x00,  /*   reset exponent, unit, phys    */ \
         0xC0                                 /* End Collection                  */
 
-#define SVAL_PTP_REPORT_DESCRIPTOR                                                                                                             \
+#define SVAL_PTP_REPORT_DESCRIPTOR_SIZED(XM, PXM, YM, PYM)                                                                                                         \
     0x05, 0x0D,                                                                                          /* Usage Page (Digitizers)         */ \
         0x09, 0x05,                                                                                      /* Usage (Touch Pad)               */ \
         0xA1, 0x01,                                                                                      /* Collection (Application)        */ \
         0x85, SVAL_PTP_REPORT_ID_INPUT,                                                                  /*   Report ID 1 (input)           */ \
-        SVAL_PTP_FINGER, SVAL_PTP_FINGER, SVAL_PTP_FINGER, SVAL_PTP_FINGER, SVAL_PTP_FINGER, 0x05, 0x0D, /*   Usage Page (Digitizers)       */ \
+        SVAL_PTP_FINGER_SIZED(XM, PXM, YM, PYM), SVAL_PTP_FINGER_SIZED(XM, PXM, YM, PYM), SVAL_PTP_FINGER_SIZED(XM, PXM, YM, PYM), SVAL_PTP_FINGER_SIZED(XM, PXM, YM, PYM), SVAL_PTP_FINGER_SIZED(XM, PXM, YM, PYM), 0x05, 0x0D, /*   Usage Page (Digitizers)       */ \
         0x55, 0x0C,                                                                                      /*   Unit Exponent -4              */ \
         0x66, 0x01, 0x10,                                                                                /*   Unit (SI Linear, seconds)     */ \
         0x47, 0xFF, 0xFF, 0x00, 0x00,                                                                    /*   Physical max 65535            */ \
@@ -128,3 +128,22 @@
         0x95, 0x06, 0xB1, 0x03,                                                                          /*     6 bits padding              */ \
         0xC0,                                                                                            /*   End Collection                */ \
         0xC0                                                                                             /* End Collection (Configuration)  */
+
+// The standard surface: both pads and the gap.
+#define SVAL_PTP_FINGER SVAL_PTP_FINGER_SIZED(SVAL_PTP_XMAX, SVAL_PTP_PXMAX, SVAL_PTP_YMAX, SVAL_PTP_PYMAX)
+#define SVAL_PTP_REPORT_DESCRIPTOR SVAL_PTP_REPORT_DESCRIPTOR_SIZED(SVAL_PTP_XMAX, SVAL_PTP_PXMAX, SVAL_PTP_YMAX, SVAL_PTP_PYMAX)
+
+// The large surface (prototype, dev builds): three times the standard one on
+// each axis at the same counts per mm, so pointer speed and the OS's gesture
+// distances are unchanged; the real surface sits in its center. Room for
+// boost by position scaling to travel.
+#define SVAL_PTP_LARGE_XOFF (SVAL_PTP_XMAX + 1)
+#define SVAL_PTP_LARGE_YOFF (SVAL_PTP_YMAX + 1)
+#define SVAL_PTP_LARGE_XMAX (3 * (SVAL_PTP_XMAX + 1) - 1)
+#define SVAL_PTP_LARGE_YMAX (3 * (SVAL_PTP_YMAX + 1) - 1)
+#define SVAL_PTP_LARGE_PXMAX (3 * SVAL_PTP_PXMAX)
+#define SVAL_PTP_LARGE_PYMAX (3 * SVAL_PTP_PYMAX)
+#if SVAL_PTP_LARGE_XMAX > 32767 || SVAL_PTP_LARGE_PXMAX > 32767
+#    error "the large surface must fit a signed 16-bit logical and physical maximum"
+#endif
+#define SVAL_PTP_REPORT_DESCRIPTOR_LARGE SVAL_PTP_REPORT_DESCRIPTOR_SIZED(SVAL_PTP_LARGE_XMAX, SVAL_PTP_LARGE_PXMAX, SVAL_PTP_LARGE_YMAX, SVAL_PTP_LARGE_PYMAX)

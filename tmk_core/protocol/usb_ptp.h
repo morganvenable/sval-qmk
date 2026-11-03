@@ -13,6 +13,9 @@
 // defined in ptp.c. Its length is fixed: ptp.c checks it.
 #    define SVAL_PTP_REPORT_DESCRIPTOR_SIZE 523
 extern const uint8_t SvalPtpReport[SVAL_PTP_REPORT_DESCRIPTOR_SIZE];
+// The descriptor in force: SvalPtpReport, or a dev build's large surface,
+// chosen at boot. Always SVAL_PTP_REPORT_DESCRIPTOR_SIZE bytes.
+const uint8_t *sval_ptp_report_descriptor(void);
 
 // report_type 1 input, 3 feature. Returns the reply length, or 0 to stall.
 uint16_t sval_ptp_get_report(uint8_t report_type, uint8_t report_id, const uint8_t **data);

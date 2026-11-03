@@ -158,6 +158,9 @@ static sval_pad_follow_t pad_follow[2];
 // boost hold. Lets go 500 ms after the last repeat.
 static uint8_t  pad_dev_keys;
 static uint32_t pad_dev_at;
+static uint32_t pad_reboot_at; // action 5: restart at this time (0: none)
+uint8_t         sval_proto_surface_stored(void); // svalboard.c
+void            sval_proto_surface_store(uint8_t large);
 #        define PAD_DEV_SCROLL (pad_dev_keys & 1)
 #        define PAD_DEV_SNIPER ((pad_dev_keys >> 1) & 1)
 #        define PAD_DEV_BOOST ((pad_dev_keys >> 2) & 1)
@@ -425,6 +428,7 @@ static void pad_dev_keys_set(uint8_t keys) {
 
 static void pad_modes_sync(void) {
 #    ifdef SVAL_TOUCH_DEV
+    if (pad_reboot_at && timer_elapsed32(pad_reboot_at) > 200) soft_reset_keyboard();
     if (pad_dev_keys && timer_elapsed32(pad_dev_at) > 500) pad_dev_keys_set(0);
 #    endif
     bool scroll_key = (scroll_hold || PAD_DEV_SCROLL) != scroll_toggle;
@@ -469,12 +473,17 @@ uint8_t sval_pad_proto_command(uint8_t action, const uint8_t *a) {
         pad_dev_keys_set(a[0]);
         return 0;
     }
+    if (action == 5) { // restart, once the reply is out: a stored surface applies
+        pad_reboot_at = timer_read32() | 1;
+        return 0;
+    }
     if (action != 3) return 2;
     if (a[0] == 0) return 0;
-    if (a[0] != 1 || a[1] > SVAL_PAD_MODE_TAKEOVER || a[2] > SVAL_PAD_MODE_SCALING || a[3] > SVAL_PAD_MODE_SCALING || a[4] != 0) return 2;
+    if (a[0] != 1 || a[1] > SVAL_PAD_MODE_TAKEOVER || a[2] > SVAL_PAD_MODE_SCALING || a[3] > SVAL_PAD_MODE_SCALING || a[4] > 1) return 2;
     pad_mode_scroll = a[1];
     pad_mode_sniper = a[2];
     pad_mode_boost  = a[3];
+    sval_proto_surface_store(a[4]); // applies at the next boot
     return 0;
 }
 
@@ -486,9 +495,9 @@ void sval_pad_proto_block(uint8_t *o) {
     o[1] = pad_mode_scroll;
     o[2] = pad_mode_sniper;
     o[3] = pad_mode_boost;
-    o[4] = 0;
-    o[5] = 0;
-    o[6] = 1 | 2 | 4;
+    o[4] = sval_proto_surface_stored();
+    o[5] = sval_ptp_large_surface() ? 1 : 0;
+    o[6] = 1 | 2 | 4 | 8;
     o[7] = sval_ptp_grab_holders();
 }
 #    endif

@@ -18,6 +18,10 @@ export ASAN_OPTIONS=detect_leaks=0
 # The unifier, feature reports and frame builder (ptp.c).
 "${cc[@]}" $t/test_ptp.c -o "$work/test_ptp"
 "$work/test_ptp" "$work/trace.txt"
+# Again with the dev builds' prototype (the large surface).
+"${cc[@]}" -DSVAL_TOUCH_DEV $t/test_ptp.c -o "$work/test_ptp_dev"
+"$work/test_ptp_dev" "$work/trace-dev.txt" > "$work/dev.txt" || { cat "$work/dev.txt"; exit 1; }
+grep "large surface" "$work/dev.txt"
 
 # The contact path and the split link (multitouch.c with ptp.c).
 "${cc[@]}" -Wno-unused-function $t/test_multitouch.c -o "$work/test_multitouch"

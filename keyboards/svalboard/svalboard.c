@@ -341,6 +341,38 @@ void svalboard_eeprom_set_valid(void) {}
 void write_eeprom_kb(void) {}
 #endif
 
+#ifdef SVAL_TOUCH_DEV
+// The touchpad surface the OS sees (prototype, dev builds; azoteq/ptp.c): its
+// own two bytes after the touchpad mode's record, a value and its complement,
+// read once at boot before USB starts. Anything else reads as standard.
+#    define SVALBOARD_PROTO_SURFACE_OFFSET (SVALBOARD_PAD_MODE_OFFSET + SVAL_PAD_MODE_RECORD_BYTES)
+_Static_assert(SVALBOARD_PROTO_SURFACE_OFFSET + 2 <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "the surface record fits the VIA custom config");
+static uint8_t proto_surface_stored = 0;
+
+uint8_t sval_proto_surface_stored(void) {
+    return proto_surface_stored;
+}
+
+void sval_proto_surface_store(uint8_t v) {
+    v = v ? 1 : 0;
+    if (v == proto_surface_stored) return;
+    proto_surface_stored = v;
+#    if VIA_ENABLE
+    uint8_t rec[2] = {(uint8_t)(0xA0 | v), (uint8_t)~(0xA0 | v)};
+    via_update_custom_config(rec, SVALBOARD_PROTO_SURFACE_OFFSET, 2);
+#    endif
+}
+
+static void proto_surface_load(void) {
+#    if VIA_ENABLE
+    uint8_t rec[2];
+    via_read_custom_config(rec, SVALBOARD_PROTO_SURFACE_OFFSET, 2);
+    proto_surface_stored = ((rec[0] & 0xFE) == 0xA0 && (uint8_t)~rec[0] == rec[1]) ? (rec[0] & 1) : 0;
+#    endif
+    sval_ptp_set_large_surface(proto_surface_stored);
+}
+#endif
+
 #define HSV(c) (struct layer_hsv){(c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF}
 
 // Factory defaults for every saved keyboard setting, in RAM only.
@@ -416,6 +448,9 @@ void keyboard_pre_init_kb(void) {
     sval_side_init(); // the side, before split_pre_init() asks and before the build reset formats the settings
 #endif
     build_reset_pre_init(); // a different firmware build: reset stored settings
+#ifdef SVAL_TOUCH_DEV
+    proto_surface_load(); // before USB starts: it picks the touchpad descriptor
+#endif
     keyboard_pre_init_user();
 }
 

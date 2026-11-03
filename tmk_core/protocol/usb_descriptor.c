@@ -1579,7 +1579,7 @@ uint16_t get_usb_descriptor(const uint16_t wValue, const uint16_t wIndex, const 
 #endif
 #ifdef SVAL_NATIVE_PTP
                 case PTP_INTERFACE:
-                    Address = &SvalPtpReport;
+                    Address = sval_ptp_report_descriptor();
                     Size    = sizeof(SvalPtpReport);
                     break;
 #endif
