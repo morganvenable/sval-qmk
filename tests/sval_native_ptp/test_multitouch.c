@@ -29,6 +29,15 @@ void       velocity_scroll_dev_hold(bool on) {
     velocity_holds++;
     velocity_on = on;
 }
+static uint8_t proto_action, proto_arg;
+uint8_t        sval_pad_proto_command(uint8_t action, const uint8_t *a) {
+    proto_action = action;
+    proto_arg    = a[0];
+    return action == 3 || action == 4 ? 0 : 2;
+}
+void sval_pad_proto_block(uint8_t *o) {
+    for (int i = 0; i < 8; i++) o[i] = (uint8_t)(0xB0 + i);
+}
 
 // ------------------------------------------------------------- helpers
 
@@ -405,7 +414,18 @@ static void test_owner(void) {
     d[8] = 0;
     sval_mt_command(d, 64);
     assert(velocity_holds == 2 && !velocity_on && d[8] == SVAL_TOUCH_OWNER_NATIVE);
-    puts("  owner command: mouse and native only; status v2 reports both pads; Velocity Scroll dev hold");
+    memset(d, 0, 64);
+    d[6] = 0x42;
+    d[7] = 3; // prototype pad modes: routed to keymap_support.c, its block in the reply
+    d[8] = 1;
+    sval_mt_command(d, 64);
+    assert(d[6] == 0xC2 && d[7] == 0 && (d[9] & 16) && proto_action == 3 && proto_arg == 1 && d[56] == 0xB0 && d[63] == 0xB7);
+    memset(d, 0, 64);
+    d[6] = 0x42;
+    d[7] = 9; // unknown action: refused, the owner unchanged
+    sval_mt_command(d, 64);
+    assert(d[7] == 2 && d[8] == SVAL_TOUCH_OWNER_NATIVE);
+    puts("  owner command: mouse and native only; status v2 reports both pads; Velocity Scroll dev hold; pad modes routed");
 }
 
 // ------------------------------------------------ a pinch over a flaky link

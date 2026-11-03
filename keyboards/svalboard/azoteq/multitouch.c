@@ -439,10 +439,18 @@ static void poll_remote(void) {
 // data[7] 2: hold Velocity Scroll (data[8] 1) or let it go (0) with no key,
 // for keyless test boards; a hold ends unless repeated within 500 ms
 // (tools/multitouch/velocity_hold.py).
-void velocity_scroll_dev_hold(bool on); // keymaps/keymap_support.c
+// data[7] 3: the prototype pad modes, get (data[8] 0) or set (1, then
+// data[9..12]); data[7] 4: the mode keys held with no key (data[8] bits), for
+// keyless test boards (tools/multitouch/pad_hold.py). Every reply carries the
+// modes' block at data[56..63] (sval_pad_proto_block, keymap_support.c).
+void    velocity_scroll_dev_hold(bool on);                        // keymaps/keymap_support.c
+uint8_t sval_pad_proto_command(uint8_t action, const uint8_t *a); // keymaps/keymap_support.c
+void    sval_pad_proto_block(uint8_t *o);                         // keymaps/keymap_support.c
 void sval_mt_command(uint8_t *data, uint8_t length) {
     uint8_t action = data[7], wanted = data[8], status = 0;
-    if (action == 2) {
+    if (action >= 3) {
+        status = sval_pad_proto_command(action, data + 8);
+    } else if (action == 2) {
         velocity_scroll_dev_hold(wanted != 0);
     } else if (action == 1 && wanted != touch_owner) {
         if (wanted != SVAL_TOUCH_OWNER_MOUSE && wanted != SVAL_TOUCH_OWNER_NATIVE) {
@@ -451,14 +459,12 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
             sval_ptp_set_native(wanted == SVAL_TOUCH_OWNER_NATIVE);
             touch_owner = wanted;
         }
-    } else if (action > 1) {
-        status = 2;
     }
     memset(data + 6, 0, length - 6);
     data[6] = 0xC2;
     data[7] = status;
     data[8] = touch_owner;
-    data[9] = 1 | 2 | 4 | 8; // bit 0 native touchpad built, bit 1 status v2 (pads, link), bit 2 v3 (lost fingers), bit 3 action 2
+    data[9] = 1 | 2 | 4 | 8 | 16; // bit 0 native touchpad built, bit 1 status v2 (pads, link), bit 2 v3 (lost fingers), bit 3 action 2, bit 4 actions 3 and 4
     sval_ptp_status(data + 10);
     uint8_t *o = data + 10 + SVAL_PTP_STATUS_SIZE;
     put32(o, samples);
@@ -470,6 +476,7 @@ void sval_mt_command(uint8_t *data, uint8_t length) {
     o[18] = (remote_hints ? 1 : 0) | (remote_empty ? 2 : 0) | (remote_seen ? 4 : 0) | (remote_lost ? 8 : 0);
     o[19] = sval_ptp_lost_down(0); // fingers lifted because their pad's samples stopped
     o[20] = sval_ptp_lost_down(1);
+    sval_pad_proto_block(data + 56);
 }
 #endif
 

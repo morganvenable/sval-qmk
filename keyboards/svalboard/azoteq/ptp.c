@@ -382,6 +382,7 @@ typedef struct {
     uint16_t x, y;    // its position on this pad, in the touchpad's orientation
 } grab_t;
 static bool     grabbed;
+static uint8_t  grab_holders; // SVAL_PTP_GRAB_*: who holds the pads
 static grab_t   grab[2];
 static uint16_t grab_serial;
 
@@ -1017,16 +1018,24 @@ void sval_ptp_set_paused(bool p) {
     paused = p;
 }
 
-// Velocity Scroll holds the pads: no reports while grabbed, so the operating
-// system sees every finger lift (start_release), and the pads arm again
-// afterwards on an all-up sample, so a finger still down when the grab ends
-// never moves the pointer.
-void sval_ptp_set_grab(bool g) {
-    if (g && !grabbed) {
+// Velocity Scroll and the firmware pointer modes hold the pads: no reports
+// while grabbed, so the operating system sees every finger lift
+// (start_release), and the pads arm again afterwards on an all-up sample, so a
+// finger still down when the grab ends never moves the pointer. Each holder
+// has its own bit: the pads go back only when the last one lets go, and the
+// finger followed stays the same from one holder to the next.
+void sval_ptp_set_grab(uint8_t holder, bool g) {
+    uint8_t h = g ? (uint8_t)(grab_holders | holder) : (uint8_t)(grab_holders & ~holder);
+    if (h && !grabbed) {
         grab_reset(0);
         grab_reset(1);
     }
-    grabbed = g;
+    grab_holders = h;
+    grabbed      = h != 0;
+}
+
+uint8_t sval_ptp_grab_holders(void) {
+    return grab_holders;
 }
 
 bool sval_ptp_grab_ready(uint8_t pad) {
@@ -1260,8 +1269,9 @@ void sval_ptp_test_reset(void) {
     pad_used[0] = pad_used[1] = 0;
     arrival                   = 0;
     native = paused = mode3 = output = hold = release_pending = dirty = ever_sent = scan_started = busy_streak = false;
-    grabbed     = false;
-    grab_serial = 0;
+    grabbed      = false;
+    grab_holders = 0;
+    grab_serial  = 0;
     grab_reset(0);
     grab_reset(1);
     release_at = last_sent = scan_clock = scan_rem = frames_sent = send_busy = busy_since = 0;

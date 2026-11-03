@@ -28,6 +28,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifdef SVAL_NATIVE_PTP
 #    include "../azoteq/ptp.h"
 #    include "../azoteq/ptp_descriptor.h"
+#    include "../azoteq/multitouch.h"
+#    include "pad_follow.h"
 #endif
 
 // in keymap.c:
@@ -134,6 +136,40 @@ bool boost_toggle_5 = false;
 
 static bool scroll_hold    = false,
             scroll_toggle  = false;
+
+#ifdef SVAL_NATIVE_PTP
+// The pad pointer modes (prototype, RAM only, Off at boot: today's behavior).
+// While the OS owns a pad (native touchpad, Input Mode 3), Takeover has the
+// firmware take it from the OS, as Velocity Scroll does, whenever the mode's
+// keys are on: one finger then drives the firmware's own scroll or pointer,
+// with the settings a trackball hand gets. Off leaves the pad to the OS.
+enum { SVAL_PAD_MODE_OFF, SVAL_PAD_MODE_TAKEOVER, SVAL_PAD_MODE_SCALING };
+static uint8_t pad_mode_scroll = SVAL_PAD_MODE_OFF;
+static bool    pad_driven[2]; // this report, the hand's motion is its grabbed finger's
+static sval_pad_follow_t pad_follow[2];
+#    ifdef SVAL_TOUCH_DEV
+// Raw HID 0xFC op 0x42 action 4 (multitouch.c): the keys held with no key, for
+// keyless test boards. Bit 0 scroll hold. Lets go 500 ms after the last repeat.
+static uint8_t  pad_dev_keys;
+static uint32_t pad_dev_at;
+#        define PAD_DEV_SCROLL (pad_dev_keys & 1)
+#    endif
+#endif
+#ifndef PAD_DEV_SCROLL
+#    define PAD_DEV_SCROLL 0
+#endif
+
+// A hand's motion is scroll: its saved scroll setting, flipped by the hold
+// key, flipped by the toggle. A pad driven from its grabbed finger has no
+// saved setting in force (the OS owned it), so only the keys count.
+static bool hand_scrolling(uint8_t hand) {
+    bool held = scroll_hold || PAD_DEV_SCROLL;
+#ifdef SVAL_NATIVE_PTP
+    if (pad_driven[hand & 1]) return held != scroll_toggle;
+#endif
+    bool saved = hand ? global_saved_values.right_scroll : global_saved_values.left_scroll;
+    return (saved != held) != scroll_toggle;
+}
 
 
 #define AXIS_LOCK_BREAKAWAY_THRESHOLD 18750
@@ -300,7 +336,7 @@ static void velocity_scroll_update(void) {
         m_scroll_accumulator_h = m_scroll_accumulator_v = 0;
     }
 #    ifdef SVAL_NATIVE_PTP
-    sval_ptp_set_grab(change > 0);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_VS, change > 0);
 #    endif
 }
 
@@ -357,9 +393,83 @@ static report_mouse_t velocity_scroll_report(report_mouse_t left, report_mouse_t
     return pointing_device_task_user(out);
 }
 
+#ifdef SVAL_NATIVE_PTP
+// Who holds the pads, from the modes and the keys, every pointing task, so a
+// key, a toggle or a mode change takes effect at once, and a holder never
+// outlives its reason. Releasing is ptp.c's: reports come back on an all-up
+// sample, so a finger still down never moves the OS pointer.
+static void pad_modes_sync(void) {
+#    ifdef SVAL_TOUCH_DEV
+    if (pad_dev_keys && timer_elapsed32(pad_dev_at) > 500) pad_dev_keys = 0;
+#    endif
+    bool scroll_key = (scroll_hold || PAD_DEV_SCROLL) != scroll_toggle;
+    sval_ptp_set_grab(SVAL_PTP_GRAB_SCROLL, pad_mode_scroll == SVAL_PAD_MODE_TAKEOVER && scroll_key);
+}
+
+// A pad the firmware holds for a pointer mode, while the OS would otherwise
+// own it: its followed finger becomes the hand's relative motion, at the
+// hand's DPI, before sniper, boost and scroll, exactly where a trackball's
+// counts enter. The finger is tracked whenever it is followed (Velocity
+// Scroll too), so a holder that takes over later starts without a jump.
+static void pad_drive(report_mouse_t *left, report_mouse_t *right) {
+    report_mouse_t *hands[2] = {left, right};
+    const uint8_t   ours     = sval_ptp_grab_holders() & (SVAL_PTP_GRAB_SCROLL | SVAL_PTP_GRAB_POINT);
+    for (uint8_t hand = 0; hand < 2; hand++) {
+        uint16_t x = 0, y = 0, touch = sval_ptp_grab_finger(hand, &x, &y);
+        int16_t  dx, dy;
+        int16_t  dpi = hand ? get_right_dpi() : get_left_dpi();
+        sval_pad_follow(&pad_follow[hand], touch, x, y, dpi > 0 ? (uint16_t)dpi : 0, &dx, &dy);
+        // Only a hand the OS would own (its pad mouse is suppressed): on a
+        // Mac, in built-in gestures, or with the touchpad off, the pad is the
+        // chip's mouse and the keys work on it as they always have.
+        pad_driven[hand] = ours && sval_mt_suppress_hand(hand);
+        if (!pad_driven[hand]) continue;
+        hands[hand]->x = dx;
+        hands[hand]->y = dy;
+    }
+}
+
+#    ifdef SVAL_TOUCH_DEV
+// Raw HID 0xFC op 0x42 (multitouch.c), prototype pad modes. Action 3: [0]
+// 0 get, 1 set; [1] scroll, [2] sniper, [3] boost, [4] surface. Action 4:
+// [0] the keys held (bit 0 scroll). Returns the status: 0 ok, 2 refused (an
+// unknown action or a value out of range; nothing changes).
+uint8_t sval_pad_proto_command(uint8_t action, const uint8_t *a) {
+    if (action == 4) {
+        pad_dev_keys = a[0] & 1;
+        pad_dev_at   = timer_read32();
+        return 0;
+    }
+    if (action != 3) return 2;
+    if (a[0] == 0) return 0;
+    if (a[0] != 1 || a[1] > SVAL_PAD_MODE_TAKEOVER || a[2] != 0 || a[3] != 0 || a[4] != 0) return 2;
+    pad_mode_scroll = a[1];
+    return 0;
+}
+
+// The reply block (8 bytes): version 1, scroll, sniper, boost, surface stored,
+// surface in force, supported (bit 0 scroll Takeover, 1 sniper and boost
+// Takeover, 2 their Scaling, 3 the large surface), the grab's holders.
+void sval_pad_proto_block(uint8_t *o) {
+    o[0] = 1;
+    o[1] = pad_mode_scroll;
+    o[2] = 0;
+    o[3] = 0;
+    o[4] = 0;
+    o[5] = 0;
+    o[6] = 1;
+    o[7] = sval_ptp_grab_holders();
+}
+#    endif
+#endif
+
 report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, report_mouse_t reportMouse2) {
     report_mouse_t ret_mouse;
 
+#ifdef SVAL_NATIVE_PTP
+    pad_modes_sync();
+    pad_drive(&reportMouse1, &reportMouse2);
+#endif
     if (vs.active) return velocity_scroll_report(reportMouse1, reportMouse2);
 
     if (any_sniper_active()) {
@@ -395,8 +505,8 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
         return pointing_device_combine_reports(reportMouse1, reportMouse2);
 
     // Track scroll input BEFORE division (h/v after division may be 0 due to accumulation)
-    bool left_scrolling = (global_saved_values.left_scroll != scroll_hold) != scroll_toggle;
-    bool right_scrolling = (global_saved_values.right_scroll != scroll_hold) != scroll_toggle;
+    bool left_scrolling = hand_scrolling(0);
+    bool right_scrolling = hand_scrolling(1);
     bool has_scroll_input = (left_scrolling && (reportMouse1.x != 0 || reportMouse1.y != 0)) ||
                             (right_scrolling && (reportMouse2.x != 0 || reportMouse2.y != 0));
 
@@ -500,8 +610,8 @@ void sval_pointing_modes(sval_pointing_modes_t *m) {
     if (global_saved_values.natural_scroll) m->global_bits |= SVAL_MOTION_NATURAL_SCROLL;
     if (scroll_hold || scroll_toggle) m->global_bits |= SVAL_MOTION_SCROLL_KEY;
     m->axis_state      = axis_lock ? (uint8_t)axis_scroll_mode : 0; // FREE 0, LOCKED_V 1, LOCKED_H 2
-    m->left_scroll     = (global_saved_values.left_scroll != scroll_hold) != scroll_toggle;
-    m->right_scroll    = (global_saved_values.right_scroll != scroll_hold) != scroll_toggle;
+    m->left_scroll     = hand_scrolling(0);
+    m->right_scroll    = hand_scrolling(1);
     m->left_automouse  = global_saved_values.left_automouse;
     m->right_automouse = global_saved_values.right_automouse;
     // Velocity Scroll: its state, and the curves so a host can draw them.

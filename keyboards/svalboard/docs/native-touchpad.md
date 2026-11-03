@@ -101,6 +101,34 @@ finger that lands later is, so one resting on a pad never takes over. When
 it turns off, the pads arm again on an all-up sample, so a finger still
 down never moves the pointer.
 
+### Pointer modes on a pad (prototype, dev builds)
+
+Dev builds (`SVAL_TOUCH_DEV`) have selectors, held in RAM and Off at boot,
+that let the firmware's pointer keys work on a pad the OS owns. They change
+nothing on a Mac, with built-in gestures, or with the touchpad off: there the
+pad is the chip's mouse and the keys work on it as always.
+
+- **Scroll toggle: Takeover.** While the scroll toggle or hold key has a pad
+  hand scrolling (`SV_SCROLL_TOGGLE`, `SV_SCROLL_HOLD`; the hold key flips
+  the toggle, as on a trackball), the firmware takes the pads with the same
+  grab as Velocity Scroll and turns one finger's motion into the firmware's
+  scroll, at the hand's DPI, with the scroll divisor, natural scroll and axis
+  lock a trackball hand gets. The hand's saved scroll setting does not apply
+  to a pad (the OS owned it); only the keys do.
+
+The grab has one holder bit per reason (`SVAL_PTP_GRAB_VS`, `_SCROLL`,
+`_POINT`; `sval_ptp_set_grab`), worked out again every pointing task from the
+modes and the keys, so the pads go back only when the last reason ends, and
+the finger followed stays the same from one holder to the next.
+`pad_follow.c` turns the followed finger into counts, as the pad's own mouse
+output scales them; a new finger starts where it lands. Velocity Scroll still
+has precedence while it is on.
+
+Selectors and test holds go over the dev command (raw HID 0xFC op 0x42):
+action 3 gets or sets the modes, action 4 holds their keys on a keyless board
+(`tools/multitouch/pad_hold.py`), and every reply carries the modes' block at
+bytes 56 to 63.
+
 ## Builds
 
 | Flag | Where | Effect |

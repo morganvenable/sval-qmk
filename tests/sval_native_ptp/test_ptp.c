@@ -843,7 +843,7 @@ static void test_grab(void) {
     new_reports();
     assert(sval_ptp_grab_ready(0) && sval_ptp_grab_ready(1));
     assert(sval_ptp_grab_finger(0, &x, &y) == 0); // not grabbed
-    sval_ptp_set_grab(true);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_VS, true);
     run(5000);
     assert(new_reports() == 1 && flags_of(last(), 0) == 1 && sval_ptp_suppress_mouse()); // the OS sees a lift
     FEED(0, {0, 1, 110, 205});                                                           // the finger already down is followed at once
@@ -865,7 +865,7 @@ static void test_grab(void) {
     assert(c && c != a && c != b && x == 700);
     flagged(0, 0x02); // palm: that finger is done
     assert(sval_ptp_grab_finger(0, &x, &y) == 0);
-    sval_ptp_set_grab(false);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_VS, false);
     FEED(0, {2, 3, 720, 700});
     run(5000);
     assert(new_reports() == 0 && sval_ptp_grab_finger(0, &x, &y) == 0); // a finger down at release never moves the pointer
@@ -876,6 +876,49 @@ static void test_grab(void) {
     run(5000);
     assert(new_reports() == 1 && x_of(last(), 0) == 50); // reports again after all-up
     puts("  grab: OS sees the lift, then nothing; one finger per pad followed; resting fingers never take over");
+}
+
+// Several holders (Velocity Scroll, scroll Takeover, pointer Takeover): the
+// pads go back only when the last lets go, and the followed finger is the
+// same from one holder to the next.
+static void test_grab_holders(void) {
+    start("grab-holders");
+    uint16_t x, y;
+    sval_ptp_set_grab(SVAL_PTP_GRAB_SCROLL, true);
+    run(5000);
+    FEED(0, {0, 1, 100, 200});
+    run(5000);
+    uint16_t a = sval_ptp_grab_finger(0, &x, &y);
+    assert(a && x == 100 && new_reports() == 0);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_VS, true); // a second holder: the same finger
+    FEED(0, {0, 1, 120, 200});
+    assert(sval_ptp_grab_finger(0, &x, &y) == a && x == 120);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_SCROLL, false); // one lets go: still grabbed
+    run(5000);
+    assert(new_reports() == 0 && sval_ptp_grab_holders() == SVAL_PTP_GRAB_VS);
+    FEED(0, {0, 1, 130, 200});
+    assert(sval_ptp_grab_finger(0, &x, &y) == a && x == 130);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_POINT, false); // a holder that never held: no change
+    assert(sval_ptp_grab_holders() == SVAL_PTP_GRAB_VS);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_VS, false);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_VS, false); // twice is harmless
+    assert(sval_ptp_grab_holders() == 0);
+    FEED(0, {0, 1, 140, 200});
+    run(5000);
+    assert(new_reports() == 0 && sval_ptp_grab_finger(0, &x, &y) == 0); // a finger down at release never moves the pointer
+    up(0);
+    up(1);
+    run(5000);
+    FEED(0, {0, 2, 50, 50});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == 50);
+    // Grabbed again while that finger is down: it is followed at once, as a new touch.
+    sval_ptp_set_grab(SVAL_PTP_GRAB_POINT, true);
+    FEED(0, {0, 2, 60, 50});
+    uint16_t b = sval_ptp_grab_finger(0, &x, &y);
+    assert(b && b != a && x == 60);
+    sval_ptp_set_grab(SVAL_PTP_GRAB_POINT, false);
+    puts("  grab holders: the last holder releases; the same finger across holders");
 }
 
 // Sval POINTING_CONTACTS (0x2F): every contact the computer has, back on its
@@ -1028,6 +1071,7 @@ int main(int argc, char **argv) {
     test_host_silent();
     test_paused();
     test_grab();
+    test_grab_holders();
     test_host_contacts();
     test_host_contacts_six();
     fresh("end");
