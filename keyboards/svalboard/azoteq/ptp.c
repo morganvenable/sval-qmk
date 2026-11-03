@@ -338,6 +338,12 @@ typedef struct {
     uint16_t x, y;
     uint16_t sx, sy; // the position last sent with Tip = 1: a release goes there
     uint32_t order;
+    // Position scaling (sval_ptp_set_scale): the position reported, rx/ry, is
+    // the anchor bx/by plus the travel since ax/ay times the factor while
+    // scaling, and x/y plus a frozen offset ox/oy after.
+    bool     scaling, seen;
+    uint16_t rx, ry, ax, ay, bx, by;
+    int16_t  ox, oy;
 } contact_t;
 // Worst case: 5 reported contacts lifting while the endpoint is busy, 5 new
 // candidates waiting for their slots, and every other chip slot of both pads.
@@ -771,6 +777,74 @@ static void admit(void) {
     }
 }
 
+// ------------------------------------------------------- position scaling
+// Sniper and boost by scaling (keymaps/keymap_support.c): the OS keeps the
+// pads, and while exactly one contact is down it is reported at its anchor
+// plus its travel since then times num/den, clamped to the whole surface.
+// The anchor is where it was when scaling began: when the factor turned on
+// with it the only contact down, or where it landed while the factor was on.
+// When the factor ends or another finger lands, its offset from the real
+// position is frozen until it lifts: no snap back, no lift and re-touch.
+static uint16_t scale_num = 1, scale_den = 1;     // wanted
+static uint16_t applied_num = 1, applied_den = 1; // in force in the last frame
+
+void sval_ptp_set_scale(uint16_t num, uint16_t den) {
+    scale_num = num ? num : 1;
+    scale_den = den ? den : 1;
+}
+
+static uint16_t clamp_to(int32_t v, int32_t max) {
+    return v < 0 ? 0 : v > max ? (uint16_t)max : (uint16_t)v;
+}
+
+static void scale_point(contact_t *c, uint16_t num, uint16_t den) {
+    int32_t px, py;
+    if (c->scaling) {
+        px = c->bx + ((int32_t)c->x - c->ax) * num / den;
+        py = c->by + ((int32_t)c->y - c->ay) * num / den;
+    } else {
+        px = (int32_t)c->x + c->ox;
+        py = (int32_t)c->y + c->oy;
+    }
+    c->rx = clamp_to(px, SVAL_PTP_XMAX);
+    c->ry = clamp_to(py, SVAL_PTP_YMAX);
+}
+
+// Before each frame is built: every reported contact's position, then the
+// transitions. Each transition anchors at the position just reported, so
+// nothing jumps.
+static void scale_update(void) {
+    uint8_t live = 0;
+    for (uint8_t i = 0; i < POOL; i++)
+        if ((pool[i].state == C_ACTIVE || pool[i].state == C_CANDIDATE) && !pool[i].lift) live++;
+    bool on      = scale_num != scale_den;
+    bool was_on  = applied_num != applied_den;
+    bool edge    = on && !was_on;
+    bool changed = on && was_on && (scale_num != applied_num || scale_den != applied_den);
+    for (uint8_t i = 0; i < POOL; i++) {
+        contact_t *c = &pool[i];
+        if (c->state != C_ACTIVE) continue;
+        scale_point(c, applied_num, applied_den);
+        if (c->lift) continue; // its release goes where it was last reported
+        if (c->scaling && (!on || live > 1)) {
+            c->scaling = false;
+            c->ox      = (int16_t)((int32_t)c->rx - c->x);
+            c->oy      = (int16_t)((int32_t)c->ry - c->y);
+        } else if (on && live == 1 && (c->scaling ? changed : (!c->seen || edge))) {
+            // Start (it landed alone, or the factor came on with it alone),
+            // or a new factor while scaling: anchor where it is reported now.
+            c->scaling = true;
+            c->ax      = c->x;
+            c->ay      = c->y;
+            c->bx      = c->rx;
+            c->by      = c->ry;
+        }
+        c->seen = true;
+    }
+    applied_num = scale_num;
+    applied_den = scale_den;
+}
+
 static void build(uint8_t *r, bool release) {
     memset(r, 0, SVAL_PTP_INPUT_SIZE);
     r[0]      = SVAL_PTP_REPORT_ID_INPUT;
@@ -783,8 +857,8 @@ static void build(uint8_t *r, bool release) {
         uint8_t *o   = r + 1 + 6 * n++;
         o[0]         = (c->conf ? 1 : 0) | (tip ? 2 : 0);
         o[1]         = c->cid;
-        ptp_put16(o + 2, release ? c->sx : c->x);
-        ptp_put16(o + 4, release ? c->sy : c->y);
+        ptp_put16(o + 2, release ? c->sx : c->rx);
+        ptp_put16(o + 4, release ? c->sy : c->ry);
     }
     r[33] = n;
     r[34] = (!release && (f_switches & 2)) ? (key_buttons & 7) : 0;
@@ -807,8 +881,8 @@ static void commit(bool release) {
         } else {
             if (c->lift) dirty = true; // a tap shorter than a frame: Tip = 0 next
             c->sent_down = true;
-            c->sx        = c->x;
-            c->sy        = c->y;
+            c->sx        = c->rx;
+            c->sy        = c->ry;
         }
     }
     for (uint8_t i = 0; i < POOL; i++)
@@ -862,7 +936,10 @@ static void host_gone(uint32_t now) {
 
 static bool send_frame(uint32_t now, bool release) {
     uint8_t r[SVAL_PTP_INPUT_SIZE];
-    if (!release) admit();
+    if (!release) {
+        admit();
+        scale_update();
+    }
     build(r, release);
     ptp_put16(r + 31, stamp(release ? now : frame_time(now)));
     if (!ptp_try_send(r)) {
@@ -1271,6 +1348,7 @@ void sval_ptp_test_reset(void) {
     native = paused = mode3 = output = hold = release_pending = dirty = ever_sent = scan_started = busy_streak = false;
     grabbed      = false;
     grab_holders = 0;
+    scale_num = scale_den = applied_num = applied_den = 1;
     grab_serial  = 0;
     grab_reset(0);
     grab_reset(1);

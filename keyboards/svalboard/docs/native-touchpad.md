@@ -126,6 +126,17 @@ pad is the chip's mouse and the keys work on it as always.
   apply instead of the touchpad's curve). A second finger is ignored. When
   the key is let go, the pads come back on an all-up sample: lift the finger
   before the OS sees the pad again.
+- **Sniper and boost: Scaling.** The OS keeps the pads (taps, gestures and
+  its curve stay). While the key is on and exactly one contact is down, that
+  contact is reported at its anchor plus its travel since then, times the
+  factor (sniper 1/divisor, boost multiplier; both multiply), clamped to the
+  whole surface the OS sees (both pads and the gap). The anchor is where the
+  finger was when the key came on with it the only contact down, or where it
+  landed while the key was on. When the key is let go or a second finger
+  lands, the contact keeps its offset from the real position until it lifts:
+  no snap back, and no lift and re-touch (which the OS could read as a tap).
+  Every change takes effect from the next frame, anchored where the contact
+  was last reported, so nothing jumps.
 
 The grab has one holder bit per reason (`SVAL_PTP_GRAB_VS`, `_SCROLL`,
 `_POINT`; `sval_ptp_set_grab`), worked out again every pointing task from the

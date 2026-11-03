@@ -131,6 +131,11 @@ bool     sval_ptp_key_button(uint8_t button, bool pressed); // SVAL_PTP_KEY_BUTT
 #define SVAL_PTP_GRAB_POINT 4  // sniper or boost, Takeover
 void     sval_ptp_set_grab(uint8_t holder, bool grab);
 uint8_t  sval_ptp_grab_holders(void);
+
+// --- position scaling: sniper and boost while the OS keeps the pads (keymap_support.c) ---
+// num/den 1/1 is off. While on and exactly one contact is down, it is reported
+// at its anchor plus its travel times num/den; ptp.c has the rules.
+void sval_ptp_set_scale(uint16_t num, uint16_t den);
 bool     sval_ptp_grab_ready(uint8_t pad); // this pad's contact frames arrive here
 // The followed finger: its touch serial (never 0; a new one per finger), and
 // its position on the pad (x 0..SVAL_PTP_PAD_X-1, y 0..SVAL_PTP_PAD_Y-1, in the

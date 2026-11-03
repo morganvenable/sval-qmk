@@ -921,6 +921,98 @@ static void test_grab_holders(void) {
     puts("  grab holders: the last holder releases; the same finger across holders");
 }
 
+// Position scaling: the OS keeps the pads; one contact is reported at its
+// anchor plus its travel times the factor; a second finger or the factor's
+// end freezes its offset until it lifts.
+static void test_scale(void) {
+    start("scale");
+    // Sniper 1/2, the finger already down when it turns on: anchored there.
+    FEED(0, {0, 1, 1000, 800});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == 1000);
+    sval_ptp_set_scale(1, 2);
+    FEED(0, {0, 1, 1000, 800});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == 1000 && y_of(last(), 0) == 800); // no jump
+    FEED(0, {0, 1, 1200, 700});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == 1100 && y_of(last(), 0) == 750);
+    // A second finger lands: the first is scaled up to that frame (1150, 750),
+    // then freezes its offset (-150, +50); the new one is true.
+    FEED(0, {0, 1, 1300, 700}, {1, 2, 300, 300});
+    run(5000);
+    new_reports();
+    int a = slot_at(last(), 1150, 750), b = slot_at(last(), 300, 300);
+    assert(a >= 0 && b >= 0);
+    // The second lifts: the first stays frozen (no resume, no snap back).
+    FEED(0, {0, 1, 1400, 600});
+    run(5000);
+    run(5000);
+    new_reports();
+    assert(slot_at(last(), 1250, 650) >= 0);
+    FEED(0, {0, 1, 1410, 600});
+    run(5000);
+    assert(new_reports() == 1 && count_of(last()) == 1 && x_of(last(), 0) == 1260);
+    up(0);
+    run(5000);
+    new_reports();
+    // Boost x3, on the right pad (x from SVAL_PTP_PAD_STRIDE): a finger that
+    // lands while it is on is anchored where it lands.
+    const uint16_t R = SVAL_PTP_PAD_STRIDE;
+    sval_ptp_set_scale(3, 1);
+    FEED(1, {0, 3, 1500, 900});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == R + 1500);
+    FEED(1, {0, 3, 1600, 950});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == R + 1800 && y_of(last(), 0) == 1050);
+    // It is clamped to the whole surface, both pads and the gap.
+    FEED(1, {0, 3, 2047, 1791});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == SVAL_PTP_XMAX && y_of(last(), 0) == SVAL_PTP_YMAX);
+    FEED(1, {0, 3, 0, 0});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == 0 && y_of(last(), 0) == 0);
+    FEED(1, {0, 3, 1600, 950});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == R + 1800);
+    // A new factor while scaling: this frame still at x 3 (R + 1830), then
+    // anchored there at x 2. Every change takes effect from the next frame.
+    sval_ptp_set_scale(2, 1);
+    FEED(1, {0, 3, 1610, 950});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == R + 1830);
+    // The factor ends: this frame at x 2 (R + 1850), then frozen at that
+    // offset (+230, +100) until it lifts.
+    sval_ptp_set_scale(1, 1);
+    FEED(1, {0, 3, 1620, 950});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == R + 1850 && y_of(last(), 0) == 1050);
+    FEED(1, {0, 3, 1500, 900});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == R + 1730 && y_of(last(), 0) == 1000);
+    // On again with it the only contact: scaling resumes from where it is
+    // reported (this frame frozen, R + 1830; then half the travel).
+    sval_ptp_set_scale(1, 2);
+    FEED(1, {0, 3, 1600, 900});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == R + 1830);
+    FEED(1, {0, 3, 1700, 900});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == R + 1880);
+    // It lifts where it was last reported; once off, the next finger is true.
+    up(1);
+    run(5000);
+    assert(new_reports() == 1 && flags_of(last(), 0) == 1 && x_of(last(), 0) == R + 1880);
+    sval_ptp_set_scale(1, 1);
+    FEED(0, {0, 4, 100, 100});
+    run(5000);
+    assert(new_reports() == 1 && x_of(last(), 0) == 100);
+    up(0);
+    run(5000);
+    puts("  scale: one contact scaled from its anchor; frozen offset on a second finger or the end; clamped to the surface");
+}
+
 // Sval POINTING_CONTACTS (0x2F): every contact the computer has, back on its
 // own pad in that pad's counts.
 typedef struct {
@@ -1072,6 +1164,7 @@ int main(int argc, char **argv) {
     test_paused();
     test_grab();
     test_grab_holders();
+    test_scale();
     test_host_contacts();
     test_host_contacts_six();
     fresh("end");

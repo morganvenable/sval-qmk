@@ -142,8 +142,10 @@ static bool scroll_hold    = false,
 // While the OS owns a pad (native touchpad, Input Mode 3), Takeover has the
 // firmware take it from the OS, as Velocity Scroll does, whenever the mode's
 // keys are on: one finger then drives the firmware's own scroll or pointer,
-// with the settings a trackball hand gets (DPI, then sniper and boost). Off
-// leaves the pad to the OS.
+// with the settings a trackball hand gets (DPI, then sniper and boost).
+// Scaling (sniper and boost) leaves the pad to the OS and scales the one
+// contact's reported travel instead (azoteq/ptp.c, sval_ptp_set_scale). Off
+// leaves the pad to the OS as it is.
 enum { SVAL_PAD_MODE_OFF, SVAL_PAD_MODE_TAKEOVER, SVAL_PAD_MODE_SCALING };
 static uint8_t pad_mode_scroll = SVAL_PAD_MODE_OFF;
 static uint8_t pad_mode_sniper = SVAL_PAD_MODE_OFF;
@@ -266,6 +268,8 @@ void update_axis_scroll_mode(int32_t h, int32_t v) {
     }
 }
 
+static uint16_t sniper_div_now = 1, boost_mult_now = 1; // the factors in force
+
 void update_sniper_divisor(void) {
     uint8_t div = 1;
     for (uint8_t i = 0; i < sniper_hold_2 + sniper_toggle_2 + PAD_DEV_SNIPER; i++) div *= 2;
@@ -275,6 +279,7 @@ void update_sniper_divisor(void) {
     set_div_axis(&sniper_y, div);
     set_div_axis(&sniper_h, div);
     set_div_axis(&sniper_v, div);
+    sniper_div_now = div;
 }
 
 void update_boost_multiplier(void) {
@@ -287,6 +292,7 @@ void update_boost_multiplier(void) {
     set_mult_axis(&boost_y, (uint8_t)mult);
     set_mult_axis(&boost_h, (uint8_t)mult);
     set_mult_axis(&boost_v, (uint8_t)mult);
+    boost_mult_now = mult;
 }
 
 #ifdef SVAL_NATIVE_PTP
@@ -425,6 +431,9 @@ static void pad_modes_sync(void) {
     sval_ptp_set_grab(SVAL_PTP_GRAB_SCROLL, pad_mode_scroll == SVAL_PAD_MODE_TAKEOVER && scroll_key);
     bool point = (pad_mode_sniper == SVAL_PAD_MODE_TAKEOVER && any_sniper_active()) || (pad_mode_boost == SVAL_PAD_MODE_TAKEOVER && any_boost_active());
     sval_ptp_set_grab(SVAL_PTP_GRAB_POINT, point);
+    uint16_t num = pad_mode_boost == SVAL_PAD_MODE_SCALING && any_boost_active() ? boost_mult_now : 1;
+    uint16_t den = pad_mode_sniper == SVAL_PAD_MODE_SCALING && any_sniper_active() ? sniper_div_now : 1;
+    sval_ptp_set_scale(num, den);
 }
 
 // A pad the firmware holds for a pointer mode, while the OS would otherwise
@@ -462,7 +471,7 @@ uint8_t sval_pad_proto_command(uint8_t action, const uint8_t *a) {
     }
     if (action != 3) return 2;
     if (a[0] == 0) return 0;
-    if (a[0] != 1 || a[1] > SVAL_PAD_MODE_TAKEOVER || a[2] > SVAL_PAD_MODE_TAKEOVER || a[3] > SVAL_PAD_MODE_TAKEOVER || a[4] != 0) return 2;
+    if (a[0] != 1 || a[1] > SVAL_PAD_MODE_TAKEOVER || a[2] > SVAL_PAD_MODE_SCALING || a[3] > SVAL_PAD_MODE_SCALING || a[4] != 0) return 2;
     pad_mode_scroll = a[1];
     pad_mode_sniper = a[2];
     pad_mode_boost  = a[3];
@@ -479,7 +488,7 @@ void sval_pad_proto_block(uint8_t *o) {
     o[3] = pad_mode_boost;
     o[4] = 0;
     o[5] = 0;
-    o[6] = 1 | 2;
+    o[6] = 1 | 2 | 4;
     o[7] = sval_ptp_grab_holders();
 }
 #    endif
