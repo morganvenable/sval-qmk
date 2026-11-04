@@ -65,8 +65,18 @@ ifeq ($(strip $(SVAL_TWO_CABLE)), yes)
   ifeq ($(strip $(SVAL_UPDATE_RELEASE)), yes)
     $(error SVAL_TWO_CABLE cannot be part of a release build)
   endif
+  ifeq ($(strip $(SVAL_KEYTEST)), yes)
+    $(error SVAL_TWO_CABLE and SVAL_KEYTEST cannot go together: a follower would type)
+  endif
   OPT_DEFS += -DSVAL_TWO_CABLE
   SRC += two_cable.c
+  # The bench ops (INJECT, CAPTURE, REBOOT) for hardware tests; never in an
+  # image for a person to use.
+  ifeq ($(strip $(SVAL_TWO_CABLE_BENCH)), yes)
+    OPT_DEFS += -DSVAL_TWO_CABLE_BENCH
+  endif
+else ifeq ($(strip $(SVAL_TWO_CABLE_BENCH)), yes)
+  $(error SVAL_TWO_CABLE_BENCH needs SVAL_TWO_CABLE=yes)
 endif
 
 # Timing counters (perf.c: main loop, matrix frames, pad reads, split fetches,

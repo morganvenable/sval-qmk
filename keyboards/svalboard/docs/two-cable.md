@@ -27,6 +27,12 @@ Both roles are held by the relay's packets. If the relay stops:
 If the relay sees a half leave USB, it acts at once: the lead's relayed keys
 are released, or the follower is told to type on its own.
 
+When the lead's role ends, the relayed rows go to zero first, and the other
+half counts as gone (side unknown) only after a whole `keyboard_task()` pass
+has released those keys. While the other half is gone, `side.c` drops events
+from its rows, releases included, so the other order would leave a held
+layer or tap-hold key on.
+
 ## Sides
 
 Each half needs a side, as over the cable (`side.h`). A half with no side
@@ -56,7 +62,7 @@ then throttles the master's attempts to one every 500 ms, each limited by the
 | op | to | payload | reply |
 |---|---|---|---|
 | 0x01 FOLLOW | follower | none; renews the lease | `0x81`, then a rows push |
-| 0x02 LEAD | lead | seq, side, rows[5], dx, dy (int16), h, v (int8), buttons, flags (bit 0: reply) | `0x82` only if asked |
+| 0x02 LEAD | lead | seq, side, rows[5], dx, dy (int16), h, v (int8), buttons, flags (bit 0: reply; bit 1: the rows hold injected keys, which act only while the lead captures) | `0x82` only if asked |
 | 0x03 RELEASE | either | none: end the role | `0x83` |
 | 0x04 STATUS | either | none | `0x84` |
 | 0x05 INJECT | either | bench: rows[5], dx, dy | `0x85` |
@@ -64,8 +70,10 @@ then throttles the master's attempts to one every 500 ms, each limited by the
 | 0x07 REBOOT | either | bench: leave USB and come back | `0x87` |
 
 Replies: `[0x80|op][seq][status][role][side][capture][lead packets:4][time us:4]`.
-Status: 0 OK, 1 not a follower (INJECT), 2 unknown op, 3 the split cable
-works (FOLLOW and LEAD refused, and LEAD replies even when not asked).
+Status: 0 OK, 1 not a follower (INJECT), 2 unknown op (also the bench ops
+without `SVAL_TWO_CABLE_BENCH`), 3 the split cable works (FOLLOW and LEAD
+refused, and LEAD replies even when not asked), 4 INJECT on a lead that isn't
+capturing.
 
 Pushes from the board:
 
@@ -75,6 +83,8 @@ Pushes from the board:
 - `0x93` report (lead, while capturing): kind (1 keyboard, 2 NKRO, 3 mouse,
   4 extra), time us, length, bytes.
 
-The bench ops exist only for hardware tests: CAPTURE keeps every report the
-lead makes off the computer and drains for a second after it ends, so a key
-pressed by INJECT never types.
+The bench ops exist only for hardware tests, and only in builds with
+`SVAL_TWO_CABLE_BENCH=yes`: CAPTURE hands every report the lead makes to the
+client that asked, which no other app on the computer should be able to do.
+CAPTURE keeps those reports off the computer and drains for a second after it
+ends, and injected keys act only into a capture, so they never type.

@@ -38,9 +38,18 @@ _Static_assert(sizeof(matrix_row_t) == 1, "rows travel as one byte each");
 enum { OP_FOLLOW = 0x01, OP_LEAD = 0x02, OP_RELEASE = 0x03, OP_STATUS = 0x04, OP_INJECT = 0x05, OP_CAPTURE = 0x06, OP_REBOOT = 0x07 };
 enum { PUSH_ROWS = 0x90, PUSH_APPLIED = 0x92, PUSH_REPORT = 0x93 };
 enum { ROLE_NONE, ROLE_LEAD, ROLE_FOLLOWER };
-// Reply status: 0 OK, 1 not a follower (INJECT), 2 unknown op, 3 the split
-// cable works, so FOLLOW and LEAD are refused.
-enum { STATUS_OK, STATUS_NOT_FOLLOWER, STATUS_UNKNOWN_OP, STATUS_CABLE };
+// Reply status: 0 OK, 1 not a follower (INJECT), 2 unknown op (and the bench
+// ops in a build without SVAL_TWO_CABLE_BENCH), 3 the split cable works, so
+// FOLLOW and LEAD are refused, 4 INJECT on a lead that is not capturing.
+enum { STATUS_OK, STATUS_NOT_FOLLOWER, STATUS_UNKNOWN_OP, STATUS_CABLE, STATUS_NOT_CAPTURING };
+
+// INJECT, CAPTURE and REBOOT are for hardware tests: CAPTURE hands every
+// report the lead makes to a raw HID client, and INJECT presses keys.
+#ifdef SVAL_TWO_CABLE_BENCH
+#    define BENCH_OPS true
+#else
+#    define BENCH_OPS false
+#endif
 
 extern matrix_row_t matrix[MATRIX_ROWS]; // quantum/matrix_common.c, debounced
 
@@ -153,22 +162,39 @@ static bool cable_up(void) {
     return is_keyboard_master() && sval_other_half_connected();
 }
 
+// The other half is dropped (its side unknown) only after a matrix_task() has
+// released the relayed keys: while it is gone, side.c throws away events from
+// its rows, releases included, which would leave a held layer or tap-hold on.
+// 1: set by lead_end(); the first task pass after that counts it on, and the
+// next one (a whole keyboard_task() later) drops the side.
+static uint8_t side_drop;
+
 static void lead_end(void) {
     lead_drop_keys();
+    if (!cable_up()) side_drop = 1;
+    role = ROLE_NONE;
+}
+
+static void side_drop_task(void) {
+    if (!side_drop || ++side_drop < 3) return;
+    side_drop = 0;
 #ifdef SVAL_EITHER_HAND
-    if (!cable_up()) {
+    if (role != ROLE_LEAD && !cable_up()) {
         for (uint8_t i = 0; i < 3; i++)
             sval_side_other_set(false, false, SVAL_SIDE_UNKNOWN);
     }
 #endif
-    role = ROLE_NONE;
 }
 
 static void lead_state(const uint8_t *d) {
-    // d[7] seq, d[8] follower side, d[9..13] rows, d[14..17] dx dy, d[18] h, d[19] v, d[20] buttons, d[21] flags
-    bool changed = false;
+    // d[7] seq, d[8] follower side, d[9..13] rows, d[14..17] dx dy, d[18] h, d[19] v, d[20] buttons,
+    // d[21] flags (bit 0: reply, bit 1: the follower's rows hold injected keys)
+    bool changed  = false;
+    bool injected = d[21] & 2;
+    side_drop     = 0;
     for (uint8_t r = 0; r < ROWS_PER_HAND; r++) {
-        matrix_row_t row = capture_draining ? 0 : d[9 + r]; // a draining capture keeps them up
+        // A draining capture keeps them up, and injected keys act only into a capture.
+        matrix_row_t row = capture_draining || (injected && !capture_on) ? 0 : d[9 + r];
         if (matrix[that_hand() + r] != row) {
             matrix[that_hand() + r] = row;
             changed                 = true;
@@ -338,6 +364,10 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
         // with a reply (even for LEAD), so the relay can say so.
         role_end();
         status = STATUS_CABLE;
+    } else if (!BENCH_OPS && (op == OP_INJECT || op == OP_CAPTURE || op == OP_REBOOT)) {
+        status = STATUS_UNKNOWN_OP; // bench builds only: no other app may type, read keys or reboot
+    } else if (op == OP_INJECT && role == ROLE_LEAD && !capture_on) {
+        status = STATUS_NOT_CAPTURING; // the lead's own injected keys act only into a capture
     } else
         switch (op) {
             case OP_FOLLOW:
@@ -415,6 +445,7 @@ void sval_two_cable_task(void) {
     if (reboot_pending && timer_expired32(timer_read32(), reboot_at)) soft_reset_keyboard();
     if (capture_on && timer_elapsed32(capture_seen) > CAPTURE_LEASE_MS) capture_end();
     capture_drain_task();
+    side_drop_task();
     if (role != ROLE_NONE && cable_up()) {
         role_end(); // the cable came back: it carries the other half again
         return;
