@@ -21,6 +21,7 @@
 #include "host_driver.h"
 #include "client_wrapper.h"
 #include "two_cable.h"
+#include "svalboard.h" // sval_other_half_connected
 #ifdef SVAL_EITHER_HAND
 #    include "side.h"
 #endif
@@ -37,12 +38,15 @@ _Static_assert(sizeof(matrix_row_t) == 1, "rows travel as one byte each");
 enum { OP_FOLLOW = 0x01, OP_LEAD = 0x02, OP_RELEASE = 0x03, OP_STATUS = 0x04, OP_INJECT = 0x05, OP_CAPTURE = 0x06, OP_REBOOT = 0x07 };
 enum { PUSH_ROWS = 0x90, PUSH_APPLIED = 0x92, PUSH_REPORT = 0x93 };
 enum { ROLE_NONE, ROLE_LEAD, ROLE_FOLLOWER };
+// Reply status: 0 OK, 1 not a follower (INJECT), 2 unknown op, 3 the split
+// cable works, so FOLLOW and LEAD are refused.
+enum { STATUS_OK, STATUS_NOT_FOLLOWER, STATUS_UNKNOWN_OP, STATUS_CABLE };
 
 extern matrix_row_t matrix[MATRIX_ROWS]; // quantum/matrix_common.c, debounced
 
 static uint8_t  role;
-static uint32_t owner;     // client ID of the relay
-static uint32_t last_pkt;  // its last packet for this role
+static uint32_t owner;    // client ID of the relay
+static uint32_t last_pkt; // its last packet for this role
 
 // lead
 static uint8_t  applied_seq;
@@ -65,9 +69,9 @@ static uint8_t  inject_rows[ROWS_PER_HAND];
 static int16_t  inject_dx, inject_dy;
 
 // capture (lead, bench only): reports go to the relay instead of the computer
-static bool          capture_on;
-static uint32_t      capture_owner, capture_seen;
-static host_driver_t capture_driver;
+static bool           capture_on;
+static uint32_t       capture_owner, capture_seen;
+static host_driver_t  capture_driver;
 static host_driver_t *capture_saved;
 #define CAPTURE_DRAIN_MS 1000
 static bool     capture_draining;
@@ -83,7 +87,8 @@ static inline uint32_t now_us(void) {
     return (uint32_t)chVTGetSystemTimeX();
 }
 static void put32(uint8_t *p, uint32_t v) {
-    for (uint8_t i = 0; i < 4; i++) p[i] = v >> (8 * i);
+    for (uint8_t i = 0; i < 4; i++)
+        p[i] = v >> (8 * i);
 }
 static void put16(uint8_t *p, int16_t v) {
     p[0] = (uint16_t)v & 0xFF;
@@ -125,9 +130,10 @@ bool should_process_keypress(void) {
 // ---- lead -----------------------------------------------------------------------
 
 static void lead_clear_rows(void) {
-    for (uint8_t r = 0; r < ROWS_PER_HAND; r++) matrix[that_hand() + r] = 0;
+    for (uint8_t r = 0; r < ROWS_PER_HAND; r++)
+        matrix[that_hand() + r] = 0;
     in_dx = in_dy = in_h = in_v = 0;
-    in_buttons = 0;
+    in_buttons                  = 0;
 }
 
 static void lead_drop_keys(void) {
@@ -140,10 +146,20 @@ static void lead_drop_keys(void) {
     }
 }
 
+// The split link is up: the cable carries the other half, so the relay steps
+// aside. Both roles refuse, and a live role ends. The presence ping sets the
+// other half's side then, so ending the lead leaves it alone.
+static bool cable_up(void) {
+    return is_keyboard_master() && sval_other_half_connected();
+}
+
 static void lead_end(void) {
     lead_drop_keys();
 #ifdef SVAL_EITHER_HAND
-    for (uint8_t i = 0; i < 3; i++) sval_side_other_set(false, false, SVAL_SIDE_UNKNOWN);
+    if (!cable_up()) {
+        for (uint8_t i = 0; i < 3; i++)
+            sval_side_other_set(false, false, SVAL_SIDE_UNKNOWN);
+    }
 #endif
     role = ROLE_NONE;
 }
@@ -155,7 +171,7 @@ static void lead_state(const uint8_t *d) {
         matrix_row_t row = capture_draining ? 0 : d[9 + r]; // a draining capture keeps them up
         if (matrix[that_hand() + r] != row) {
             matrix[that_hand() + r] = row;
-            changed = true;
+            changed                 = true;
         }
     }
     in_dx += get16s(&d[14]);
@@ -224,12 +240,17 @@ static void follower_begin(void) {
     acc_buttons = sent_buttons = 0;
     memset(inject_rows, 0, sizeof(inject_rows));
     inject_dx = inject_dy = 0;
-    role = ROLE_FOLLOWER;
+    role                  = ROLE_FOLLOWER;
 }
 
 static void follower_end(void) {
     memset(inject_rows, 0, sizeof(inject_rows));
     role = ROLE_NONE; // types on its own again from the next key change
+}
+
+static void role_end(void) {
+    if (role == ROLE_LEAD) lead_end();
+    if (role == ROLE_FOLLOWER) follower_end();
 }
 
 // ---- capture (bench) ---------------------------------------------------------------
@@ -311,70 +332,78 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
     if (length < 32) return false;
     uint32_t client = data[1] | ((uint32_t)data[2] << 8) | ((uint32_t)data[3] << 16) | ((uint32_t)data[4] << 24);
     uint8_t  op     = data[6];
-    uint8_t  status = 0;
-    switch (op) {
-        case OP_FOLLOW:
-            if (role == ROLE_LEAD) lead_end();
-            if (role != ROLE_FOLLOWER) follower_begin();
-            owner    = client;
-            last_pkt = timer_read32();
-            follower_push(true);
-            break;
-        case OP_LEAD:
-            if (role == ROLE_FOLLOWER) follower_end();
-            role     = ROLE_LEAD;
-            owner    = client;
-            last_pkt = timer_read32();
-            lead_state(data);
-            if (!(data[21] & 1)) return false; // no reply unless asked
-            break;
-        case OP_RELEASE:
-            if (role == ROLE_LEAD) lead_end();
-            if (role == ROLE_FOLLOWER) follower_end();
-            capture_end();
-            break;
-        case OP_STATUS:
-            break;
-        case OP_INJECT:
-            if (role == ROLE_LEAD) {
-                // Bench only: press or release the lead's own keys, as keytest does.
-                for (uint8_t r = 0; r < ROWS_PER_HAND; r++) {
-                    uint8_t diff = lead_inject[r] ^ data[7 + r];
-                    for (uint8_t c = 0; c < MATRIX_COLS; c++) {
-                        if (diff & (1u << c)) action_exec(MAKE_KEYEVENT(this_hand() + r, c, (data[7 + r] >> c) & 1));
+    uint8_t  status = STATUS_OK;
+    if ((op == OP_FOLLOW || op == OP_LEAD) && cable_up()) {
+        // The split cable carries the other half: no relay needed. Refused
+        // with a reply (even for LEAD), so the relay can say so.
+        role_end();
+        status = STATUS_CABLE;
+    } else
+        switch (op) {
+            case OP_FOLLOW:
+                if (role == ROLE_LEAD) lead_end();
+                if (role != ROLE_FOLLOWER) follower_begin();
+                owner    = client;
+                last_pkt = timer_read32();
+                follower_push(true);
+                break;
+            case OP_LEAD:
+                if (role == ROLE_FOLLOWER) follower_end();
+                role     = ROLE_LEAD;
+                owner    = client;
+                last_pkt = timer_read32();
+                lead_state(data);
+                if (!(data[21] & 1)) return false; // no reply unless asked
+                break;
+            case OP_RELEASE:
+                role_end();
+                capture_end();
+                break;
+            case OP_STATUS:
+                break;
+            case OP_INJECT:
+                if (role == ROLE_LEAD) {
+                    // Bench only: press or release the lead's own keys, as keytest does.
+                    for (uint8_t r = 0; r < ROWS_PER_HAND; r++) {
+                        uint8_t diff = lead_inject[r] ^ data[7 + r];
+                        for (uint8_t c = 0; c < MATRIX_COLS; c++) {
+                            if (diff & (1u << c)) action_exec(MAKE_KEYEVENT(this_hand() + r, c, (data[7 + r] >> c) & 1));
+                        }
+                        lead_inject[r] = data[7 + r];
                     }
-                    lead_inject[r] = data[7 + r];
+                    break;
                 }
+                if (role != ROLE_FOLLOWER) {
+                    status = STATUS_NOT_FOLLOWER;
+                    break;
+                }
+                memcpy(inject_rows, &data[7], ROWS_PER_HAND);
+                inject_dx = get16s(&data[12]);
+                inject_dy = get16s(&data[14]);
+                acc_dx += inject_dx;
+                acc_dy += inject_dy;
+                follower_push(true);
                 break;
-            }
-            if (role != ROLE_FOLLOWER) {
-                status = 1;
+            case OP_REBOOT: // bench: drop off USB and come back, as a pulled cable does to the relay
+                reboot_pending = true;
+                reboot_at      = timer_read32() + 100; // reply first
                 break;
-            }
-            memcpy(inject_rows, &data[7], ROWS_PER_HAND);
-            inject_dx = get16s(&data[12]);
-            inject_dy = get16s(&data[14]);
-            acc_dx += inject_dx;
-            acc_dy += inject_dy;
-            follower_push(true);
-            break;
-        case OP_REBOOT: // bench: drop off USB and come back, as a pulled cable does to the relay
-            reboot_pending = true;
-            reboot_at      = timer_read32() + 100; // reply first
-            break;
-        case OP_CAPTURE:
-            if (data[7]) capture_begin(client); else capture_end();
-            break;
-        default:
-            status = 2;
-            break;
-    }
+            case OP_CAPTURE:
+                if (data[7])
+                    capture_begin(client);
+                else
+                    capture_end();
+                break;
+            default:
+                status = STATUS_UNKNOWN_OP;
+                break;
+        }
     uint8_t seq = data[7];
     memset(&data[7], 0, length - 7);
-    data[6] = 0x80 | op;
-    data[7] = seq;
-    data[8] = status;
-    data[9] = role;
+    data[6]  = 0x80 | op;
+    data[7]  = seq;
+    data[8]  = status;
+    data[9]  = role;
     data[10] = my_side();
     data[11] = capture_on;
     put32(&data[12], lead_packets);
@@ -386,6 +415,10 @@ void sval_two_cable_task(void) {
     if (reboot_pending && timer_expired32(timer_read32(), reboot_at)) soft_reset_keyboard();
     if (capture_on && timer_elapsed32(capture_seen) > CAPTURE_LEASE_MS) capture_end();
     capture_drain_task();
+    if (role != ROLE_NONE && cable_up()) {
+        role_end(); // the cable came back: it carries the other half again
+        return;
+    }
     if (role == ROLE_LEAD) {
         if (timer_elapsed32(last_pkt) > LEAD_LEASE_MS) {
             lead_end();
@@ -425,11 +458,11 @@ void sval_two_cable_pointing(report_mouse_t *left, report_mouse_t *right) {
         acc_buttons = mine->buttons;
         *left = *right = (report_mouse_t){0};
     } else if (role == ROLE_LEAD) {
-        int32_t lim = MOUSE_REPORT_XY_MAX;
-        int32_t dx  = in_dx < -lim ? -lim : in_dx > lim ? lim : in_dx;
-        int32_t dy  = in_dy < -lim ? -lim : in_dy > lim ? lim : in_dy;
-        int32_t h   = in_h < -127 ? -127 : in_h > 127 ? 127 : in_h;
-        int32_t v   = in_v < -127 ? -127 : in_v > 127 ? 127 : in_v;
+        int32_t lim    = MOUSE_REPORT_XY_MAX;
+        int32_t dx     = in_dx < -lim ? -lim : in_dx > lim ? lim : in_dx;
+        int32_t dy     = in_dy < -lim ? -lim : in_dy > lim ? lim : in_dy;
+        int32_t h      = in_h < -127 ? -127 : in_h > 127 ? 127 : in_h;
+        int32_t v      = in_v < -127 ? -127 : in_v > 127 ? 127 : in_v;
         other->x       = dx;
         other->y       = dy;
         other->h       = h;

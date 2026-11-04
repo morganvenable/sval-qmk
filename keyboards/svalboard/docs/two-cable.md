@@ -27,6 +27,28 @@ Both roles are held by the relay's packets. If the relay stops:
 If the relay sees a half leave USB, it acts at once: the lead's relayed keys
 are released, or the follower is told to type on its own.
 
+## Sides
+
+Each half needs a side, as over the cable (`side.h`). A half with no side
+types nothing, and a lead whose follower reports no side, or its own side,
+lets none of the follower's keys act. The relay checks both halves' sides
+(Sval `0x33` GET) before it starts, and sets them when they are missing or
+the same (`0x33` SET, source HOST, with a restart), after asking the person
+to press a key on the left half: both halves follow for that moment, and the
+one whose rows change is the left. The record it writes is the ordinary side
+record, so normal firmware keeps it afterwards.
+
+## The split cable
+
+The relay only stands in for a split link that is down. With the link up
+(`sval_other_half_connected()` on the half with USB), FOLLOW and LEAD are
+refused with status 3 and a live role ends, so the cable and the relay never
+both write the other half's rows. With no cable the split code never touches
+those rows: `matrix_post_scan()` clears them only when a link that was up
+goes down, and the time-based disconnect check (`SPLIT_MIN_DISCONNECT_MS`)
+then throttles the master's attempts to one every 500 ms, each limited by the
+3 ms per-scan deadline of the DMA receive.
+
 ## Wire
 
 64-byte raw HID reports in the client wrapper: `[0xDD][client:4][0xFB][op]`.
@@ -42,6 +64,8 @@ are released, or the follower is told to type on its own.
 | 0x07 REBOOT | either | bench: leave USB and come back | `0x87` |
 
 Replies: `[0x80|op][seq][status][role][side][capture][lead packets:4][time us:4]`.
+Status: 0 OK, 1 not a follower (INJECT), 2 unknown op, 3 the split cable
+works (FOLLOW and LEAD refused, and LEAD replies even when not asked).
 
 Pushes from the board:
 
