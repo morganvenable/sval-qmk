@@ -17,6 +17,7 @@ typedef enum {
     UPDATE_LED_WRITING,  // solid magenta: this half's commit, which holds a fixed color
     UPDATE_LED_DONE,     // green double flash: done, the halves match
     UPDATE_LED_ERROR,    // red, 1 Hz, 50/50: it failed, open Keybard (stops after 30 s)
+    UPDATE_LED_RELAY,    // amber double blip (two-cable builds): the relay app stopped; start it again
 } update_led_mode_t;
 
 // Called on every updater_task() pass with the mode for the current state.

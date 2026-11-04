@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "report.h"
+#include "svalboard.h" // sval_pointer_identity_t, sval_board_identity_t
 
 // Wrapped raw HID protocol byte: [0xDD][client:4][0xFB][op] ...
 #define SVAL_TWO_CABLE_PROTO 0xFB
@@ -23,11 +24,28 @@ bool sval_two_cable_follower_live(void);
 // Pointing: the follower takes its own hand's report; the lead fills in the
 // other hand's (svalboard.c, pointing_device_task_combined_kb).
 void sval_two_cable_pointing(report_mouse_t *left, report_mouse_t *right);
+// The follower's own identity blocks (its Sval 0x2C and 0x38), as the relay
+// last passed them (op PEER), while this half leads. False otherwise: then
+// the other half's blocks come from the split link or stay zero, as before.
+bool sval_two_cable_peer_pointer(sval_pointer_identity_t *id);
+bool sval_two_cable_peer_board(sval_board_identity_t *id);
+// The relay-down light (updater.c): true while the amber blip should show.
+// A lead whose lease lapsed (the relay stopped without RELEASE) blips until a
+// relay or the split cable takes over again.
+bool sval_two_cable_relay_light(void);
 #else
 static inline bool sval_two_cable_lead_live(void) {
     return false;
 }
 static inline bool sval_two_cable_follower_live(void) {
+    return false;
+}
+static inline bool sval_two_cable_peer_pointer(sval_pointer_identity_t *id) {
+    (void)id;
+    return false;
+}
+static inline bool sval_two_cable_peer_board(sval_board_identity_t *id) {
+    (void)id;
     return false;
 }
 #endif

@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include "quantum.h"
 #include "svalboard.h"
+#include "two_cable.h"
 #include "sval.h"
 #ifdef SVAL_EITHER_HAND
 #    include "side.h"
@@ -206,7 +207,11 @@ void sval_main_board_kb(uint8_t *out, uint8_t length) {
     sval_local_board_identity(&mine);
     out[0] = 1;
     memcpy(&out[1], &mine, sizeof(mine));
-    if (other_valid && sval_other_half_connected()) memcpy(&out[1 + sizeof(mine)], &other_id, sizeof(other_id));
+    sval_board_identity_t peer;
+    if (other_valid && sval_other_half_connected())
+        memcpy(&out[1 + sizeof(mine)], &other_id, sizeof(other_id));
+    else if (sval_two_cable_peer_board(&peer)) // a two-cable lead: the follower's, through the relay
+        memcpy(&out[1 + sizeof(mine)], &peer, sizeof(peer));
     if (length >= 15) {
         uint16_t b = board_us > 0xFFFF ? 0xFFFF : (uint16_t)board_us, c = check_us > 0xFFFF ? 0xFFFF : (uint16_t)check_us;
         out[11] = b & 0xFF;

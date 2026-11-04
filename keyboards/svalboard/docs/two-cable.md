@@ -33,6 +33,32 @@ has released those keys. While the other half is gone, `side.c` drops events
 from its rows, releases included, so the other order would leave a held
 layer or tap-hold key on.
 
+## What the lead reports for the other half
+
+Over the cable, the other half's presence reply gives the master its pointing
+module and main board, and Sval `0x2C`, `0x2D`, `0x18` (pointing fragments)
+and `0x38` report them for that hand. With two cables the relay stands in:
+about once a second it reads the follower's own `0x2C` and `0x38` blocks and
+hands them to the lead with PEER. The lead uses them wherever the presence
+reply's would go, while the split link is down and it leads; they are
+dropped when its role ends. So Keybard and Keybard Overlay draw both hands'
+pointing modules, and `0x2D` carries the follower's motion in its hand's
+block (which needs that hand's identity, with the sensor started).
+
+Still empty for the other half in two-cable mode, since each needs the split
+link: the flicker latch (`0x3D`, Matrix Tester), Scan Lab, `0x33` SET and
+CLEAR for the other half, the updater's split presence, and `0x2F` contacts.
+
+## Relay down
+
+When the lead's lease runs out (the relay stopped without RELEASE), the lead
+shows an amber double blip every 3 s, starting 3 s later so a relay that
+restarts at once never shows it. Layer colors show between blips. It ends
+when a relay sends FOLLOW, LEAD or RELEASE, or the split cable comes up, and
+it is dark while USB is suspended. The updater's own lights take precedence
+(`updater.c`, `UPDATE_LED_RELAY` in `update_led.c`). Amber means nothing else
+in the light table: red stays for failures only.
+
 ## Sides
 
 Each half needs a side, as over the cable (`side.h`). A half with no side
@@ -68,12 +94,13 @@ then throttles the master's attempts to one every 500 ms, each limited by the
 | 0x05 INJECT | either | bench: rows[5], dx, dy | `0x85` |
 | 0x06 CAPTURE | lead | bench: 1 on / keep alive, 0 off | `0x86` |
 | 0x07 REBOOT | either | bench: leave USB and come back | `0x87` |
+| 0x08 PEER | lead | held (bit 0 pointer, bit 1 board), the follower's own Sval `0x2C` block (5 bytes), its own `0x38` block (5 bytes) | `0x88` |
 
 Replies: `[0x80|op][seq][status][role][side][capture][lead packets:4][time us:4]`.
 Status: 0 OK, 1 not a follower (INJECT), 2 unknown op (also the bench ops
 without `SVAL_TWO_CABLE_BENCH`), 3 the split cable works (FOLLOW and LEAD
 refused, and LEAD replies even when not asked), 4 INJECT on a lead that isn't
-capturing.
+capturing, 5 PEER on a half that isn't leading.
 
 Pushes from the board:
 

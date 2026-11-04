@@ -172,6 +172,9 @@
 #include "update_build_info.h"
 #include "update_gesture.h"
 #include "update_led.h"
+#ifdef SVAL_TWO_CABLE
+#    include "two_cable.h" // the relay-down light
+#endif
 #include "update_commit.h"
 #include "update_split.h"
 #include "update_pair.h"   // the boot relay of a pair UF2 (docs/pair-uf2.md)
@@ -1399,7 +1402,12 @@ void updater_task(void) {
         pass_max_state = pass_st;
     }
     lt.shown = led_mode();
+#ifdef SVAL_TWO_CABLE
+    // Two cables: the relay-down blip, only while the updater shows nothing.
+    update_led_show(lt.shown == UPDATE_LED_NONE && sval_two_cable_relay_light() ? UPDATE_LED_RELAY : lt.shown);
+#else
     update_led_show(lt.shown);
+#endif
     crumb_pass();
 }
 

@@ -856,6 +856,16 @@ bool        sval_other_half_connected(void) {
 // The other half's pointer identity from its last ping reply (zero = not reported).
 static sval_pointer_identity_t other_pointer;
 
+// The other half's pointer identity: from the split link while it is up, or,
+// in a two-cable lead, from the follower through the relay (two_cable.c).
+static bool other_pointer_get(sval_pointer_identity_t *id) {
+    if (is_connected) {
+        *id = other_pointer;
+        return true;
+    }
+    return sval_two_cable_peer_pointer(id);
+}
+
 // Sval POINTING_HARDWARE (0x2C) reply, after [0xDF] [0x2C]:
 // [format = 1] [this half: 5 bytes] [other half: 5 bytes], each a sval_pointer_identity_t.
 // The other half's block stays zero while it is disconnected or runs firmware without this.
@@ -865,7 +875,8 @@ void sval_pointing_hardware_kb(uint8_t *out, uint8_t length) {
     sval_local_pointer_identity(&mine);
     out[0] = 1;
     memcpy(&out[1], &mine, sizeof(mine));
-    if (is_connected) memcpy(&out[1 + sizeof(mine)], &other_pointer, sizeof(other_pointer));
+    sval_pointer_identity_t other;
+    if (other_pointer_get(&other)) memcpy(&out[1 + sizeof(mine)], &other, sizeof(other));
 #ifdef SVAL_AZOTEQ_MULTITOUCH
     // The OS drives these pads as a touchpad: the pointer settings don't apply.
     for (uint8_t b = 0; b < 2; b++) {
@@ -882,8 +893,9 @@ static inline bool sval_pointer_for_hand(bool left, sval_pointer_identity_t *id,
     *local = true;
     if (((id->flags & SVAL_POINTER_LEFT) != 0) == left) return true;
     *local = false;
-    if (is_connected && (other_pointer.flags & SVAL_POINTER_REPORTED) && ((other_pointer.flags & SVAL_POINTER_LEFT) != 0) == left) {
-        *id = other_pointer;
+    sval_pointer_identity_t other;
+    if (other_pointer_get(&other) && (other.flags & SVAL_POINTER_REPORTED) && ((other.flags & SVAL_POINTER_LEFT) != 0) == left) {
+        *id = other;
         return true;
     }
     return false;

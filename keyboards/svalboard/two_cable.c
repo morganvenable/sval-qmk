@@ -20,6 +20,7 @@
 #include "host.h"
 #include "host_driver.h"
 #include "client_wrapper.h"
+#include "usb_device_state.h"
 #include "two_cable.h"
 #include "svalboard.h" // sval_other_half_connected
 #ifdef SVAL_EITHER_HAND
@@ -35,13 +36,14 @@ _Static_assert(sizeof(matrix_row_t) == 1, "rows travel as one byte each");
 #define CAPTURE_LEASE_MS 1000
 #define HEARTBEAT_MS 100
 
-enum { OP_FOLLOW = 0x01, OP_LEAD = 0x02, OP_RELEASE = 0x03, OP_STATUS = 0x04, OP_INJECT = 0x05, OP_CAPTURE = 0x06, OP_REBOOT = 0x07 };
+enum { OP_FOLLOW = 0x01, OP_LEAD = 0x02, OP_RELEASE = 0x03, OP_STATUS = 0x04, OP_INJECT = 0x05, OP_CAPTURE = 0x06, OP_REBOOT = 0x07, OP_PEER = 0x08 };
 enum { PUSH_ROWS = 0x90, PUSH_APPLIED = 0x92, PUSH_REPORT = 0x93 };
 enum { ROLE_NONE, ROLE_LEAD, ROLE_FOLLOWER };
 // Reply status: 0 OK, 1 not a follower (INJECT), 2 unknown op (and the bench
 // ops in a build without SVAL_TWO_CABLE_BENCH), 3 the split cable works, so
-// FOLLOW and LEAD are refused, 4 INJECT on a lead that is not capturing.
-enum { STATUS_OK, STATUS_NOT_FOLLOWER, STATUS_UNKNOWN_OP, STATUS_CABLE, STATUS_NOT_CAPTURING };
+// FOLLOW and LEAD are refused, 4 INJECT on a lead that is not capturing,
+// 5 PEER on a half that is not leading.
+enum { STATUS_OK, STATUS_NOT_FOLLOWER, STATUS_UNKNOWN_OP, STATUS_CABLE, STATUS_NOT_CAPTURING, STATUS_NOT_LEAD };
 
 // INJECT, CAPTURE and REBOOT are for hardware tests: CAPTURE hands every
 // report the lead makes to a raw HID client, and INJECT presses keys.
@@ -57,6 +59,15 @@ static uint8_t  role;
 static uint32_t owner;    // client ID of the relay
 static uint32_t last_pkt; // its last packet for this role
 
+// Relay down: this half led, and the relay went quiet without a RELEASE. The
+// light waits RELAY_LIGHT_AFTER_MS, so a relay that restarts at once never
+// blips, then repeats a double blip every RELAY_LIGHT_EVERY_MS.
+#define RELAY_LIGHT_AFTER_MS 3000
+#define RELAY_LIGHT_EVERY_MS 3000
+#define RELAY_LIGHT_ON_MS 450 // the blip itself: update_led.c, UPDATE_LED_RELAY
+static bool     relay_lapsed;
+static uint32_t relay_lapsed_at;
+
 // lead
 static uint8_t  applied_seq;
 static bool     applied_pending;
@@ -66,6 +77,10 @@ static uint32_t lead_packets;
 static uint8_t  lead_inject[ROWS_PER_HAND]; // bench: the lead's own keys, pressed by the relay
 static bool     reboot_pending;
 static uint32_t reboot_at;
+// The follower's own identity blocks, from its Sval 0x2C and 0x38 replies
+// (op PEER): where the split link's presence reply would put them.
+static sval_pointer_identity_t peer_pointer;
+static sval_board_identity_t   peer_board;
 
 // follower
 static uint8_t  sent_rows[ROWS_PER_HAND];
@@ -171,6 +186,8 @@ static uint8_t side_drop;
 
 static void lead_end(void) {
     lead_drop_keys();
+    memset(&peer_pointer, 0, sizeof(peer_pointer));
+    memset(&peer_board, 0, sizeof(peer_board));
     if (!cable_up()) side_drop = 1;
     role = ROLE_NONE;
 }
@@ -391,6 +408,18 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
                 break;
             case OP_STATUS:
                 break;
+            case OP_PEER:
+                // d[7] blocks held (bit 0 pointer, bit 1 board), d[8..12] the
+                // follower's 0x2C block for itself, d[13..17] its 0x38 block.
+                if (role != ROLE_LEAD) {
+                    status = STATUS_NOT_LEAD;
+                    break;
+                }
+                memset(&peer_pointer, 0, sizeof(peer_pointer));
+                memset(&peer_board, 0, sizeof(peer_board));
+                if (data[7] & 1) memcpy(&peer_pointer, &data[8], sizeof(peer_pointer));
+                if (data[7] & 2) memcpy(&peer_board, &data[8 + sizeof(peer_pointer)], sizeof(peer_board));
+                break;
             case OP_INJECT:
                 if (role == ROLE_LEAD) {
                     // Bench only: press or release the lead's own keys, as keytest does.
@@ -428,6 +457,8 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
                 status = STATUS_UNKNOWN_OP;
                 break;
         }
+    // Any role a relay asks for, or a RELEASE, means a relay is there again.
+    if (op == OP_FOLLOW || op == OP_LEAD || op == OP_RELEASE) relay_lapsed = false;
     uint8_t seq = data[7];
     memset(&data[7], 0, length - 7);
     data[6]  = 0x80 | op;
@@ -453,6 +484,8 @@ void sval_two_cable_task(void) {
     if (role == ROLE_LEAD) {
         if (timer_elapsed32(last_pkt) > LEAD_LEASE_MS) {
             lead_end();
+            relay_lapsed    = true; // after lead_end(): ending a role on request clears it
+            relay_lapsed_at = timer_read32();
             return;
         }
         if (applied_pending) {
@@ -476,6 +509,29 @@ void sval_two_cable_task(void) {
         }
         follower_push(false);
     }
+}
+
+bool sval_two_cable_relay_light(void) {
+    if (!relay_lapsed) return false;
+    if (cable_up()) { // the split cable carries the other half: nothing is missing
+        relay_lapsed = false;
+        return false;
+    }
+    if (usb_device_state_get_configure_state() != USB_DEVICE_STATE_CONFIGURED) return false; // asleep or unplugged
+    uint32_t t = timer_elapsed32(relay_lapsed_at);
+    return t >= RELAY_LIGHT_AFTER_MS && (t - RELAY_LIGHT_AFTER_MS) % RELAY_LIGHT_EVERY_MS < RELAY_LIGHT_ON_MS;
+}
+
+bool sval_two_cable_peer_pointer(sval_pointer_identity_t *id) {
+    if (role != ROLE_LEAD || !(peer_pointer.flags & SVAL_POINTER_REPORTED)) return false;
+    *id = peer_pointer;
+    return true;
+}
+
+bool sval_two_cable_peer_board(sval_board_identity_t *id) {
+    if (role != ROLE_LEAD || !(peer_board.flags & SVAL_BOARD_REPORTED)) return false;
+    *id = peer_board;
+    return true;
 }
 
 void sval_two_cable_pointing(report_mouse_t *left, report_mouse_t *right) {
