@@ -14,6 +14,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#ifdef SVAL_TOUCH_DEV
+#    include "key_inject.h"
+#endif
 #include "flicker_latch.h"
 #include <stdint.h>
 #include <stdbool.h>
@@ -336,6 +339,9 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     // SvalMCUMini V1.0: an original cluster can't be scanned, so its keys are muted
     // (its center would read as held). Scan Lab still sees the raw rows.
     uint8_t muted = sval_muted_rows();
+#ifdef SVAL_TOUCH_DEV
+    sval_key_inject_apply(curr_matrix); // dev builds: injected presses (key_inject.c)
+#endif
     if (muted && !scanlab_active()) {
         for (uint8_t r = 0; r < ROWS_PER_HAND; r++) {
             if (muted & (1u << r)) curr_matrix[r] = 0;

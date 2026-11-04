@@ -1,3 +1,6 @@
+#ifdef SVAL_TOUCH_DEV
+#    include "key_inject.h"
+#endif
 #include "svalboard.h"
 #include "pointing_detect.h"
 #include "pointer_reprobe.h"
@@ -805,6 +808,9 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void *in_data, uint8_t
     if (sval_mt_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return;
     if (sval_touch_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return; // the touch page
 #endif
+#ifdef SVAL_TOUCH_DEV
+    if (sval_key_inject_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return; // dev: injected presses
+#endif
 #ifdef SVAL_PERF_STATS
     if (sval_perf_split_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return;
 #endif
@@ -1035,6 +1041,10 @@ void sval_dev_command(uint8_t *data, uint8_t length) {
 #    ifdef SVAL_TOUCH_DEV
     if (op == 0x42) {
         sval_mt_command(data, length);
+        return;
+    }
+    if (op == 0x44) {
+        sval_key_inject_command(data, length);
         return;
     }
 #    endif

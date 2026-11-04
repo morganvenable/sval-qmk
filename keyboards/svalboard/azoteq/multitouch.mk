@@ -25,6 +25,7 @@ ifeq ($(strip $(SVAL_NATIVE_PTP)),yes)
       $(error SVAL_TOUCH_DEV cannot be part of a release build)
     endif
     OPT_DEFS += -DSVAL_TOUCH_DEV
+    SRC += key_inject.c
   endif
 else
   ifeq ($(strip $(SVAL_TOUCH_DEV)),yes)
