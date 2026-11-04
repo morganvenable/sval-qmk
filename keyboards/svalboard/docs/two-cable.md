@@ -54,7 +54,7 @@ CLEAR for the other half, the updater's split presence, and `0x2F` contacts.
 When the lead's lease runs out (the relay stopped without RELEASE), the lead
 shows an amber double blip every 3 s, starting 3 s later so a relay that
 restarts at once never shows it. Layer colors show between blips. It ends
-when a relay sends FOLLOW, LEAD or RELEASE, or the split cable comes up, and
+when a relay sends FOLLOW, LEAD, RELEASE or PEER, or the split cable comes up, and
 it is dark while USB is suspended. The updater's own lights take precedence
 (`updater.c`, `UPDATE_LED_RELAY` in `update_led.c`). Amber means nothing else
 in the light table: red stays for failures only.
@@ -94,9 +94,10 @@ then throttles the master's attempts to one every 500 ms, each limited by the
 | 0x05 INJECT | either | bench: rows[5], dx, dy | `0x85` |
 | 0x06 CAPTURE | lead | bench: 1 on / keep alive, 0 off | `0x86` |
 | 0x07 REBOOT | either | bench: leave USB and come back | `0x87` |
-| 0x08 PEER | lead | held (bit 0 pointer, bit 1 board), the follower's own Sval `0x2C` block (5 bytes), its own `0x38` block (5 bytes) | `0x88` |
+| 0x08 PEER | lead | held (bit 0 pointer, bit 1 board), the follower's own Sval `0x2C` block (5 bytes), its own `0x38` block (5 bytes) | `0x88` (byte 7 echoes the held byte, not a sequence) |
 
-Replies: `[0x80|op][seq][status][role][side][capture][lead packets:4][time us:4]`.
+Replies: `[0x80|op][seq][status][role][side][capture][lead packets:4][time us:4]
+[relay light: bit 0 due, bit 1 showing][PEER held: bit 0 pointer, bit 1 board][ms since the lease lapsed:2]`.
 Status: 0 OK, 1 not a follower (INJECT), 2 unknown op (also the bench ops
 without `SVAL_TWO_CABLE_BENCH`), 3 the split cable works (FOLLOW and LEAD
 refused, and LEAD replies even when not asked), 4 INJECT on a lead that isn't

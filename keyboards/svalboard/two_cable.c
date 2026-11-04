@@ -457,8 +457,9 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
                 status = STATUS_UNKNOWN_OP;
                 break;
         }
-    // Any role a relay asks for, or a RELEASE, means a relay is there again.
-    if (op == OP_FOLLOW || op == OP_LEAD || op == OP_RELEASE) relay_lapsed = false;
+    // Any role a relay asks for, a RELEASE, or a PEER (only a relay sends one, even
+    // to a lead whose lease lapsed while the follower was away) means a relay is there.
+    if (op == OP_FOLLOW || op == OP_LEAD || op == OP_RELEASE || op == OP_PEER) relay_lapsed = false;
     uint8_t seq = data[7];
     memset(&data[7], 0, length - 7);
     data[6]  = 0x80 | op;
@@ -469,6 +470,12 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
     data[11] = capture_on;
     put32(&data[12], lead_packets);
     put32(&data[16], now_us());
+    // 20: the relay-down light is due (bit 0) / showing now (bit 1); 21: PEER blocks held
+    // (bit 0 pointer, bit 1 board); 22-23: ms since the lease lapsed (capped).
+    data[20] = (relay_lapsed ? 1 : 0) | (sval_two_cable_relay_light() ? 2 : 0);
+    data[21] = ((peer_pointer.flags & SVAL_POINTER_REPORTED) ? 1 : 0) | ((peer_board.flags & SVAL_BOARD_REPORTED) ? 2 : 0);
+    uint32_t lapsed_ms = relay_lapsed ? timer_elapsed32(relay_lapsed_at) : 0;
+    put16(&data[22], (int16_t)(lapsed_ms > 32767 ? 32767 : lapsed_ms));
     return true;
 }
 
