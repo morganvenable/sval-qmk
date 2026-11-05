@@ -12,6 +12,9 @@
 #ifdef SVAL_TWO_CABLE
 extern bool sval_two_cable_command(uint8_t *data, uint8_t length);
 #endif
+#ifdef SVAL_LINK_TEST
+extern void sval_link_test_command(uint8_t *data, uint8_t length);
+#endif
 
 #if defined(SVAL_TOUCH_DEV) || defined(SVAL_PERF_STATS)
 // Touchpad dev builds only (keyboards/svalboard/azoteq/multitouch.mk).
@@ -185,6 +188,12 @@ bool client_wrapper_receive(uint8_t *data, uint8_t length) {
 #ifdef SVAL_TWO_CABLE
         case 0xFB: // Two halves on separate USB cables (keyboards/svalboard/two_cable.c); prototype builds only.
             if (sval_two_cable_command(data, length)) host_raw_hid_send(data, length);
+            return true;
+#endif
+#ifdef SVAL_LINK_TEST
+        case 0xFA: // Link light tests (keyboards/svalboard/link_light.c); dev builds only.
+            sval_link_test_command(data, length);
+            host_raw_hid_send(data, length);
             return true;
 #endif
         case 0xFE: {

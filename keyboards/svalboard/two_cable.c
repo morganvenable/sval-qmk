@@ -20,7 +20,7 @@
 #include "host.h"
 #include "host_driver.h"
 #include "client_wrapper.h"
-#include "usb_device_state.h"
+#include "link_light.h"
 #include "two_cable.h"
 #include "svalboard.h" // sval_other_half_connected
 #ifdef SVAL_EITHER_HAND
@@ -59,14 +59,10 @@ static uint8_t  role;
 static uint32_t owner;    // client ID of the relay
 static uint32_t last_pkt; // its last packet for this role
 
-// Relay down: this half led, and the relay went quiet without a RELEASE. The
-// light waits RELAY_LIGHT_AFTER_MS, so a relay that restarts at once never
-// blips, then repeats a double blip every RELAY_LIGHT_EVERY_MS.
-#define RELAY_LIGHT_AFTER_MS 3000
-#define RELAY_LIGHT_EVERY_MS 3000
-#define RELAY_LIGHT_ON_MS 450 // the blip itself: update_led.c, UPDATE_LED_RELAY
-static bool     relay_lapsed;
-static uint32_t relay_lapsed_at;
+// The link light (link_light.h): taking a role pairs; a lease that runs out,
+// or a RELEASE that says the other half was lost, loses the pairing; a plain
+// RELEASE is a stop on purpose.
+#define RELEASE_LOST 0x01 // RELEASE d[7]: the relay lost the other half (it left USB or stopped answering)
 
 // lead
 static uint8_t  applied_seq;
@@ -392,6 +388,7 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
                 if (role != ROLE_FOLLOWER) follower_begin();
                 owner    = client;
                 last_pkt = timer_read32();
+                sval_link_paired();
                 follower_push(true);
                 break;
             case OP_LEAD:
@@ -399,12 +396,17 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
                 role     = ROLE_LEAD;
                 owner    = client;
                 last_pkt = timer_read32();
+                sval_link_paired();
                 lead_state(data);
                 if (!(data[21] & 1)) return false; // no reply unless asked
                 break;
             case OP_RELEASE:
                 role_end();
                 capture_end();
+                if (data[7] & RELEASE_LOST)
+                    sval_link_lost();
+                else
+                    sval_link_stopped();
                 break;
             case OP_STATUS:
                 break;
@@ -457,9 +459,6 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
                 status = STATUS_UNKNOWN_OP;
                 break;
         }
-    // Any role a relay asks for, a RELEASE, or a PEER (only a relay sends one, even
-    // to a lead whose lease lapsed while the follower was away) means a relay is there.
-    if (op == OP_FOLLOW || op == OP_LEAD || op == OP_RELEASE || op == OP_PEER) relay_lapsed = false;
     uint8_t seq = data[7];
     memset(&data[7], 0, length - 7);
     data[6]  = 0x80 | op;
@@ -470,12 +469,12 @@ bool sval_two_cable_command(uint8_t *data, uint8_t length) {
     data[11] = capture_on;
     put32(&data[12], lead_packets);
     put32(&data[16], now_us());
-    // 20: the relay-down light is due (bit 0) / showing now (bit 1); 21: PEER blocks held
-    // (bit 0 pointer, bit 1 board); 22-23: ms since the lease lapsed (capped).
-    data[20] = (relay_lapsed ? 1 : 0) | (sval_two_cable_relay_light() ? 2 : 0);
+    // 20: the link light (bit 0 lost, bit 1 showing now, bit 2 armed); 21: PEER blocks
+    // held (bit 0 pointer, bit 1 board); 22-23: ms since the loss (capped).
+    data[20] = sval_link_flags();
     data[21] = ((peer_pointer.flags & SVAL_POINTER_REPORTED) ? 1 : 0) | ((peer_board.flags & SVAL_BOARD_REPORTED) ? 2 : 0);
-    uint32_t lapsed_ms = relay_lapsed ? timer_elapsed32(relay_lapsed_at) : 0;
-    put16(&data[22], (int16_t)(lapsed_ms > 32767 ? 32767 : lapsed_ms));
+    uint32_t lost_ms = sval_link_lost_ms();
+    put16(&data[22], (int16_t)(lost_ms > 32767 ? 32767 : lost_ms));
     return true;
 }
 
@@ -491,8 +490,7 @@ void sval_two_cable_task(void) {
     if (role == ROLE_LEAD) {
         if (timer_elapsed32(last_pkt) > LEAD_LEASE_MS) {
             lead_end();
-            relay_lapsed    = true; // after lead_end(): ending a role on request clears it
-            relay_lapsed_at = timer_read32();
+            sval_link_lost(); // the relay went quiet
             return;
         }
         if (applied_pending) {
@@ -512,21 +510,11 @@ void sval_two_cable_task(void) {
     } else if (role == ROLE_FOLLOWER) {
         if (timer_elapsed32(last_pkt) > FOLLOW_LEASE_MS) {
             follower_end();
+            sval_link_lost(); // the relay went quiet
             return;
         }
         follower_push(false);
     }
-}
-
-bool sval_two_cable_relay_light(void) {
-    if (!relay_lapsed) return false;
-    if (cable_up()) { // the split cable carries the other half: nothing is missing
-        relay_lapsed = false;
-        return false;
-    }
-    if (usb_device_state_get_configure_state() != USB_DEVICE_STATE_CONFIGURED) return false; // asleep or unplugged
-    uint32_t t = timer_elapsed32(relay_lapsed_at);
-    return t >= RELAY_LIGHT_AFTER_MS && (t - RELAY_LIGHT_AFTER_MS) % RELAY_LIGHT_EVERY_MS < RELAY_LIGHT_ON_MS;
 }
 
 bool sval_two_cable_peer_pointer(sval_pointer_identity_t *id) {

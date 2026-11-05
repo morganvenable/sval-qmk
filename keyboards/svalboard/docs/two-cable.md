@@ -49,15 +49,23 @@ Still empty for the other half in two-cable mode, since each needs the split
 link: the flicker latch (`0x3D`, Matrix Tester), Scan Lab, `0x33` SET and
 CLEAR for the other half, the updater's split presence, and `0x2F` contacts.
 
-## Relay down
+## Link light
 
-When the lead's lease runs out (the relay stopped without RELEASE), the lead
-shows an amber double blip every 3 s, starting 3 s later so a relay that
-restarts at once never shows it. Layer colors show between blips. It ends
-when a relay sends FOLLOW, LEAD, RELEASE or PEER, or the split cable comes up, and
-it is dark while USB is suspended. The updater's own lights take precedence
-(`updater.c`, `UPDATE_LED_RELAY` in `update_led.c`). Amber means nothing else
-in the light table: red stays for failures only.
+Two cables use the same link light as the split cable (`link_light.h`,
+`docs/link-light.md`): amber, 2 Hz, on both halves.
+
+- Taking a role (FOLLOW or LEAD) pairs a half.
+- A lease that runs out (the relay crashed or hung) loses the pairing, on both
+  halves.
+- A RELEASE with bit 0 of its first byte set also loses it. The relay sends
+  that when the other half left USB or stopped answering, so the half that is
+  left blinks.
+- A plain RELEASE (the relay stopped, or was uninstalled) is a stop on purpose:
+  no light.
+- The pairing comes back with the next role.
+
+A half on its own from power-up never blinks. The updater's lights win, and the
+light is dark in USB suspend.
 
 ## Sides
 
@@ -89,7 +97,7 @@ then throttles the master's attempts to one every 500 ms, each limited by the
 |---|---|---|---|
 | 0x01 FOLLOW | follower | none; renews the lease | `0x81`, then a rows push |
 | 0x02 LEAD | lead | seq, side, rows[5], dx, dy (int16), h, v (int8), buttons, flags (bit 0: reply; bit 1: the rows hold injected keys, which act only while the lead captures) | `0x82` only if asked |
-| 0x03 RELEASE | either | none: end the role | `0x83` |
+| 0x03 RELEASE | either | flags: bit 0 the other half was lost (the link light shows), else a stop on purpose | `0x83` |
 | 0x04 STATUS | either | none | `0x84` |
 | 0x05 INJECT | either | bench: rows[5], dx, dy | `0x85` |
 | 0x06 CAPTURE | lead | bench: 1 on / keep alive, 0 off | `0x86` |
@@ -97,7 +105,7 @@ then throttles the master's attempts to one every 500 ms, each limited by the
 | 0x08 PEER | lead | held (bit 0 pointer, bit 1 board), the follower's own Sval `0x2C` block (5 bytes), its own `0x38` block (5 bytes) | `0x88` (byte 7 echoes the held byte, not a sequence) |
 
 Replies: `[0x80|op][seq][status][role][side][capture][lead packets:4][time us:4]
-[relay light: bit 0 due, bit 1 showing][PEER held: bit 0 pointer, bit 1 board][ms since the lease lapsed:2]`.
+[link light: bit 0 lost, bit 1 showing, bit 2 armed][PEER held: bit 0 pointer, bit 1 board][ms since the loss:2]`.
 Status: 0 OK, 1 not a follower (INJECT), 2 unknown op (also the bench ops
 without `SVAL_TWO_CABLE_BENCH`), 3 the split cable works (FOLLOW and LEAD
 refused, and LEAD replies even when not asked), 4 INJECT on a lead that isn't

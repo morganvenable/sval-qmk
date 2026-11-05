@@ -29,10 +29,6 @@ void sval_two_cable_pointing(report_mouse_t *left, report_mouse_t *right);
 // the other half's blocks come from the split link or stay zero, as before.
 bool sval_two_cable_peer_pointer(sval_pointer_identity_t *id);
 bool sval_two_cable_peer_board(sval_board_identity_t *id);
-// The relay-down light (updater.c): true while the amber blip should show.
-// A lead whose lease lapsed (the relay stopped without RELEASE) blips until a
-// relay or the split cable takes over again.
-bool sval_two_cable_relay_light(void);
 #else
 static inline bool sval_two_cable_lead_live(void) {
     return false;
