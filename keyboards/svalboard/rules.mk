@@ -50,6 +50,8 @@ VIA_INSECURE = yes
 # debounced in both, 5 ms per key, deferred.
 DEBOUNCE_TYPE = custom
 SRC += debounce_sval.c
+# Every firmware restart is a full chip reset (full_reset.c).
+SRC += full_reset.c
 SRC += link_light.c
 
 # Link light tests (link_light.c): a dev-only raw HID protocol (0xFA) that pauses
