@@ -39,5 +39,6 @@ typedef struct {
     uint32_t last_ms;
 } sval_pad_scroll_t;
 
+// speed_pct: the user's touchpad scroll speed, 25 to 400, 100 is the rate above.
 // Pad pixels in (h: right, v: as the chip reports), wheel counts out.
-void sval_pad_scroll(sval_pad_scroll_t *s, uint32_t now_ms, int32_t px_h, int32_t px_v, bool mac, bool lock, int16_t *h, int16_t *v);
+void sval_pad_scroll(sval_pad_scroll_t *s, uint32_t now_ms, int32_t px_h, int32_t px_v, bool mac, bool lock, uint16_t speed_pct, int16_t *h, int16_t *v);

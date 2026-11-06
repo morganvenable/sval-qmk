@@ -143,6 +143,7 @@ enum sval_feature_flags4 {
     sval_flag4_pad_palm      = (1 << 0), // VIA value 58: the touchpad palm rejection (native touchpad builds)
     sval_flag4_pad_mode      = (1 << 1), // VIA value 59: touchpad mode, Automatic or built-in gestures (native touchpad builds)
     sval_flag4_debug_console = (1 << 2), // 0x3E sets and reads QMK's debug flag (builds with the console)
+    sval_flag4_pad_scroll_speed = (1 << 3), // VIA value 60: touchpad scroll speed, percent (test build)
 };
 
 // Status byte after the modifiers in the 0x16 reply (sval_flag2_modifier_state).

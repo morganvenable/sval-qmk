@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "pad_scroll.h"
 
-static int16_t counts(int32_t px, int32_t den, int32_t *rem) {
-    int32_t t = px * SVAL_PAD_SCROLL_HIRES + *rem;
+static int16_t counts(int32_t px, int32_t den, uint16_t speed_pct, int32_t *rem) {
+    den *= 100; // the speed is in percent
+    int32_t t = px * SVAL_PAD_SCROLL_HIRES * (int32_t)speed_pct + *rem;
     int32_t q = t / den;
     *rem      = t - q * den;
     if (q > 32767) q = 32767;
@@ -14,7 +15,7 @@ static int32_t iabs(int32_t v) {
     return v < 0 ? -v : v;
 }
 
-void sval_pad_scroll(sval_pad_scroll_t *s, uint32_t now_ms, int32_t px_h, int32_t px_v, bool mac, bool lock, int16_t *h, int16_t *v) {
+void sval_pad_scroll(sval_pad_scroll_t *s, uint32_t now_ms, int32_t px_h, int32_t px_v, bool mac, bool lock, uint16_t speed_pct, int16_t *h, int16_t *v) {
     *h = *v = 0;
     if (px_h == 0 && px_v == 0) return;
     if (s->lock != 0 || s->acc_h || s->acc_v) {
@@ -34,6 +35,6 @@ void sval_pad_scroll(sval_pad_scroll_t *s, uint32_t now_ms, int32_t px_h, int32_
     if (s->lock == 1) px_h = 0;
     if (s->lock == 2) px_v = 0;
     int32_t den = mac ? (int32_t)SVAL_PAD_SCROLL_PX_PER_DETENT_MAC * SVAL_PAD_SCROLL_MAC_DIV : SVAL_PAD_SCROLL_PX_PER_DETENT;
-    *h          = counts(px_h, den, &s->rem_h);
-    *v          = counts(px_v, den, &s->rem_v);
+    *h          = counts(px_h, den, speed_pct, &s->rem_h);
+    *v          = counts(px_v, den, speed_pct, &s->rem_v);
 }

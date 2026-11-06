@@ -211,6 +211,8 @@ bool     sval_pad_touch_supported(void);
 // The touchpad palm rejection (pad_gestures.h): the area threshold this half
 // uses now, 0 off. Native touchpad builds (azoteq/multitouch.c) apply it.
 uint8_t  sval_pad_palm(void);
+// The touchpad scroll speed, percent (VIA value 60): 25 to 400, 100 by default.
+uint16_t sval_pad_scroll_speed(void);
 bool     sval_pad_palm_supported(void);
 // The touchpad mode (pad_gestures.h): built-in gestures even when the OS asks
 // for a touchpad. Native touchpad builds (azoteq/ptp.c) apply it.

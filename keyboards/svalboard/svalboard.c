@@ -123,6 +123,20 @@ bool sval_pad_builtin_gestures(void) {
     return pad_mode == SVAL_PAD_MODE_BUILTIN;
 }
 
+// The touchpad scroll speed (VIA value 60), percent, stored in its own three
+// bytes after the touchpad mode's record: the value, then a check byte.
+#define SVAL_PAD_SPEED_MIN 25
+#define SVAL_PAD_SPEED_MAX 400
+static uint16_t pad_speed = 100;
+
+uint16_t sval_pad_scroll_speed(void) {
+    return pad_speed;
+}
+
+static void pad_speed_set(uint16_t p) {
+    pad_speed = p < SVAL_PAD_SPEED_MIN ? SVAL_PAD_SPEED_MIN : p > SVAL_PAD_SPEED_MAX ? SVAL_PAD_SPEED_MAX : p;
+}
+
 static void pad_mode_set(uint8_t m) {
     pad_mode = m == SVAL_PAD_MODE_BUILTIN ? SVAL_PAD_MODE_BUILTIN : SVAL_PAD_MODE_AUTO;
 }
@@ -268,6 +282,9 @@ _Static_assert(SVALBOARD_PAD_PALM_OFFSET + SVAL_PAD_PALM_RECORD_BYTES <= VIA_EEP
 // The touchpad mode's record, after the palm rejection's.
 #define SVALBOARD_PAD_MODE_OFFSET (SVALBOARD_PAD_PALM_OFFSET + SVAL_PAD_PALM_RECORD_BYTES)
 _Static_assert(SVALBOARD_PAD_MODE_OFFSET + SVAL_PAD_MODE_RECORD_BYTES <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "the touchpad mode fits the VIA custom config");
+#define SVALBOARD_PAD_SPEED_OFFSET (SVALBOARD_PAD_MODE_OFFSET + SVAL_PAD_MODE_RECORD_BYTES)
+#define SVALBOARD_PAD_SPEED_BYTES 3
+_Static_assert(SVALBOARD_PAD_SPEED_OFFSET + SVALBOARD_PAD_SPEED_BYTES <= VIA_EEPROM_CUSTOM_CONFIG_SIZE, "the scroll speed fits the VIA custom config");
 
 #if VIA_ENABLE
 static void svalboard_get_magic(uint8_t *magic) {
@@ -313,6 +330,8 @@ static void pad_gestures_save(void) {
     uint8_t mode[SVAL_PAD_MODE_RECORD_BYTES];
     sval_pad_mode_record_write(pad_mode, mode);
     via_update_custom_config(mode, SVALBOARD_PAD_MODE_OFFSET, SVAL_PAD_MODE_RECORD_BYTES);
+    uint8_t speed[SVALBOARD_PAD_SPEED_BYTES] = {pad_speed & 0xFF, pad_speed >> 8, (uint8_t)(0xA5 ^ (pad_speed & 0xFF) ^ (pad_speed >> 8))};
+    via_update_custom_config(speed, SVALBOARD_PAD_SPEED_OFFSET, SVALBOARD_PAD_SPEED_BYTES);
 }
 
 static void pad_gestures_load(void) {
@@ -328,6 +347,9 @@ static void pad_gestures_load(void) {
     uint8_t mode[SVAL_PAD_MODE_RECORD_BYTES];
     via_read_custom_config(mode, SVALBOARD_PAD_MODE_OFFSET, SVAL_PAD_MODE_RECORD_BYTES);
     pad_mode_set(sval_pad_mode_record_read(mode));
+    uint8_t speed[SVALBOARD_PAD_SPEED_BYTES];
+    via_read_custom_config(speed, SVALBOARD_PAD_SPEED_OFFSET, SVALBOARD_PAD_SPEED_BYTES);
+    pad_speed_set((uint8_t)(0xA5 ^ speed[0] ^ speed[1]) == speed[2] ? (uint16_t)(speed[0] | (speed[1] << 8)) : 100);
 }
 
 void write_eeprom_kb(void) {
@@ -430,6 +452,7 @@ void read_eeprom_kb(void) {
         pad_tuning_set(0);
         pad_palm_set(0);
         pad_mode_set(SVAL_PAD_MODE_AUTO);
+        pad_speed_set(100);
         write_eeprom_kb();
         svalboard_eeprom_set_valid();
     } else {
@@ -600,6 +623,7 @@ uint8_t sval_get_feature_flags3_kb(void) {
 // touchpad palm rejection (VIA value 58).
 uint8_t sval_get_feature_flags4_kb(void) {
     uint8_t flags = sval_pad_palm_supported() ? sval_flag4_pad_palm | sval_flag4_pad_mode : 0;
+    if (sval_pad_gestures_supported()) flags |= sval_flag4_pad_scroll_speed;
 #ifdef CONSOLE_ENABLE
     flags |= sval_flag4_debug_console; // 0x3E (debug_console.c)
 #endif
@@ -1313,6 +1337,7 @@ enum sval_via_value_id {
     id_pad_palm = 58, // u16: a contact with more area than this, in channels, is a palm; 0 (the default) is off
     // The touchpad mode (pad_gestures.h), with sval_flag4_pad_mode:
     id_pad_touchpad_mode = 59, // 0 Automatic (the default): a touchpad when the OS asks; 1 built-in gestures always
+    id_pad_scroll_speed  = 60, // u16: touchpad two-finger scroll speed, percent, 25-400 (100 the default); test build
 };
 
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
@@ -1458,6 +1483,9 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                     break;
                 case id_pad_touchpad_mode:
                     pad_mode_set(value_data[0]);
+                    break;
+                case id_pad_scroll_speed:
+                    pad_speed_set(value_data[0] | (value_data[1] << 8));
                     break;
                 case id_pad_scroll_start: {
                     // The build's own distance, as it reads back, is the build's own.
@@ -1623,6 +1651,10 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                     break;
                 case id_pad_touchpad_mode:
                     value_data[0] = pad_mode;
+                    break;
+                case id_pad_scroll_speed:
+                    value_data[0] = pad_speed & 0xFF;
+                    value_data[1] = pad_speed >> 8;
                     break;
                 case id_pad_dead_zone:
                 case id_pad_tap_ms:
