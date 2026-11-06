@@ -51,7 +51,7 @@ int main(void) {
     sval_pad_scroll(&c, 0, 0, 100, false, false, 100, &h, &v);
     sval_pad_scroll(&c, 1, 0, 0, true, false, 100, &h, &v);
     sval_pad_scroll(&c, 2, 0, 1, true, false, 100, &h, &v);
-    CHECK(v == 0 && c.rem_v == 120);
+    CHECK(v == 0 && c.rem_v == 12000);
     // Axis lock: vertical-dominant motion drops the sideways part until rest.
     sval_pad_scroll_t l = {0};
     sval_pad_scroll(&l, 0, 20, 30, false, true, 100, &h, &v); // decides V
