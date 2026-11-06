@@ -860,6 +860,15 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Response: [0xDF] [0x2C] [format] [report...]
             // format 0: the board has nothing to report. The keyboard defines the
             // report (Svalboard: keyboards/svalboard/docs/protocol.md).
+#ifdef SVAL_DEV_SENSOR_HOOKS
+            if (length > 4 && data[2] == 0xA5) { // DEV ONLY: DF 2C A5 <op>
+                extern void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length);
+                uint8_t op = data[3];
+                memset(&data[2], 0, length - 2);
+                sval_dev_sensor_hook(op, &data[2], length - 2);
+                break;
+            }
+#endif
             if (length > 2) {
                 memset(&data[2], 0, length - 2);
                 sval_pointing_hardware_kb(&data[2], length - 2);

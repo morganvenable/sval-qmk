@@ -1112,7 +1112,41 @@ void sval_dev_command(uint8_t *data, uint8_t length) {
 }
 #endif
 
+
+#ifdef SVAL_DEV_SENSOR_HOOKS
+// DEV ONLY (sub-ball-loss investigation): poke this half's PMW3389 directly.
+//   1 Shutdown (0xB6)   2 Power_Up_Reset (0x5A, no SROM)   3 read IDs
+//   4 full-chip restart in 100 ms (sensor stays powered)   5 = 1 then 4
+//   6 = 2 then 4
+bool    sval_pmw3389_write(uint8_t sensor, uint8_t reg, uint8_t val);
+uint8_t sval_pmw3389_read(uint8_t sensor, uint8_t reg);
+bool    sval_pmw3389_drv_init(void);
+static uint32_t dev_reset_at;
+void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length) {
+    out[0] = 0xA5;
+    out[1] = op;
+    if (op == 1 || op == 5) out[2] = sval_pmw3389_write(0, 0x3B, 0xB6);
+    if (op == 2 || op == 6) out[2] = sval_pmw3389_write(0, 0x3A, 0x5A);
+    if (op == 3) {
+        out[3] = sval_pmw3389_read(0, 0x00);
+        out[4] = sval_pmw3389_read(0, 0x3F);
+        out[5] = sval_pmw3389_read(0, 0x2A); // SROM_ID
+        out[6] = sval_pmw3389_read(0, 0x02); // Motion
+        out[7] = sval_pmw3389_read(0, 0x10); // Config2
+        out[8] = sval_pmw3389_read(0, 0x24); // Observation
+    }
+    if (op == 7) out[2] = sval_pmw3389_drv_init(); // spi pins + Power_Up_Reset, as the per-module boot does
+    if (op >= 4 && op <= 6) dev_reset_at = timer_read32() + 100;
+}
+static void sval_dev_sensor_task(void) {
+    if (dev_reset_at && timer_read32() > dev_reset_at) mcu_reset();
+}
+#else
+static inline void sval_dev_sensor_task(void) {}
+#endif
+
 void housekeeping_task_kb(void) {
+    sval_dev_sensor_task();
 #ifdef SVAL_PERF_STATS
     sval_perf_loop();
 #endif

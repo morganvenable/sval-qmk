@@ -183,3 +183,8 @@ ifeq ($(strip $(SVAL_DEV_KEEP_SETTINGS)), yes)
   endif
   OPT_DEFS += -DSVAL_DEV_KEEP_SETTINGS
 endif
+
+# DEV ONLY: sensor fault hooks (sub-ball-loss investigation)
+ifeq ($(strip $(SVAL_DEV_SENSOR_HOOKS)), yes)
+  OPT_DEFS += -DSVAL_DEV_SENSOR_HOOKS
+endif
