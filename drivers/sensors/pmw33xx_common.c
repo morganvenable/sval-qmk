@@ -17,6 +17,13 @@
 
 extern const uint8_t pmw33xx_firmware_signature[2] PROGMEM;
 
+#ifdef SVAL_DEV_SENSOR_HOOKS
+void sval_dev_stage_point(uint8_t stage, uint16_t at); // DEV ONLY: may restart the MCU here
+#    define DEV_STAGE(s, at) sval_dev_stage_point(s, at)
+#else
+#    define DEV_STAGE(s, at)
+#endif
+
 static const pin_t cs_pins_left[]  = PMW33XX_CS_PINS;
 static const pin_t cs_pins_right[] = PMW33XX_CS_PINS_RIGHT;
 
@@ -118,6 +125,7 @@ bool pmw33xx_upload_firmware(uint8_t sensor) {
     if (!pmw33xx_write(sensor, REG_SROM_Enable, 0x1d)) {
         return false;
     }
+    DEV_STAGE(2, 0);
     wait_ms(10);
     pmw33xx_write(sensor, REG_SROM_Enable, 0x18);
 
@@ -129,11 +137,13 @@ bool pmw33xx_upload_firmware(uint8_t sensor) {
     wait_us(15);
 
     for (size_t i = 0; i < pmw33xx_srom_get_length(); i++) {
+        DEV_STAGE(3, i);
         spi_write(pmw33xx_srom_get_byte(i));
         wait_us(15);
     }
 
     spi_stop();
+    DEV_STAGE(4, 0);
     wait_us(200);
 
     pmw33xx_read(sensor, REG_SROM_ID);
@@ -160,7 +170,10 @@ bool pmw33xx_init(uint8_t sensor) {
     if (!pmw33xx_write(sensor, REG_Power_Up_Reset, 0x5a)) {
         return false;
     }
-    wait_ms(50);
+    for (uint8_t ms = 0; ms < 50; ms++) {
+        DEV_STAGE(1, ms);
+        wait_ms(1);
+    }
 
     // read registers and discard
     pmw33xx_read(sensor, REG_Motion);
@@ -193,6 +206,7 @@ bool pmw33xx_init(uint8_t sensor) {
         pd_dprintf("PMW33XX (%d): firmware signature verification failed!\n", sensor);
         return false;
     }
+    DEV_STAGE(5, 0);
 
     return true;
 }

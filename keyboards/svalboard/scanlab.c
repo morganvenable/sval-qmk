@@ -228,6 +228,8 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
 #ifdef SVAL_DEV_SENSOR_HOOKS
         case 0x7F: { // DEV ONLY: the sensor hook on this half (either half through the split link): set value 0x7F, [hand][hook op]
             extern void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length);
+            extern uint16_t sval_dev_hook_arg;
+            sval_dev_hook_arg = req[2] | (uint16_t)(req[3] << 8);
             sval_dev_sensor_hook(req[1], rsp, SCANLAB_RSP_LEN);
             return;
         }

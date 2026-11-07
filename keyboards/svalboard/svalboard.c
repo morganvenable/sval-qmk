@@ -1122,6 +1122,16 @@ bool    sval_pmw3389_write(uint8_t sensor, uint8_t reg, uint8_t val);
 uint8_t sval_pmw3389_read(uint8_t sensor, uint8_t reg);
 bool    sval_pmw3389_drv_init(void);
 static uint32_t dev_reset_at;
+// Ops 31-35: restart the PMW driver from the main loop, and restart the MCU at stage
+// op - 30 (1 in the 50 ms power-up wait at ms arg, 2 in SROM_Enable's 10 ms, 3 before
+// SROM byte arg, 4 right after the upload, 5 at the end of the start).
+uint16_t        sval_dev_hook_arg;
+static uint8_t  dev_stage;
+static uint16_t dev_stage_arg;
+static bool     dev_restart_driver;
+void sval_dev_stage_point(uint8_t stage, uint16_t at) {
+    if (dev_stage && stage == dev_stage && at == dev_stage_arg) mcu_reset();
+}
 void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length) {
     out[0] = 0xA5;
     out[1] = op;
@@ -1152,9 +1162,20 @@ void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length) {
     }
     if (op == 7) out[2] = sval_pmw3389_drv_init(); // spi pins + Power_Up_Reset, as the per-module boot does
     if (op >= 4 && op <= 6) dev_reset_at = timer_read32() + 100;
+    if (op >= 31 && op <= 35) {
+        dev_stage          = op - 30;
+        dev_stage_arg      = sval_dev_hook_arg;
+        dev_restart_driver = true;
+        out[2]             = 1;
+    }
 }
 static void sval_dev_sensor_task(void) {
     if (dev_reset_at && timer_read32() > dev_reset_at) mcu_reset();
+    if (dev_restart_driver) {
+        dev_restart_driver = false;
+        wait_ms(20); // the RPC reply goes out first
+        sval_pmw3389_drv_init();
+    }
 }
 #else
 static inline void sval_dev_sensor_task(void) {}
