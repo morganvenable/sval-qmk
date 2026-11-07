@@ -8,6 +8,9 @@
 #include "pointing_device.h"
 #include "pointing_detect.h"
 #include "pointing_auto.h"
+#ifdef SVAL_BALL_DIAG
+#    include "ball_diag.h"
+#endif
 #include "drivers/sensors/azoteq_iqs5xx.h"
 
 static const sval_pointer_driver_t *driver      = NULL; // running
