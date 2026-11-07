@@ -194,6 +194,11 @@ else
   endif
 endif
 
+# Trackball diagnostics build (x4.5-balldiag): counters only, no behavior change.
+ifeq ($(strip $(SVAL_BALL_DIAG)), yes)
+  OPT_DEFS += -DSVAL_BALL_DIAG
+endif
+
 # Dev builds that keep stored settings across flashes (build_reset.c, D37):
 # -e SVAL_DEV_KEEP_SETTINGS=yes skips the reset on the first boot of a new build
 # and leaves the record alone, so util/sval_dev_flash.sh keep can iterate on a

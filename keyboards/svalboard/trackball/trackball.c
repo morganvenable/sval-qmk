@@ -7,6 +7,9 @@
 #include "drivers/sensors/pmw33xx_common.h"
 #include "svalboard.h"
 #include "squal.h"
+#ifdef SVAL_BALL_DIAG
+#    include "ball_diag.h"
+#endif
 
 static uint16_t trackball_cached_cpi = 0;
 
@@ -71,6 +74,9 @@ bool pmw33xx_spi_start(uint8_t sensor); // pmw33xx_common.c; selecting the chip 
 // port and 0x5A its core, as the search does (pointing_detect.c); the next look reads it after
 // its 50 ms. Nothing here waits.
 static void sensor_unstick(void) {
+#ifdef SVAL_BALL_DIAG
+    diag_unsticks++;
+#endif
     if (pmw33xx_spi_start(0)) {
         wait_us(10);
         spi_stop();
@@ -207,12 +213,19 @@ uint8_t sval_pointer_own_bus(void) {
 static uint32_t sensor_check_at     = 0;
 static uint16_t sensor_recover_wait = 0;
 
+#ifdef SVAL_BALL_DIAG
+static uint8_t diag_bad_mask = 0;
+#endif
 static bool sensor_answers(void) {
     uint8_t product = pmw33xx_read(0, REG_Product_ID), inverse = pmw33xx_read(0, REG_Inverse_Product_ID);
+    uint8_t config2 = pmw33xx_read(0, REG_Config2);
     bool    ok      = sval_pmw33xx_classify(product, inverse) != SVAL_SENSOR_NO_RESPONSE && product == sensor_product_id && inverse == sensor_inverse_product_id &&
-              pmw33xx_read(0, REG_Config2) == config2_shadow && sensor_cpi_raw() == sensor_cpi_seen &&
+              config2 == config2_shadow && sensor_cpi_raw() == sensor_cpi_seen &&
               pmw33xx_read(0, REG_Lift_Config) == sensor_lift_seen;
     pmw33xx_write(0, REG_Motion_Burst, 0x00); // burst mode again, as the read path enters it; no setting changes
+#ifdef SVAL_BALL_DIAG
+    diag_bad_mask = (product != sensor_product_id ? 1 : 0) | (inverse != sensor_inverse_product_id ? 2 : 0) | (config2 != config2_shadow ? 4 : 0);
+#endif
     return ok;
 }
 
@@ -222,9 +235,26 @@ static bool sensor_running(void) {
     if (sensor_init_ok) {
         if (timer_elapsed32(sensor_check_at) < SENSOR_CHECK_MS) return true;
         sensor_check_at = now;
-        if (sensor_answers()) return true;
+#ifdef SVAL_BALL_DIAG
+        diag_checks++;
+#endif
+        if (sensor_answers()) {
+#ifdef SVAL_BALL_DIAG
+            diag_health = 1;
+#endif
+            return true;
+        }
         wait_us(500);
-        if (sensor_answers()) return true;
+        if (sensor_answers()) {
+#ifdef SVAL_BALL_DIAG
+            diag_health = 2;
+#endif
+            return true;
+        }
+#ifdef SVAL_BALL_DIAG
+        diag_health = (uint8_t)(3 | (diag_bad_mask << 4));
+        diag_recoveries++;
+#endif
         sensor_init_ok      = false;
         sensor_recover_wait = 0;
         dprintf("PMW33XX: failed its health check, restarting\n");
@@ -234,6 +264,9 @@ static bool sensor_running(void) {
         // the searches cover the first 30 s, then this probe keeps looking. A half that never
         // saw a trackball leaves it to the searches.
         if (!sensor_saw_pair || sensor_probe_starts >= SENSOR_PROBE_START_TRIES) return false;
+#ifdef SVAL_BALL_DIAG
+        if (!sensor_gave_up) diag_giveups++;
+#endif
         sensor_gave_up = true;
     }
     if (sensor_gave_up) {
@@ -245,6 +278,9 @@ static bool sensor_running(void) {
             sensor_unstick(); // not a pair: a stuck sensor answers after this; the next probe reads it
         } else if (sensor == SVAL_BUILT_FOR) {
             if (!sensor_was_running) sensor_probe_starts++;
+#ifdef SVAL_BALL_DIAG
+            diag_slow_starts++;
+#endif
             if (pointing_device_driver_init()) { // clears sensor_gave_up and the failed-restart count
                 sensor_recover_wait = 0;
                 sensor_check_at     = timer_read32();
@@ -261,6 +297,9 @@ static bool sensor_running(void) {
         return true;
     }
     if (++sensor_recover_fails >= SENSOR_RECOVER_TRIES) {
+#ifdef SVAL_BALL_DIAG
+        if (!sensor_gave_up) diag_giveups++;
+#endif
         sensor_gave_up = true;
         dprintf("PMW33XX: giving up restarts after %u, probing every 30 s\n", sensor_recover_fails);
         return false;
