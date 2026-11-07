@@ -10,5 +10,5 @@ extern uint8_t diag_boots, diag_link_halfs, diag_first_spi, diag_start_search, d
 // 2 Inverse_Product_ID, 4 Config2); recoveries started; checks run (wraps).
 extern uint8_t diag_health, diag_recoveries, diag_checks;
 // Recovery work, since power-on: unstick (power-up) resets sent, slow-probe full starts,
-// and times the restarts gave up (wrap at 256; the Sval readout saturates them at 15).
+// and times the restarts gave up (wrap at 256; the Sval readout saturates them at 7, 7 and 3).
 extern uint8_t diag_unsticks, diag_slow_starts, diag_giveups;
