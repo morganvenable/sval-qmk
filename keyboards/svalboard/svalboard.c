@@ -1129,6 +1129,60 @@ uint16_t        sval_dev_hook_arg;
 static uint8_t  dev_stage;
 static uint16_t dev_stage_arg;
 static bool     dev_restart_driver;
+// Ops 40-45 (from the main loop): 40 SROM download cut after arg bytes, MCU restart with CS low;
+// 41 the same, then CS up and the IDs read into the hook's next op 3; 42 burst read cut after
+// arg bytes, MCU restart with CS low; 43 arg random-ish register writes to 0x00-0x7F, restart;
+// 44 SROM download cut, CS up, then MCU restart; 45 address byte only (CS low), restart.
+static uint8_t  dev_state_op;
+static uint16_t dev_state_arg;
+bool sval_pmw3389_spi_start(uint8_t sensor);
+#include "spi_master.h"
+static void dev_state_task(void) {
+    uint8_t op = dev_state_op;
+    if (!op) return;
+    dev_state_op = 0;
+    wait_ms(20);
+    if (op == 40 || op == 41 || op == 44) {
+        sval_pmw3389_write(0, 0x13, 0x1d);
+        wait_ms(10);
+        sval_pmw3389_write(0, 0x13, 0x18);
+        sval_pmw3389_spi_start(0);
+        spi_write(0x62 | 0x80);
+        wait_us(15);
+        for (uint16_t i = 0; i < dev_state_arg; i++) {
+            spi_write((uint8_t)(i * 37 + 11));
+            wait_us(15);
+        }
+        if (op == 40) mcu_reset();
+        spi_stop();
+        wait_us(200);
+        if (op == 44) mcu_reset();
+        return;
+    }
+    if (op == 42) {
+        sval_pmw3389_write(0, 0x50, 0x00);
+        sval_pmw3389_spi_start(0);
+        spi_write(0x50);
+        wait_us(35);
+        for (uint16_t i = 0; i < dev_state_arg; i++) spi_read();
+        mcu_reset();
+    }
+    if (op == 43) {
+        uint32_t x = 0x12345 + dev_state_arg;
+        for (uint16_t i = 0; i < dev_state_arg; i++) {
+            x = x * 1103515245u + 12345u;
+            uint8_t reg = (x >> 8) & 0x7F;
+            if (reg == 0x3A || reg == 0x3B || reg == 0x13 || reg == 0x62) continue;
+            sval_pmw3389_write(0, reg, (x >> 16) & 0xFF);
+        }
+        mcu_reset();
+    }
+    if (op == 45) {
+        sval_pmw3389_spi_start(0);
+        spi_write(0x00);
+        mcu_reset();
+    }
+}
 void sval_dev_stage_point(uint8_t stage, uint16_t at) {
     if (dev_stage && stage == dev_stage && at == dev_stage_arg) mcu_reset();
 }
@@ -1161,6 +1215,7 @@ void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length) {
         out[11] = sval_pmw3389_read(0, 0x63);
     }
     if (op == 7) out[2] = sval_pmw3389_drv_init(); // spi pins + Power_Up_Reset, as the per-module boot does
+    if (op >= 40 && op <= 45) dev_state_op = op, dev_state_arg = sval_dev_hook_arg;
     if (op >= 4 && op <= 6) dev_reset_at = timer_read32() + 100;
     if (op >= 31 && op <= 35) {
         dev_stage          = op - 30;
@@ -1171,6 +1226,7 @@ void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length) {
 }
 static void sval_dev_sensor_task(void) {
     if (dev_reset_at && timer_read32() > dev_reset_at) mcu_reset();
+    dev_state_task();
     if (dev_restart_driver) {
         dev_restart_driver = false;
         wait_ms(20); // the RPC reply goes out first
