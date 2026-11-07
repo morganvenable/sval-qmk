@@ -418,8 +418,11 @@ static volatile uint32_t diag_boot_word __attribute__((section(".ram0")));
 uint8_t diag_boots = 0, diag_link_halfs = 15, diag_first_spi = 15, diag_start_search = 15, diag_start_tenths = 255;
 uint8_t diag_health = 0, diag_recoveries = 0, diag_checks = 0;
 uint8_t diag_unsticks = 0, diag_slow_starts = 0, diag_giveups = 0;
-static uint8_t diag_n15(uint8_t v) {
-    return v > 15 ? 15 : v;
+// The three recovery counts in one byte: unstick resets (bits 0-2), slow-probe starts (3-5),
+// give-ups (6-7); each saturates at its largest value.
+static uint8_t diag_recovery_byte(void) {
+    uint8_t u = diag_unsticks > 7 ? 7 : diag_unsticks, s = diag_slow_starts > 7 ? 7 : diag_slow_starts, g = diag_giveups > 3 ? 3 : diag_giveups;
+    return (uint8_t)(u | (s << 3) | (g << 6));
 }
 static void diag_boot_count(void) {
     if ((diag_boot_word & 0xFFFFFF00u) != 0xBA11D100u) diag_boot_word = 0xBA11D100u;
@@ -853,8 +856,7 @@ void kb_sync_listener(uint8_t in_buflen, const void *in_data, uint8_t out_buflen
             out->ball_diag[3] = diag_health;
             out->ball_diag[4] = diag_recoveries;
             out->ball_diag[5] = diag_checks;
-            out->ball_diag[6] = (uint8_t)(diag_n15(diag_unsticks) | (diag_n15(diag_slow_starts) << 4));
-            out->ball_diag[7] = diag_n15(diag_giveups);
+            out->ball_diag[6] = diag_recovery_byte();
 #endif
         }
         out->magic[0] = SVAL_PRESENCE_RSP_MAGIC0;
@@ -960,7 +962,7 @@ static sval_pointer_identity_t other_pointer;
 #ifdef SVAL_BALL_DIAG
 // What the master saw from the sub: its ping replies (identity block, relayed counters)
 // and its pointing reports.
-static uint8_t  diag_sub[8];
+static uint8_t  diag_sub[7];
 static bool     diag_sub_valid, diag_reply_seen, diag_change_seen, diag_motion_seen;
 static uint32_t diag_reply_at, diag_change_at, diag_motion_at;
 static uint16_t diag_age(bool seen, uint32_t at, uint32_t div) {
@@ -979,7 +981,7 @@ static void diag_put16(uint8_t *o, uint16_t v) {
 // [sub counters, 6 bytes, as ball_diag.h] [this half's own sensor: health, recoveries, checks,
 // first_spi | search << 4, start_tenths].
 void sval_ball_diag_kb(uint8_t *out, uint8_t length) {
-    if (length < 30) return;
+    if (length < 29) return;
     out[0] = 0xA5;
     out[1] = 1;
     out[2] = (diag_sub_valid ? 1 : 0) | (is_connected ? 2 : 0) | (is_keyboard_left() ? 4 : 0);
@@ -998,11 +1000,9 @@ void sval_ball_diag_kb(uint8_t *out, uint8_t length) {
     out[23] = diag_checks;
     out[24] = (uint8_t)((diag_first_spi & 15) | ((diag_start_search & 15) << 4));
     out[25] = diag_start_tenths;
-    // [26] this half: unstick resets | slow-probe starts << 4; [27] give-ups; [28] [29] the same for the sub (each count saturates at 15).
-    out[26] = (uint8_t)(diag_n15(diag_unsticks) | (diag_n15(diag_slow_starts) << 4));
-    out[27] = diag_n15(diag_giveups);
-    out[28] = diag_sub[6];
-    out[29] = diag_sub[7];
+    // [26] this half's recovery counts, [27] the sub's: unstick resets (bits 0-2), slow-probe starts (3-5), give-ups (6-7), each saturating.
+    out[26] = diag_recovery_byte();
+    out[27] = diag_sub[6];
 }
 #endif
 

@@ -163,7 +163,7 @@ typedef struct __attribute__((__packed__)) {
     uint8_t               board_magic; // SVAL_BOARD_RPC_MAGIC
     sval_board_identity_t board;
 #ifdef SVAL_BALL_DIAG
-    uint8_t ball_diag[8]; // ball_diag.h
+    uint8_t ball_diag[7]; // ball_diag.h
 #endif
 } presence_rsp_t;
 
