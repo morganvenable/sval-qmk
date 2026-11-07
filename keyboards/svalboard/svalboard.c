@@ -1137,7 +1137,19 @@ static uint8_t  dev_state_op;
 static uint16_t dev_state_arg;
 bool sval_pmw3389_spi_start(uint8_t sensor);
 #include "spi_master.h"
+static uint8_t dev_window[16];
 static void dev_state_task(void) {
+    if (dev_state_op == 46) {
+        dev_state_op = 0;
+        sval_pmw3389_write(0, 0x3A, 0x5A);
+        if (dev_state_arg) wait_ms(dev_state_arg);
+        for (uint8_t i = 0; i < 8; i++) { // pairs ~0.4 ms apart
+            dev_window[2 * i]     = sval_pmw3389_read(0, 0x00);
+            dev_window[2 * i + 1] = sval_pmw3389_read(0, 0x3F);
+            if (i == 3) wait_ms(60);       // the last four after the reset is surely done
+        }
+        return;
+    }
     uint8_t op = dev_state_op;
     if (!op) return;
     dev_state_op = 0;
@@ -1215,7 +1227,8 @@ void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length) {
         out[11] = sval_pmw3389_read(0, 0x63);
     }
     if (op == 7) out[2] = sval_pmw3389_drv_init(); // spi pins + Power_Up_Reset, as the per-module boot does
-    if (op >= 40 && op <= 45) dev_state_op = op, dev_state_arg = sval_dev_hook_arg;
+    if (op >= 40 && op <= 46) dev_state_op = op, dev_state_arg = sval_dev_hook_arg;
+    if (op == 47) memcpy(&out[2], dev_window, sizeof(dev_window));
     if (op >= 4 && op <= 6) dev_reset_at = timer_read32() + 100;
     if (op >= 31 && op <= 35) {
         dev_stage          = op - 30;
