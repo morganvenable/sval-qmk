@@ -1135,6 +1135,21 @@ void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length) {
         out[7] = sval_pmw3389_read(0, 0x10); // Config2
         out[8] = sval_pmw3389_read(0, 0x24); // Observation
     }
+    if (op == 12) { // probe: what a healthy and a just-reset sensor read, in one call
+        out[2] = sval_pmw3389_read(0, 0x2A);              // SROM_ID, plain
+        sval_pmw3389_write(0, 0x10, 0x20);                // leave burst mode
+        out[3] = sval_pmw3389_read(0, 0x2A);              // SROM_ID after a write
+        out[4] = sval_pmw3389_read(0, 0x0E);              // Resolution_L
+        out[5] = sval_pmw3389_read(0, 0x63);              // Lift_Config
+        out[6] = sval_pmw3389_read(0, 0x24);              // Observation
+        sval_pmw3389_write(0, 0x3A, 0x5A);
+        wait_ms(55);
+        out[7]  = sval_pmw3389_read(0, 0x2A);
+        out[8]  = sval_pmw3389_read(0, 0x10);
+        out[9]  = sval_pmw3389_read(0, 0x24);
+        out[10] = sval_pmw3389_read(0, 0x0E);
+        out[11] = sval_pmw3389_read(0, 0x63);
+    }
     if (op == 7) out[2] = sval_pmw3389_drv_init(); // spi pins + Power_Up_Reset, as the per-module boot does
     if (op >= 4 && op <= 6) dev_reset_at = timer_read32() + 100;
 }

@@ -225,6 +225,13 @@ void scanlab_handle(const uint8_t *req, uint8_t *rsp) {
     memset(rsp, 0, SCANLAB_RSP_LEN);
 
     switch (op) {
+#ifdef SVAL_DEV_SENSOR_HOOKS
+        case 0x7F: { // DEV ONLY: the sensor hook on this half (either half through the split link): set value 0x7F, [hand][hook op]
+            extern void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length);
+            sval_dev_sensor_hook(req[1], rsp, SCANLAB_RSP_LEN);
+            return;
+        }
+#endif
         case SCANLAB_OP_SET_MODE: {
             uint8_t mode = req[1];
 #ifdef SVAL_UPDATER
