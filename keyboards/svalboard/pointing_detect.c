@@ -212,8 +212,22 @@ static bool probe_i2c(sval_probe_result_t *found) {
 
 /* ---- SPI mode 3 (PMW3360/PMW3389) ---- */
 
+#ifdef SVAL_DEV_SENSOR_HOOKS
+#    include "hardware/structs/watchdog.h"
+#    define DEV_BAD_ID_MAGIC 0xBAD1D022u
+uint8_t dev_bad_id_reads; // reads answered 0x22 since boot
+static bool dev_bad_id(void) {
+    return watchdog_hw->scratch[6] == DEV_BAD_ID_MAGIC;
+}
+#endif
 static uint8_t spi_read_register(uint8_t reg) {
     uint8_t value = 0;
+#ifdef SVAL_DEV_SENSOR_HOOKS
+    if (dev_bad_id()) {
+        dev_bad_id_reads++;
+        return 0x22;
+    }
+#endif
     pin_drive(SVAL_DETECT_SPI_CS, false);
     det_wait_us(1);
     for (uint8_t i = 0; i < 8; i++) { // address, MSB first, bit 7 clear for a read
@@ -239,6 +253,9 @@ static uint8_t spi_read_register(uint8_t reg) {
 
 // A write: bit 7 of the address set, then the value.
 static void spi_write_register(uint8_t reg, uint8_t value) {
+#ifdef SVAL_DEV_SENSOR_HOOKS
+    if (reg == 0x3A && value == 0x5A) watchdog_hw->scratch[6] = 0;
+#endif
     uint16_t word = ((uint16_t)(reg | 0x80) << 8) | value;
     pin_drive(SVAL_DETECT_SPI_CS, false);
     det_wait_us(1);

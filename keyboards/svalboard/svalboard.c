@@ -1114,6 +1114,7 @@ void sval_dev_command(uint8_t *data, uint8_t length) {
 
 
 #ifdef SVAL_DEV_SENSOR_HOOKS
+#include "hardware/structs/watchdog.h"
 // DEV ONLY (sub-ball-loss investigation): poke this half's PMW3389 directly.
 //   1 Shutdown (0xB6)   2 Power_Up_Reset (0x5A, no SROM)   3 read IDs
 //   4 full-chip restart in 100 ms (sensor stays powered)   5 = 1 then 4
@@ -1229,6 +1230,17 @@ void sval_dev_sensor_hook(uint8_t op, uint8_t *out, uint8_t length) {
     if (op == 7) out[2] = sval_pmw3389_drv_init(); // spi pins + Power_Up_Reset, as the per-module boot does
     if (op >= 40 && op <= 46) dev_state_op = op, dev_state_arg = sval_dev_hook_arg;
     if (op == 47) memcpy(&out[2], dev_window, sizeof(dev_window));
+    if (op == 48) { // arm the emulated 0x22 sensor, restart in 100 ms
+        watchdog_hw->scratch[6] = 0xBAD1D022u;
+        dev_reset_at            = timer_read32() + 100;
+    }
+    if (op == 49) { // emulation state: still armed, reads answered 0x22, ms since boot
+        extern uint8_t dev_bad_id_reads;
+        uint32_t       t = timer_read32();
+        out[2]           = watchdog_hw->scratch[6] == 0xBAD1D022u;
+        out[3]           = dev_bad_id_reads;
+        memcpy(&out[4], &t, 4);
+    }
     if (op >= 4 && op <= 6) dev_reset_at = timer_read32() + 100;
     if (op >= 31 && op <= 35) {
         dev_stage          = op - 30;
