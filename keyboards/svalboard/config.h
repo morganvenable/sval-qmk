@@ -292,6 +292,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // link counts as disconnected (the other half's held keys released) once
 // failures have gone on for 200 ms instead (quantum/split_common/split_connection.h).
 #define SPLIT_MIN_DISCONNECT_MS 200
+#ifdef SVAL_BALL_DIAG
+#    define RPC_S2M_BUFFER_SIZE 36 // the ping reply carries the trackball counters (ball_diag.h)
+#endif
 
 #define MOUSE_EXTENDED_REPORT
 #define SPLIT_POINTING_ENABLE

@@ -6,6 +6,9 @@
 #include "pointing_device.h"
 #include "drivers/sensors/pmw33xx_common.h"
 #include "svalboard.h"
+#ifdef SVAL_BALL_DIAG
+#    include "ball_diag.h"
+#endif
 
 static uint16_t trackball_cached_cpi = 0;
 
@@ -129,10 +132,16 @@ static uint32_t sensor_check_at     = 0;
 static uint32_t sensor_recover_at   = 0;
 static uint16_t sensor_recover_wait = 0;
 
+#ifdef SVAL_BALL_DIAG
+static uint8_t diag_bad_mask = 0;
+#endif
 static bool sensor_answers(void) {
     uint8_t product = pmw33xx_read(0, REG_Product_ID), inverse = pmw33xx_read(0, REG_Inverse_Product_ID);
     uint8_t config2 = pmw33xx_read(0, REG_Config2);
     pmw33xx_write(0, REG_Config2, config2_shadow); // any write leaves burst mode; this one changes nothing
+#ifdef SVAL_BALL_DIAG
+    diag_bad_mask = (product != sensor_product_id ? 1 : 0) | (inverse != sensor_inverse_product_id ? 2 : 0) | (config2 != config2_shadow ? 4 : 0);
+#endif
     return product == sensor_product_id && inverse == sensor_inverse_product_id && config2 == config2_shadow;
 }
 
@@ -142,9 +151,26 @@ static bool sensor_running(void) {
     if (sensor_init_ok) {
         if (timer_elapsed32(sensor_check_at) < SENSOR_CHECK_MS) return true;
         sensor_check_at = now;
-        if (sensor_answers()) return true;
+#ifdef SVAL_BALL_DIAG
+        diag_checks++;
+#endif
+        if (sensor_answers()) {
+#ifdef SVAL_BALL_DIAG
+            diag_health = 1;
+#endif
+            return true;
+        }
         wait_us(500);
-        if (sensor_answers()) return true;
+        if (sensor_answers()) {
+#ifdef SVAL_BALL_DIAG
+            diag_health = 2;
+#endif
+            return true;
+        }
+#ifdef SVAL_BALL_DIAG
+        diag_health = (uint8_t)(3 | (diag_bad_mask << 4));
+        diag_recoveries++;
+#endif
         sensor_init_ok      = false;
         sensor_recover_wait = 0;
     }

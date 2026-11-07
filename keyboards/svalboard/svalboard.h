@@ -162,6 +162,9 @@ typedef struct __attribute__((__packed__)) {
     // magic unset.
     uint8_t               board_magic; // SVAL_BOARD_RPC_MAGIC
     sval_board_identity_t board;
+#ifdef SVAL_BALL_DIAG
+    uint8_t ball_diag[6]; // ball_diag.h
+#endif
 } presence_rsp_t;
 
 // Hardware revision, read once from SVAL_HW_REV_PIN (internal pull-up; the

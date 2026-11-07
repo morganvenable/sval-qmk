@@ -13,6 +13,9 @@
 #endif
 #include "pointing_detect.h"
 #include "pointer_reprobe.h"
+#ifdef SVAL_BALL_DIAG
+#    include "ball_diag.h"
+#endif
 
 static bool                pointer_probed       = false; // the first search has finished
 static bool                pointer_search_done  = false; // never search again
@@ -84,6 +87,9 @@ void sval_pointer_probe_task(void) {
         if (bus == SVAL_BUS_PS2 && pointer_spi_probed && timer_elapsed32(pointer_spi_at) < SVAL_DETECT_TP_SETTLE_MS) return;
         pointer_search_step++;
         found = sval_probe_bus(bus, pointer_searches == 0);
+#ifdef SVAL_BALL_DIAG
+        if (bus == SVAL_BUS_SPI && diag_first_spi == 15) diag_first_spi = found.detected;
+#endif
         if (bus == SVAL_BUS_SPI) {
             pointer_spi_probed = true;
             pointer_spi_at     = timer_read32();
@@ -96,6 +102,13 @@ void sval_pointer_probe_task(void) {
         sval_pointer_identity_t own = {0};
         sval_pointer_identity(&own);
         if ((own.flags & SVAL_POINTER_AUTO) && !(own.flags & SVAL_POINTER_INIT_OK)) pointer_init_fails++;
+#ifdef SVAL_BALL_DIAG
+        if ((own.flags & SVAL_POINTER_INIT_OK) && diag_start_search == 15) {
+            uint32_t t        = timer_read32() / 100;
+            diag_start_search = pointer_searches > 13 ? 13 : pointer_searches;
+            diag_start_tenths = t > 254 ? 254 : t;
+        }
+#endif
     }
     sval_pointer_search_end();
 }

@@ -411,7 +411,21 @@ void sval_storage_reset_clear_kb(void) {
 
 // Runs after the EEPROM driver is up and before anything validates or resets
 // stored settings.
+#ifdef SVAL_BALL_DIAG
+#    include "ball_diag.h"
+static volatile uint32_t diag_boot_word __attribute__((section(".ram0")));
+uint8_t diag_boots = 0, diag_link_halfs = 15, diag_first_spi = 15, diag_start_search = 15, diag_start_tenths = 255;
+uint8_t diag_health = 0, diag_recoveries = 0, diag_checks = 0;
+static void diag_boot_count(void) {
+    if ((diag_boot_word & 0xFFFFFF00u) != 0xBA11D100u) diag_boot_word = 0xBA11D100u;
+    diag_boot_word = diag_boot_word + 1;
+    diag_boots     = diag_boot_word & 0xFF;
+}
+#endif
 void keyboard_pre_init_kb(void) {
+#ifdef SVAL_BALL_DIAG
+    diag_boot_count();
+#endif
     identity_init();
     sval_thumb_hand_probe(); // before ws2812/rgblight and split init use GP19
 #ifdef SVAL_EITHER_HAND
@@ -768,6 +782,12 @@ static volatile bool rgb_redraw_due;
 
 void kb_sync_listener(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
     const presence_rpc_t *in                = (const presence_rpc_t *)in_data;
+#ifdef SVAL_BALL_DIAG
+    if (diag_link_halfs == 15) {
+        uint32_t h      = timer_read32() / 500;
+        diag_link_halfs = h > 14 ? 14 : h;
+    }
+#endif
     sval_ping_turbo                         = in->turbo_scan; // only for a wait of 0 from an older half
     global_saved_values.scan_prewait_us     = in->scan_prewait_us;
     global_saved_values.scan_postwait_us    = in->scan_postwait_us;
@@ -816,6 +836,14 @@ void kb_sync_listener(uint8_t in_buflen, const void *in_data, uint8_t out_buflen
         if (out_buflen >= sizeof(presence_rsp_t)) {
             out->board_magic = SVAL_BOARD_RPC_MAGIC;
             sval_local_board_identity(&out->board);
+#ifdef SVAL_BALL_DIAG
+            out->ball_diag[0] = (uint8_t)((diag_boots > 15 ? 15 : diag_boots) | (diag_link_halfs << 4));
+            out->ball_diag[1] = (uint8_t)((diag_first_spi & 15) | ((diag_start_search & 15) << 4));
+            out->ball_diag[2] = diag_start_tenths;
+            out->ball_diag[3] = diag_health;
+            out->ball_diag[4] = diag_recoveries;
+            out->ball_diag[5] = diag_checks;
+#endif
         }
         out->magic[0] = SVAL_PRESENCE_RSP_MAGIC0;
         out->magic[1] = SVAL_PRESENCE_RSP_MAGIC1;
@@ -916,6 +944,50 @@ bool        sval_other_half_connected(void) {
 // The other half's pointer identity from its last ping reply (zero = not reported).
 static sval_pointer_identity_t other_pointer;
 
+#ifdef SVAL_BALL_DIAG
+// What the master saw from the sub: its ping replies (identity block, relayed counters)
+// and its pointing reports.
+static uint8_t  diag_sub[6];
+static bool     diag_sub_valid, diag_reply_seen, diag_change_seen, diag_motion_seen;
+static uint32_t diag_reply_at, diag_change_at, diag_motion_at;
+static uint16_t diag_age(bool seen, uint32_t at, uint32_t div) {
+    if (!seen) return 0xFFFF;
+    uint32_t a = timer_elapsed32(at) / div;
+    return a > 0xFFFE ? 0xFFFE : (uint16_t)a;
+}
+static void diag_put16(uint8_t *o, uint16_t v) {
+    o[0] = v & 0xFF;
+    o[1] = v >> 8;
+}
+// Sval 0x2C with [0xA5] after the command: [0xA5] [1] [flags: 1 sub counters valid, 2 split link up,
+// 4 this half is the left half] [this half's boots] [sub's pointer block as the master last
+// received it: flags, built_for, detected, product_id, inverse_id] [age of the last reply, 0.1 s u16]
+// [age since that block last changed, s u16] [age of the last nonzero sub pointing report, s u16]
+// [sub counters, 6 bytes, as ball_diag.h] [this half's own sensor: health, recoveries, checks,
+// first_spi | search << 4, start_tenths].
+void sval_ball_diag_kb(uint8_t *out, uint8_t length) {
+    if (length < 28) return;
+    out[0] = 0xA5;
+    out[1] = 1;
+    out[2] = (diag_sub_valid ? 1 : 0) | (is_connected ? 2 : 0) | (is_keyboard_left() ? 4 : 0);
+    out[3] = diag_boots;
+    out[4] = other_pointer.flags;
+    out[5] = other_pointer.built_for;
+    out[6] = other_pointer.detected;
+    out[7] = other_pointer.product_id;
+    out[8] = other_pointer.inverse_product_id;
+    diag_put16(&out[9], diag_age(diag_reply_seen, diag_reply_at, 100));
+    diag_put16(&out[11], diag_age(diag_change_seen, diag_change_at, 1000));
+    diag_put16(&out[13], diag_age(diag_motion_seen, diag_motion_at, 1000));
+    memcpy(&out[15], diag_sub, 6);
+    out[21] = diag_health;
+    out[22] = diag_recoveries;
+    out[23] = diag_checks;
+    out[24] = (uint8_t)((diag_first_spi & 15) | ((diag_start_search & 15) << 4));
+    out[25] = diag_start_tenths;
+}
+#endif
+
 // Sval POINTING_HARDWARE (0x2C) reply, after [0xDF] [0x2C]:
 // [format = 1] [this half: 5 bytes] [other half: 5 bytes], each a sval_pointer_identity_t.
 // The other half's block stays zero while it is disconnected or runs firmware without this.
@@ -1001,6 +1073,15 @@ report_mouse_t pointing_device_task_combined_kb(report_mouse_t left_report, repo
     // off before anything else sees the report.
     sval_mt_remote_hint((uint8_t)(is_keyboard_left() ? right_report.boot_x : left_report.boot_x));
     left_report.boot_x = right_report.boot_x = 0;
+#    endif
+#    ifdef SVAL_BALL_DIAG
+    {
+        report_mouse_t sub = is_keyboard_left() ? right_report : left_report;
+        if (sub.x || sub.y || sub.h || sub.v) {
+            diag_motion_seen = true;
+            diag_motion_at   = timer_read32();
+        }
+    }
 #    endif
     if (motion_read_once && timer_elapsed32(motion_last_read) < SVAL_HOST_ACTIVE_MS) {
         sval_motion_accumulate(&motion_acc[0], left_report.x, left_report.y, left_report.h, left_report.v, left_report.buttons);
@@ -1167,11 +1248,26 @@ void housekeeping_task_kb(void) {
             }
             presence_rsp_t rpcin = {0};
             if (transaction_rpc_exec(KEYBOARD_SYNC_A, sizeof(presence_rpc_t), &rpcout, sizeof(presence_rsp_t), &rpcin)) {
+#ifdef SVAL_BALL_DIAG
+                sval_pointer_identity_t diag_before = other_pointer;
+#endif
                 if (rpcin.magic[0] == SVAL_PRESENCE_RSP_MAGIC0 && rpcin.magic[1] == SVAL_PRESENCE_RSP_MAGIC1 && (rpcin.pointer.flags & SVAL_POINTER_REPORTED)) {
                     other_pointer = rpcin.pointer;
                 } else {
                     memset(&other_pointer, 0, sizeof(other_pointer));
                 }
+#ifdef SVAL_BALL_DIAG
+                diag_reply_seen = true;
+                diag_reply_at   = timer_read32();
+                if (!diag_change_seen || memcmp(&diag_before, &other_pointer, sizeof(other_pointer))) {
+                    diag_change_seen = true;
+                    diag_change_at   = diag_reply_at;
+                }
+                if (rpcin.board_magic == SVAL_BOARD_RPC_MAGIC) {
+                    memcpy(diag_sub, rpcin.ball_diag, sizeof(diag_sub));
+                    diag_sub_valid = true;
+                }
+#endif
                 // The other half's main board block (Sval 0x38), when its firmware sends one.
                 sval_other_board_set(rpcin.board_magic == SVAL_BOARD_RPC_MAGIC && (rpcin.board.flags & SVAL_BOARD_REPORTED) ? &rpcin.board : NULL);
 #ifdef SVAL_EITHER_HAND
@@ -1201,6 +1297,17 @@ void housekeeping_task_kb(void) {
                 update_split_presence_result(false, NULL, 0);
 #endif
                 sval_other_board_set(NULL);
+#ifdef SVAL_BALL_DIAG
+                {
+                    sval_pointer_identity_t zero = {0};
+                    if (memcmp(&other_pointer, &zero, sizeof(zero))) {
+                        diag_change_seen = true;
+                        diag_change_at   = timer_read32();
+                    }
+                    memset(&other_pointer, 0, sizeof(other_pointer));
+                    diag_sub_valid = false;
+                }
+#endif
 #ifdef SVAL_EITHER_HAND
                 sval_side_other_set(false, false, SVAL_SIDE_UNKNOWN);
 #endif

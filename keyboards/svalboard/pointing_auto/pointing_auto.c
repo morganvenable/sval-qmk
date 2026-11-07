@@ -9,6 +9,9 @@
 #include "pointing_device.h"
 #include "pointing_detect.h"
 #include "pointing_auto.h"
+#ifdef SVAL_BALL_DIAG
+#    include "ball_diag.h"
+#endif
 #include "drivers/sensors/azoteq_iqs5xx.h"
 
 static const sval_pointer_driver_t *driver      = NULL; // running
@@ -64,8 +67,18 @@ bool pointing_device_driver_init(void) {
     // The trackball first. A silent sensor gets the power-up reset (pointing_detect.c), and
     // the 1.5 s search finds it.
     sval_probe_result_t ball = sval_probe_bus(SVAL_BUS_SPI, true);
+#ifdef SVAL_BALL_DIAG
+    if (diag_first_spi == 15) diag_first_spi = ball.detected;
+#endif
     if (ball.detected == SVAL_SENSOR_PMW3360 || ball.detected == SVAL_SENSOR_PMW3389) {
         sval_pointer_select(&ball);
+#ifdef SVAL_BALL_DIAG
+        if (driver && diag_start_search == 15) {
+            uint32_t t        = timer_read32() / 100;
+            diag_start_search = 14;
+            diag_start_tenths = t > 254 ? 254 : t;
+        }
+#endif
         if (driver) return true;
     }
     sval_pointer_identity_t id = {0};
