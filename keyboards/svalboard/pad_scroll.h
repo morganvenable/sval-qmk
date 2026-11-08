@@ -48,5 +48,7 @@ typedef struct {
 } sval_pad_scroll_t;
 
 // Pad pixels (full resolution) in (h: right, v: as the chip reports), the
-// pad's pointer DPI, wheel counts out. A DPI of 0 means 800.
-void sval_pad_scroll(sval_pad_scroll_t *s, uint32_t now_ms, int32_t px_h, int32_t px_v, bool mac, bool lock, uint16_t dpi, int16_t *h, int16_t *v);
+// pad's pointer DPI, the user's two-finger scroll speed in percent (25 to 400,
+// 100 is the DPI-driven rate above; it multiplies that rate and nothing else),
+// wheel counts out. A DPI of 0 means 800, a speed of 0 means 100.
+void sval_pad_scroll(sval_pad_scroll_t *s, uint32_t now_ms, int32_t px_h, int32_t px_v, bool mac, bool lock, uint16_t dpi, uint16_t speed_pct, int16_t *h, int16_t *v);
