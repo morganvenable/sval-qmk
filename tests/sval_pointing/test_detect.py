@@ -94,7 +94,7 @@ class VelocityScrollTests(unittest.TestCase):
         # pad_scroll.c: two-finger scroll pixels as wheel counts, Windows and Mac.
         with tempfile.TemporaryDirectory() as directory:
             binary = Path(directory) / 'pad_scroll'
-            subprocess.run(['gcc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'keyboards/svalboard'), str(HERE / 'pad_scroll_test.c'), str(ROOT / 'keyboards/svalboard/pad_scroll.c'), '-o', str(binary)], check=True)
+            subprocess.run(['gcc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-I', str(ROOT / 'keyboards/svalboard'), str(HERE / 'pad_scroll_test.c'), str(ROOT / 'keyboards/svalboard/pad_scroll.c'), str(ROOT / 'keyboards/svalboard/axis_scale.c'), '-o', str(binary)], check=True)
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout)
 

@@ -1344,7 +1344,7 @@ enum sval_via_value_id {
     id_pad_palm = 58, // u16: a contact with more area than this, in channels, is a palm; 0 (the default) is off
     // The touchpad mode (pad_gestures.h), with sval_flag4_pad_mode:
     id_pad_touchpad_mode = 59, // 0 Automatic (the default): a touchpad when the OS asks; 1 built-in gestures always
-    id_pad_scroll_speed  = 60, // u16: touchpad two-finger scroll speed, percent, 25-400 (100 the default); test build
+    id_pad_scroll_speed  = 60, // u16: touchpad scroll speed (two-finger and single-finger scroll on a touchpad hand), percent, 25-400 (100 the default); test build
 };
 
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {

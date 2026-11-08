@@ -126,5 +126,36 @@ int main(void) {
         x = (sval_pad_scroll_t){0}; sval_pad_scroll(&x, 0, 0, 170, false, false, 800, 0, &h, &v);
         CHECK(v == 120);
     }
-return failures ? 1 : 0;
+    // Single-finger scroll mode: a pad hand scales by the speed, a trackball hand never does.
+    {
+        axis_scale_t a = {1, 1, 0}, b = {1, 1, 0}, c = {1, 1, 0};
+        int32_t      ra = 0, rb = 0;
+        long         pad = 0, ball = 0, base = 0;
+        for (int i = 0; i < 1000; i++) {
+            pad += sval_scroll_mode_axis(&a, &ra, 3, true, 50);
+            ball += sval_scroll_mode_axis(&b, &rb, 3, false, 50);
+            base += add_to_axis(&c, 3);
+        }
+        CHECK(pad == 1500 && ball == 3000 && base == 3000);
+        a = (axis_scale_t){1, 1, 0}; ra = 0; pad = 0;
+        for (int i = 0; i < 1000; i++) pad += sval_scroll_mode_axis(&a, &ra, 3, true, 200);
+        CHECK(pad == 6000);
+        // 100 percent on a pad hand is add_to_axis, remainders included, on the Mac divisor too.
+        axis_scale_t m1 = {1, 12, 0}, m2 = {1, 12, 0};
+        int32_t      rm = 0;
+        for (int i = 0; i < 500; i++) CHECK(sval_scroll_mode_axis(&m1, &rm, (i % 7) - 3, true, 100) == add_to_axis(&m2, (i % 7) - 3));
+        CHECK(rm == 0 && m1.remainder == m2.remainder);
+        // Mac divisor with a pad hand at 50 and 200: counts follow the percent, remainders carry.
+        axis_scale_t m3 = {1, 12, 0}, m4 = {1, 12, 0};
+        int32_t      r3 = 0, r4 = 0;
+        long         s3 = 0, s4 = 0;
+        for (int i = 0; i < 1200; i++) { s3 += sval_scroll_mode_axis(&m3, &r3, 1, true, 50); s4 += sval_scroll_mode_axis(&m4, &r4, 1, true, 200); }
+        CHECK(s3 == 50 && s4 == 200);
+        axis_scale_t n = {1, 1, 0};
+        int32_t      rn = 0;
+        long         sn = 0;
+        for (int i = 0; i < 1000; i++) sn += sval_scroll_mode_axis(&n, &rn, -3, true, 50);
+        CHECK(sn == -1500);
+    }
+    return failures ? 1 : 0;
 }

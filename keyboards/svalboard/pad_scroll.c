@@ -46,3 +46,14 @@ void sval_pad_scroll(sval_pad_scroll_t *s, uint32_t now_ms, int32_t px_h, int32_
     *h          = counts(px_h, den, dpi < SVAL_PAD_SCROLL_CAP_DPI_X ? dpi : SVAL_PAD_SCROLL_CAP_DPI_X, speed_pct, &s->rem_h);
     *v          = counts(px_v, den, dpi < SVAL_PAD_SCROLL_CAP_DPI_Y ? dpi : SVAL_PAD_SCROLL_CAP_DPI_Y, speed_pct, &s->rem_v);
 }
+
+int16_t sval_scroll_mode_axis(axis_scale_t *as, int32_t *rem, int16_t val, bool pad_hand, uint16_t speed_pct) {
+    if (!pad_hand || speed_pct == 100 || speed_pct == 0) return add_to_axis(as, val);
+    int32_t den = (int32_t)as->div * 100;
+    int32_t t   = *rem + (int32_t)val * as->mult * speed_pct;
+    int32_t q   = t / den;
+    *rem        = t - q * den;
+    if (q > 32767) q = 32767;
+    if (q < -32767) q = -32767;
+    return (int16_t)q;
+}

@@ -102,6 +102,7 @@ axis_scale_t sniper_x = {1, 1, 0};
 
 // A pad's two-finger scroll (the chip's pixels in h and v) as wheel counts.
 static sval_pad_scroll_t pad_scroll_state[2];
+static int32_t scroll_rem[2][2]; // single-finger scroll remainders when the speed is not 100%
 #ifdef SVAL_TOUCH_DEV
 static int16_t dev_inject_h, dev_inject_v;
 // Dev builds only (raw HID 0xFC op 0x42, action 3): force the Mac scaling on
@@ -533,16 +534,19 @@ report_mouse_t pointing_device_task_combined_user(report_mouse_t reportMouse1, r
         }
     }
 
+    // Single-finger scroll on a touchpad hand also follows the scroll speed (pad_scroll.h).
+    uint8_t  scroll_pads  = sval_pad_hands();
+    uint16_t scroll_speed = sval_pad_scroll_speed();
     if (left_scrolling) {
-        reportMouse1.h = add_to_axis(&l_x, reportMouse1.x);
-        reportMouse1.v = add_to_axis(&l_y, -reportMouse1.y);
+        reportMouse1.h = sval_scroll_mode_axis(&l_x, &scroll_rem[0][0], reportMouse1.x, scroll_pads & 1, scroll_speed);
+        reportMouse1.v = sval_scroll_mode_axis(&l_y, &scroll_rem[0][1], -reportMouse1.y, scroll_pads & 1, scroll_speed);
 
         reportMouse1.x = 0;
         reportMouse1.y = 0;
     }
     if (right_scrolling) {
-        reportMouse2.h = add_to_axis(&r_x, reportMouse2.x);
-        reportMouse2.v = add_to_axis(&r_y, -reportMouse2.y);
+        reportMouse2.h = sval_scroll_mode_axis(&r_x, &scroll_rem[1][0], reportMouse2.x, scroll_pads & 2, scroll_speed);
+        reportMouse2.v = sval_scroll_mode_axis(&r_y, &scroll_rem[1][1], -reportMouse2.y, scroll_pads & 2, scroll_speed);
 
         reportMouse2.x = 0;
         reportMouse2.y = 0;

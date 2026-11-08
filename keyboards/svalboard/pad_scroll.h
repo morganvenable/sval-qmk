@@ -15,6 +15,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
+#include "axis_scale.h"
 
 // The DPI the distances below were measured at.
 #define SVAL_PAD_SCROLL_REF_DPI 800
@@ -51,4 +52,11 @@ typedef struct {
 // pad's pointer DPI, the user's two-finger scroll speed in percent (25 to 400,
 // 100 is the DPI-driven rate above; it multiplies that rate and nothing else),
 // wheel counts out. A DPI of 0 means 800, a speed of 0 means 100.
+// Single-finger scroll mode (the scroll toggle and drag scroll: pointer motion
+// becomes h/v through the axis scaler as). A hand whose pointing module is the
+// touchpad scales it by the user's scroll speed (percent) with its own
+// remainder carry (rem, in 1/(div*100) counts); any other hand, or 100%, is
+// add_to_axis exactly as before.
+int16_t sval_scroll_mode_axis(axis_scale_t *as, int32_t *rem, int16_t val, bool pad_hand, uint16_t speed_pct);
+
 void sval_pad_scroll(sval_pad_scroll_t *s, uint32_t now_ms, int32_t px_h, int32_t px_v, bool mac, bool lock, uint16_t dpi, uint16_t speed_pct, int16_t *h, int16_t *v);
