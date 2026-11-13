@@ -862,7 +862,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // report (Svalboard: keyboards/svalboard/docs/protocol.md).
 #ifdef SVAL_BALL_DIAG
             if (length > 4 && data[2] == 0xA5) { // DF 2C A5: the trackball counters (ball_diag.h)
-                extern void sval_ball_diag_kb(uint8_t * out, uint8_t length);
+                extern void sval_ball_diag_kb(uint8_t *out, uint8_t length);
                 memset(&data[2], 0, length - 2);
                 sval_ball_diag_kb(&data[2], length - 2);
                 break;

@@ -497,6 +497,27 @@ static uint8_t diag_recovery_byte(void) {
     uint8_t u = diag_unsticks > 7 ? 7 : diag_unsticks, s = diag_slow_starts > 7 ? 7 : diag_slow_starts, g = diag_giveups > 3 ? 3 : diag_giveups;
     return (uint8_t)(u | (s << 3) | (g << 6));
 }
+// The sub's counters for the master, on request (KEYBOARD_SYNC_B, first byte SVAL_BALL_DIAG_RPC_OP).
+// They used to ride on the presence ping, which made its reply 37 bytes: past the 32 that a stock
+// half accepts, so a diag master never heard a stock sub (an update from this build to a stock
+// one stopped at "the other half restarts"). The ping's reply is now the stock one.
+#    define SVAL_BALL_DIAG_RPC_OP 0xBD // no Scan Lab, side, flicker, Squal, perf or touch op uses it
+#    define SVAL_BALL_DIAG_RPC_REPLY 8 // [op] [7 counter bytes]
+static void diag_counters(uint8_t *o) {
+    o[0] = (uint8_t)((diag_boots > 15 ? 15 : diag_boots) | (diag_link_halfs << 4));
+    o[1] = (uint8_t)((diag_first_spi & 15) | ((diag_start_search & 15) << 4));
+    o[2] = diag_start_tenths;
+    o[3] = diag_health;
+    o[4] = diag_recoveries;
+    o[5] = diag_checks;
+    o[6] = diag_recovery_byte();
+}
+static bool diag_split_rpc(uint8_t in_len, const uint8_t *in, uint8_t out_len, uint8_t *out) {
+    if (in_len < 1 || in[0] != SVAL_BALL_DIAG_RPC_OP || out_len < SVAL_BALL_DIAG_RPC_REPLY) return false;
+    out[0] = SVAL_BALL_DIAG_RPC_OP;
+    diag_counters(&out[1]);
+    return true;
+}
 static void diag_boot_count(void) {
     if ((diag_boot_word & 0xFFFFFF00u) != 0xBA11D100u) diag_boot_word = 0xBA11D100u;
     diag_boot_word = diag_boot_word + 1;
@@ -922,18 +943,14 @@ void kb_sync_listener(uint8_t in_buflen, const void *in_data, uint8_t out_buflen
     // Tell the master this half's side and sensor (Sval 0x2C). Older masters ignore it.
     if (out_data && out_buflen >= offsetof(presence_rsp_t, board_magic)) {
         presence_rsp_t *out = (presence_rsp_t *)out_data;
+#ifdef SVAL_BALL_DIAG
+        // An earlier diag master asks for 37 bytes and reads its sub counters from 30-36;
+        // this build sends them on request instead (diag_split_rpc), so those bytes read zero.
+        if (out_buflen > sizeof(presence_rsp_t)) memset((uint8_t *)out_data + sizeof(presence_rsp_t), 0, out_buflen - sizeof(presence_rsp_t));
+#endif
         if (out_buflen >= sizeof(presence_rsp_t)) {
             out->board_magic = SVAL_BOARD_RPC_MAGIC;
             sval_local_board_identity(&out->board);
-#ifdef SVAL_BALL_DIAG
-            out->ball_diag[0] = (uint8_t)((diag_boots > 15 ? 15 : diag_boots) | (diag_link_halfs << 4));
-            out->ball_diag[1] = (uint8_t)((diag_first_spi & 15) | ((diag_start_search & 15) << 4));
-            out->ball_diag[2] = diag_start_tenths;
-            out->ball_diag[3] = diag_health;
-            out->ball_diag[4] = diag_recoveries;
-            out->ball_diag[5] = diag_checks;
-            out->ball_diag[6] = diag_recovery_byte();
-#endif
         }
         out->magic[0] = SVAL_PRESENCE_RSP_MAGIC0;
         out->magic[1] = SVAL_PRESENCE_RSP_MAGIC1;
@@ -958,6 +975,9 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void *in_data, uint8_t
 #endif
     if (sval_flicker_split_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return; // Sval 0x3D for this half
     if (sval_squal_split_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return;   // Sval 0x39 for this half
+#ifdef SVAL_BALL_DIAG
+    if (diag_split_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return; // Sval 0x2C A5, the sub's counters
+#endif
 #ifdef SVAL_LINK_TEST
     if (sval_link_test_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return; // dev builds: link light tests
 #endif
@@ -1060,8 +1080,23 @@ static void diag_put16(uint8_t *o, uint16_t v) {
 // [age since that block last changed, s u16] [age of the last nonzero sub pointing report, s u16]
 // [sub counters, 6 bytes, as ball_diag.h] [this half's own sensor: health, recoveries, checks,
 // first_spi | search << 4, start_tenths].
+// The sub's counters, fetched now (diag_split_rpc on the sub). Not while the link is down or
+// paused for an update; a sub without this build answers with Scan Lab's zeros.
+static void diag_fetch_sub(void) {
+    diag_sub_valid = false;
+#    ifdef SVAL_UPDATER
+    if (sval_split_paused()) return;
+#    endif
+    if (!is_connected) return; // transaction_rpc_exec checks the transport itself
+    uint8_t req[1] = {SVAL_BALL_DIAG_RPC_OP}, rsp[SVAL_BALL_DIAG_RPC_REPLY] = {0};
+    if (transaction_rpc_exec(KEYBOARD_SYNC_B, sizeof(req), req, sizeof(rsp), rsp) && rsp[0] == SVAL_BALL_DIAG_RPC_OP) {
+        memcpy(diag_sub, &rsp[1], sizeof(diag_sub));
+        diag_sub_valid = true;
+    }
+}
 void sval_ball_diag_kb(uint8_t *out, uint8_t length) {
     if (length < 29) return;
+    diag_fetch_sub();
     out[0] = 0xA5;
     out[1] = 1;
     out[2] = (diag_sub_valid ? 1 : 0) | (is_connected ? 2 : 0) | (is_keyboard_left() ? 4 : 0);
@@ -1476,10 +1511,6 @@ void housekeeping_task_kb(void) {
                     diag_change_seen = true;
                     diag_change_at   = diag_reply_at;
                 }
-                if (rpcin.board_magic == SVAL_BOARD_RPC_MAGIC) {
-                    memcpy(diag_sub, rpcin.ball_diag, sizeof(diag_sub));
-                    diag_sub_valid = true;
-                }
 #endif
                 // The other half's main board block (Sval 0x38), when its firmware sends one.
                 sval_other_board_set(rpcin.board_magic == SVAL_BOARD_RPC_MAGIC && (rpcin.board.flags & SVAL_BOARD_REPORTED) ? &rpcin.board : NULL);
@@ -1518,7 +1549,6 @@ void housekeeping_task_kb(void) {
                         diag_change_at   = timer_read32();
                     }
                     memset(&other_pointer, 0, sizeof(other_pointer));
-                    diag_sub_valid = false;
                 }
 #endif
 #ifdef SVAL_EITHER_HAND

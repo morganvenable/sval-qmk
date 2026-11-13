@@ -317,7 +317,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // failures have gone on for 200 ms instead (quantum/split_common/split_connection.h).
 #define SPLIT_MIN_DISCONNECT_MS 200
 #ifdef SVAL_BALL_DIAG
-#    define RPC_S2M_BUFFER_SIZE 40 // the ping reply carries the trackball counters (ball_diag.h)
+// As a sub, answer a ping that asks for up to 40 bytes: the earlier diag builds (x4.5-ballfix,
+// and x4.6.4 with the first ball-diag commits) ask for 37, and a stock sub's 32 refuses them,
+// so an update from one of those to this build would stop when the sub restarts. This build
+// asks for the stock 30 itself (presence_rsp_t), so it talks to a stock sub too.
+#    define RPC_S2M_BUFFER_SIZE 40
 #endif
 
 #define MOUSE_EXTENDED_REPORT
