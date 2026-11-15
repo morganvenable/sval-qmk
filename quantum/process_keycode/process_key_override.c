@@ -320,6 +320,13 @@ static bool try_activating_override(const uint16_t keycode, const uint8_t layer,
         }
 
         key_override_printf("Activating override\n");
+#ifdef SVAL_CLICK_DIAG
+        {
+            extern void    cd_log(uint8_t type, uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t e, uint8_t f, uint8_t g);
+            const uint16_t rep = override->replacement;
+            cd_log(4, (uint8_t)i, layer, keycode & 0xFF, keycode >> 8, rep & 0xFF, rep >> 8, active_mods); // CD_OVERRIDE
+        }
+#endif
 
         clear_active_override(false);
 

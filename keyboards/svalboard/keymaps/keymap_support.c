@@ -675,7 +675,26 @@ void check_layer_67(void) {
 bool in_mod_tap = false;
 int8_t in_mod_tap_layer = -1;
 int8_t mouse_keys_pressed = 0;
+#ifdef SVAL_CLICK_DIAG
+#    include "click_diag.h"
+// Every key press's time (no keycode); the keys that can press a mouse button or change a
+// layer in full, and the cause for a layer change during this event.
+static bool cd_am_timeout; // the Auto Mouse layer ends by its timeout
+static void cd_record(uint16_t kc, keyrecord_t *r) {
+    if (r->event.pressed && IS_KEYEVENT(r->event)) cd_key_press();
+    const bool combo = r->event.type == COMBO_EVENT;
+    cd_cause         = CD_CAUSE_KEY;
+    cd_cause_kc      = kc;
+    if (combo || IS_MOUSE_KEYCODE(kc) || IS_QK_TO(kc) || IS_QK_MOMENTARY(kc) || IS_QK_DEF_LAYER(kc) || IS_QK_TOGGLE_LAYER(kc) || IS_QK_ONE_SHOT_LAYER(kc) || IS_QK_LAYER_TAP_TOGGLE(kc) || IS_QK_LAYER_MOD(kc) || IS_QK_LAYER_TAP(kc) || IS_QK_TAP_DANCE(kc) || IS_QK_KB(kc) || IS_QK_USER(kc) || IS_QK_MACRO(kc) || kc == KC_APPLICATION) {
+        uint8_t tc = r->tap.count > 15 ? 15 : r->tap.count;
+        cd_log(CD_KEY, cd_layer(), r->event.key.row, r->event.key.col, kc & 0xFF, kc >> 8, (uint8_t)((r->event.pressed ? 1 : 0) | (combo ? 2 : 0) | (tc << 4)), cd_mods());
+    }
+}
+#endif
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
+#ifdef SVAL_CLICK_DIAG
+    cd_record(keycode, record);
+#endif
 
     // Abort additional processing if userspace code did
     if (!process_record_user(keycode, record)) { return false;}
@@ -963,6 +982,9 @@ void matrix_scan_kb(void) {
     const int32_t mh_timeout = sval_automouse_timeout(global_saved_values.mh_timer_index, global_saved_values.automouse_10ms);
     if ((mh_timeout >= 0) && mouse_mode_enabled && ((int32_t)timer_elapsed(mh_auto_buttons_timer) > mh_timeout) && mouse_keys_pressed == 0 && !velocity_scroll_active()) {
         if (!tp_buttons) {
+#ifdef SVAL_CLICK_DIAG
+            cd_am_timeout = true;
+#endif
             mouse_mode(false);
             dprint("matrix - mh_auto_buttons: off\n");
         }
@@ -972,6 +994,12 @@ void matrix_scan_kb(void) {
 }
 
 void mouse_mode(bool on) {
+#ifdef SVAL_CLICK_DIAG
+    if (global_saved_values.auto_mouse && on != mouse_mode_enabled) cd_log(CD_AUTOMOUSE, on, cd_am_timeout, layer_state & 0xFF, (layer_state >> 8) & 0xFF, 0, 0, 0);
+    const uint8_t  cd_c  = cd_cause;
+    const uint16_t cd_kc = cd_cause_kc;
+    if (cd_c != CD_CAUSE_KEY) cd_cause = CD_CAUSE_AUTOMOUSE;
+#endif
     if (global_saved_values.auto_mouse) {
         if (on) {
             layer_on(MH_AUTO_BUTTONS_LAYER);
@@ -987,4 +1015,9 @@ void mouse_mode(bool on) {
 #endif
         }
     }
+#ifdef SVAL_CLICK_DIAG
+    cd_cause      = cd_c;
+    cd_cause_kc   = cd_kc;
+    cd_am_timeout = false;
+#endif
 }

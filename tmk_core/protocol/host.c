@@ -208,9 +208,15 @@ void host_nkro_send(report_nkro_t *report) {
     }
 }
 
+#ifdef SVAL_CLICK_DIAG
+void cd_mouse_sent(uint8_t buttons); // keyboards/svalboard/click_diag.h
+#endif
 void host_mouse_send(report_mouse_t *report) {
     host_driver_t *driver = host_get_active_driver();
     if (!driver || !driver->send_mouse) return;
+#ifdef SVAL_CLICK_DIAG
+    cd_mouse_sent(report->buttons);
+#endif
 
 #ifdef MOUSE_SHARED_EP
     report->report_id = REPORT_ID_MOUSE;

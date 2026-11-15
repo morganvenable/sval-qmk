@@ -1,4 +1,7 @@
 #include "svalboard.h"
+#ifdef SVAL_CLICK_DIAG
+#    include "click_diag.h"
+#endif
 #include "pointing_detect.h"
 #include "pointer_reprobe.h"
 #if VIA_ENABLE
@@ -922,6 +925,9 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void *in_data, uint8_t
 #endif
     if (sval_flicker_split_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return; // Sval 0x3D for this half
     if (sval_squal_split_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return;   // Sval 0x39 for this half
+#ifdef SVAL_CLICK_DIAG
+    if (cd_split_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return; // Sval 0x2C C1, this half's click ring
+#endif
 #ifdef SVAL_LINK_TEST
     if (sval_link_test_rpc(in_buflen, (const uint8_t *)in_data, out_buflen, (uint8_t *)out_data)) return; // dev builds: link light tests
 #endif
@@ -936,6 +942,9 @@ static void scanlab_rpc_listener(uint8_t in_buflen, const void *in_data, uint8_t
 }
 
 void keyboard_post_init_kb(void) {
+#ifdef SVAL_CLICK_DIAG
+    keyboard_post_init_click_diag();
+#endif
 #ifndef DEBUG_MATRIX_SCAN_RATE
     // Debug off at every power-up, whatever the eeconfig debug byte says: the
     // debug console prints key events while it is on, and any program on the
@@ -1178,6 +1187,10 @@ report_mouse_t pointing_device_task_combined_kb(report_mouse_t left_report, repo
     // off before anything else sees the report.
     sval_mt_remote_hint((uint8_t)(is_keyboard_left() ? right_report.boot_x : left_report.boot_x));
     left_report.boot_x = right_report.boot_x = 0;
+#    endif
+#    ifdef SVAL_CLICK_DIAG
+    cd_hand_buttons(0, left_report.buttons);
+    cd_hand_buttons(1, right_report.buttons);
 #    endif
     if (motion_read_once && timer_elapsed32(motion_last_read) < SVAL_HOST_ACTIVE_MS) {
         sval_motion_accumulate(&motion_acc[0], left_report.x, left_report.y, left_report.h, left_report.v, left_report.buttons);

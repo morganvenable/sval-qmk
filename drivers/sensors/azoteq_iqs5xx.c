@@ -179,6 +179,10 @@ static bool azoteq_iqs5xx_slot_down(const uint8_t *raw, uint8_t slot) {
 }
 #endif
 
+#ifdef SVAL_CLICK_DIAG
+void cd_pad_read(const uint8_t *raw, uint8_t slots, bool ok); // keyboards/svalboard/click_diag.h
+void cd_pad_init(bool ok);
+#endif
 i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
 #ifdef SVAL_AZOTEQ_MULTITOUCH
     // One communication window for both the mouse data and every contact:
@@ -247,12 +251,18 @@ i2c_status_t azoteq_iqs5xx_get_base_data(azoteq_iqs5xx_base_data_t *base_data) {
     sval_mt_read_status(read_status, end_status, timer_elapsed32(started));
     azoteq_iqs5xx_base_status = status;
     sval_mt_sample(raw, status == I2C_STATUS_SUCCESS);
+#    ifdef SVAL_CLICK_DIAG
+    cd_pad_read(raw, AZOTEQ_IQS5XX_SLOTS, read_status == I2C_STATUS_SUCCESS);
+#    endif
     return status;
 #else
     i2c_status_t status = i2c_read_register16(AZOTEQ_IQS5XX_ADDRESS, AZOTEQ_IQS5XX_REG_PREVIOUS_CYCLE_TIME, (uint8_t *)base_data, 10, AZOTEQ_IQS5XX_TIMEOUT_MS);
     if (status == I2C_STATUS_SUCCESS) {
         azoteq_iqs5xx_end_session();
     }
+#    ifdef SVAL_CLICK_DIAG
+    cd_pad_read((const uint8_t *)base_data, 0, status == I2C_STATUS_SUCCESS);
+#    endif
     return status;
 #endif
 }
@@ -498,6 +508,9 @@ bool azoteq_iqs5xx_init(void) {
         wait_ms(AZOTEQ_IQS5XX_REPORT_RATE + 1);
     }
 
+#ifdef SVAL_CLICK_DIAG
+    cd_pad_init(azoteq_iqs5xx_init_status == I2C_STATUS_SUCCESS);
+#endif
     return azoteq_iqs5xx_init_status == I2C_STATUS_SUCCESS;
 };
 

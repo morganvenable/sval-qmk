@@ -19,6 +19,9 @@
 #    include "usb_endpoints.h"
 #endif
 #include "ptp.h"
+#ifdef SVAL_CLICK_DIAG
+#    include "click_diag.h"
+#endif
 #include "ptp_descriptor.h"
 
 // The interface's report descriptor, for tmk_core (usb_ptp.h).
@@ -1061,6 +1064,9 @@ static bool send_frame(uint32_t now, bool release) {
     ever_sent = true;
     frames_sent++;
     sent_buttons = r[34];
+#ifdef SVAL_CLICK_DIAG
+    cd_ptp_buttons(r[34], r[33]);
+#endif
     PTP_LOCK();
     memcpy(last_report, r, sizeof(r));
     PTP_UNLOCK();

@@ -860,6 +860,13 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Response: [0xDF] [0x2C] [format] [report...]
             // format 0: the board has nothing to report. The keyboard defines the
             // report (Svalboard: keyboards/svalboard/docs/protocol.md).
+#ifdef SVAL_CLICK_DIAG
+            if (length >= 32 && data[2] == 0xC1) { // DF 2C C1: the click diagnostics ring (click_diag.h)
+                extern void cd_command(uint8_t * data, uint8_t length);
+                cd_command(data, length);
+                break;
+            }
+#endif
             if (length > 2) {
                 memset(&data[2], 0, length - 2);
                 sval_pointing_hardware_kb(&data[2], length - 2);
@@ -952,7 +959,14 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // Request: [0xDF] [0x17] [state0] [state1] [state2] [state3]
             // Response: [0xDF] [0x17]
             uint32_t new_state = data[2] | (data[3] << 8) | (data[4] << 16) | (data[5] << 24);
+#ifdef SVAL_CLICK_DIAG
+            extern uint8_t cd_cause;
+            cd_cause = 3; // CD_CAUSE_HOST
+#endif
             layer_state_set(new_state);
+#ifdef SVAL_CLICK_DIAG
+            cd_cause = 0;
+#endif
             break;
         }
 
