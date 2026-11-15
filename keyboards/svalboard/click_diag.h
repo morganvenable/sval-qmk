@@ -22,6 +22,7 @@ enum {
     CD_AUTOMOUSE   = 11, // [on] [why: 0 key/pointer, 1 timeout] [layer state lo] [hi] [0...]
     CD_PAD_STATUS  = 12, // [sysinfo0] [sysinfo1] [what: 1 reset shown, 2 re-ATI, 3 read failed after ok] [0...]
     CD_PAD_INIT    = 13, // [init count] [ok] [0...]
+    CD_PAD_IGNORED = 14, // [reason | 0x80 woke] [cycle time] [ge0] [ge1] [sysinfo0] [sysinfo1] [fingers]  (chip report the gesture guard ignored)
 };
 
 // Why a layer changed (CD_LAYER cause).

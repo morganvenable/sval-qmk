@@ -196,6 +196,12 @@ void cd_pad_read(const uint8_t *raw, uint8_t slots, bool ok) {
     pf = fingers, pg = g, psys = sys0, pmask = mask;
 }
 
+// A chip report the gesture guard ignored (azoteq/pad_gesture_guard.h): the
+// gesture bytes as the chip sent them, and the rest of its base bytes.
+void sval_pad_guard_ignored_kb(uint8_t why, const uint8_t *base, uint8_t ge0, uint8_t ge1, bool woke) {
+    cd_log(CD_PAD_IGNORED, (uint8_t)(why | (woke ? 0x80 : 0)), base[0], ge0, ge1, base[3], base[4], base[5]);
+}
+
 void cd_pad_init(bool ok) {
     if (cd_inits < 255) cd_inits++;
     cd_log(CD_PAD_INIT, cd_inits, ok, 0, 0, 0, 0, 0);
