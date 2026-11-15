@@ -52,14 +52,14 @@ static void on_dance_finished(tap_dance_state_t *state, void *user_data) {
     if (sval_get_tap_dance(index, &td_entry) != 0) return;
     if (!TD_ENABLED(td_entry)) return;
     dance_state[index] = dance_step(state);
-#ifdef SVAL_CLICK_DIAG
+#    ifdef SVAL_CLICK_DIAG
     extern uint8_t  cd_cause;
     extern uint16_t cd_cause_kc;
     extern void     cd_log(uint8_t type, uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint8_t e, uint8_t f, uint8_t g);
     cd_log(3, (uint8_t)index, dance_state[index], td_entry.on_tap & 0xFF, td_entry.on_tap >> 8, td_entry.on_hold & 0xFF, td_entry.on_hold >> 8, get_mods()); // CD_TAP_DANCE
-    cd_cause    = 1; // CD_CAUSE_KEY
+    cd_cause    = 1;                                                                                                                                         // CD_CAUSE_KEY
     cd_cause_kc = QK_TAP_DANCE | (index & 0xFF);
-#endif
+#    endif
     switch (dance_state[index]) {
         case SINGLE_TAP: {
             if (td_entry.on_tap) sval_keycode_down(td_entry.on_tap);
@@ -105,9 +105,9 @@ static void on_dance_finished(tap_dance_state_t *state, void *user_data) {
             break;
         }
     }
-#ifdef SVAL_CLICK_DIAG
+#    ifdef SVAL_CLICK_DIAG
     cd_cause = 0;
-#endif
+#    endif
 }
 
 static void on_dance_reset(tap_dance_state_t *state, void *user_data) {

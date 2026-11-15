@@ -862,7 +862,7 @@ bool sval_handle_command(uint8_t *data, uint8_t length) {
             // report (Svalboard: keyboards/svalboard/docs/protocol.md).
 #ifdef SVAL_CLICK_DIAG
             if (length >= 32 && data[2] == 0xC1) { // DF 2C C1: the click diagnostics ring (click_diag.h)
-                extern void cd_command(uint8_t * data, uint8_t length);
+                extern void cd_command(uint8_t *data, uint8_t length);
                 cd_command(data, length);
                 break;
             }
