@@ -116,6 +116,11 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp "${mounts[@]}" -w "$root
 ec=$?; [ $ec -eq 0 ] && grep -a PASSED "$log" | tail -4 || tail -30 "$log"
 result "tap dance and Alt Repeat host tests" $ec
 
+step "PS/2 TrackPoint host tests (tests/sval_ps2)"
+python3 -m unittest discover -s tests/sval_ps2 -p 'test_*.py' > "$log" 2>&1
+ec=$?; [ $ec -eq 0 ] && tail -1 "$log" || tail -30 "$log"
+result "PS/2 TrackPoint host tests" $ec
+
 step "Native touchpad host tests (util/test_native_ptp.sh)"
 bash util/test_native_ptp.sh > "$log" 2>&1
 ec=$?; [ $ec -eq 0 ] && tail -1 "$log" || tail -30 "$log"
